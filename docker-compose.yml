@@ -31,31 +31,98 @@ services:
       - -c
       - |
         set -e
-        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null 2>&1; do
-          echo "Waiting for MinIO endpoint..."
+        log() {
+          printf '[minio-init] %s\n' "$$*"
+        }
+
+        log "Starting MinIO initialization"
+        log "Target endpoint: http://minio:9000"
+        log "Root user: $$MINIO_ROOT_USER"
+        log "Access user: $$MINIO_ACCESS_KEY"
+        log "Bucket: $$MINIO_BUCKET_NAME"
+
+        alias_attempt=0
+        while true; do
+          alias_output="$$(mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" 2>&1)" && break
+          alias_attempt=$$((alias_attempt + 1))
+          log "Alias setup attempt $$alias_attempt failed"
+          printf '%s\n' "$$alias_output"
+          if [ "$$alias_attempt" -ge 30 ]; then
+            log "Alias setup failed after $$alias_attempt attempts"
+            exit 1
+          fi
           sleep 2
         done
-        until mc ready local >/dev/null 2>&1; do
-          echo "Waiting for MinIO readiness..."
+        log "Alias setup succeeded"
+        printf '%s\n' "$$alias_output"
+
+        ready_attempt=0
+        while true; do
+          ready_output="$$(mc ready local 2>&1)" && break
+          ready_attempt=$$((ready_attempt + 1))
+          log "Readiness check attempt $$ready_attempt failed"
+          printf '%s\n' "$$ready_output"
+          if [ "$$ready_attempt" -ge 30 ]; then
+            log "MinIO readiness failed after $$ready_attempt attempts"
+            exit 1
+          fi
           sleep 2
         done
+        log "MinIO is ready"
+        printf '%s\n' "$$ready_output"
+
+        log "Collecting MinIO admin info"
+        mc admin info local
+
+        log "Ensuring bucket exists"
         mc mb --ignore-existing local/"$$MINIO_BUCKET_NAME"
-        mc anonymous set download local/"$$MINIO_BUCKET_NAME"
+
+        log "Setting anonymous download policy on bucket"
+        anonymous_output="$$(mc anonymous set download local/"$$MINIO_BUCKET_NAME" 2>&1)" || {
+          log "Failed to set anonymous download policy"
+          printf '%s\n' "$$anonymous_output"
+          exit 1
+        }
+        printf '%s\n' "$$anonymous_output"
+
         if [ "$$MINIO_ACCESS_KEY" != "$$MINIO_ROOT_USER" ]; then
-          mc admin user info local "$$MINIO_ACCESS_KEY" >/dev/null 2>&1 || \
-            mc admin user add local "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY"
+          log "Checking service user $$MINIO_ACCESS_KEY"
+          user_info_output="$$(mc admin user info local "$$MINIO_ACCESS_KEY" 2>&1)" || {
+            log "Service user not found, creating it"
+            printf '%s\n' "$$user_info_output"
+            user_add_output="$$(mc admin user add local "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY" 2>&1)" || {
+              log "Failed to create service user $$MINIO_ACCESS_KEY"
+              printf '%s\n' "$$user_add_output"
+              exit 1
+            }
+            printf '%s\n' "$$user_add_output"
+          }
+          if [ -n "$$user_info_output" ]; then
+            printf '%s\n' "$$user_info_output"
+          fi
+
+          log "Attaching readwrite policy to $$MINIO_ACCESS_KEY"
           policy_output="$$(mc admin policy attach local readwrite --user "$$MINIO_ACCESS_KEY" 2>&1)" || {
             case "$$policy_output" in
               *"already in effect"*|*"no net effect"*)
-                echo "$$policy_output"
+                log "Policy already attached"
+                printf '%s\n' "$$policy_output"
                 ;;
               *)
-                echo "$$policy_output"
+                log "Failed to attach policy"
+                printf '%s\n' "$$policy_output"
                 exit 1
                 ;;
             esac
           }
+          if [ -n "$$policy_output" ]; then
+            printf '%s\n' "$$policy_output"
+          fi
         fi
+
+        log "Listing bucket state"
+        mc ls local/"$$MINIO_BUCKET_NAME" || true
+        log "MinIO initialization completed"
 
   backend:
     build:
