@@ -44,7 +44,17 @@ services:
         if [ "$$MINIO_ACCESS_KEY" != "$$MINIO_ROOT_USER" ]; then
           mc admin user info local "$$MINIO_ACCESS_KEY" >/dev/null 2>&1 || \
             mc admin user add local "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY"
-          mc admin policy attach local readwrite --user "$$MINIO_ACCESS_KEY"
+          policy_output="$$(mc admin policy attach local readwrite --user "$$MINIO_ACCESS_KEY" 2>&1)" || {
+            case "$$policy_output" in
+              *"already in effect"*|*"no net effect"*)
+                echo "$$policy_output"
+                ;;
+              *)
+                echo "$$policy_output"
+                exit 1
+                ;;
+            esac
+          }
         fi
 
   backend:
