@@ -171,8 +171,9 @@ async def upload_file(
             # 验证MinIO路径中的文件是否存在
             minio_client = MinIOClient.get_instance()
             try:
+                bucket_name = settings.minio_bucket_name or 'images'
                 minio_client.stat_object(
-                    bucket=settings.minio_bucket or 'agent-files',
+                    bucket=bucket_name,
                     object_name=minio_filename
                 )
                 logger.info(f"MinIO文件验证成功: {minio_filename}")
@@ -183,7 +184,7 @@ async def upload_file(
                 )
 
             # 生成文件访问URL
-            file_url = f"{settings.minio_endpoint}/{settings.minio_bucket or 'agent-files'}/{minio_filename}"
+            file_url = _build_public_file_url(request, bucket_name, minio_filename)
 
             # 保存到数据库（使用MinIO路径）
             db_manager = get_db_manager()
@@ -360,11 +361,52 @@ async def download_file(filename: str):
 
 import httpx as _httpx
 from fastapi.responses import StreamingResponse as _StreamingResponse
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit, urlunsplit
+
+
+def _get_public_base_url(request: Request) -> str:
+    """Resolve the externally reachable base URL for browser-facing links."""
+    explicit_base = getattr(settings, "public_base_url", None)
+    if explicit_base:
+        return explicit_base.rstrip("/")
+
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+    forwarded_host = request.headers.get("x-forwarded-host")
+    if forwarded_proto and forwarded_host:
+        return f"{forwarded_proto}://{forwarded_host}".rstrip("/")
+
+    return str(request.base_url).rstrip("/")
+
+
+def _build_public_file_url(request: Request, bucket: str, object_name: str) -> str:
+    """Build a browser-accessible absolute URL for a MinIO object."""
+    object_path = object_name.lstrip("/")
+    prefix = settings.minio_url_prefix
+
+    if prefix:
+        normalized_prefix = prefix.rstrip("/")
+        if normalized_prefix.startswith(("http://", "https://")):
+            return f"{normalized_prefix}/{object_path}"
+        return f"{_get_public_base_url(request)}{normalized_prefix}/{object_path}"
+
+    return f"{_get_public_base_url(request)}/{bucket}/{object_path}"
+
+
+def _rewrite_presigned_url_for_browser(request: Request, presigned_url: str) -> str:
+    """Swap the internal MinIO host with the public app host, preserving path and signature."""
+    public_base = urlsplit(_get_public_base_url(request))
+    signed_url = urlsplit(presigned_url)
+    return urlunsplit((
+        public_base.scheme or signed_url.scheme,
+        public_base.netloc,
+        signed_url.path,
+        signed_url.query,
+        "",
+    ))
 
 
 @router.post("/minio/presigned-url")
-async def get_minio_presigned_url(filename: str):
+async def get_minio_presigned_url(request: Request, filename: str):
     """获取MinIO预签名上传URL，支持前端直传"""
     try:
         minio_client = MinIOClient.get_instance()
@@ -384,14 +426,18 @@ async def get_minio_presigned_url(filename: str):
         # 生成预签名上传URL（有效期1小时）
         from datetime import timedelta
         presigned_url = minio_client.presigned_put_object(bucket, object_name, expires=timedelta(hours=1))
+        upload_url = _rewrite_presigned_url_for_browser(request, presigned_url)
 
         # 生成文件访问URL
-        file_url = f"http://{settings.minio_endpoint}/{bucket}/{object_name}"
+        file_url = _build_public_file_url(request, bucket, object_name)
 
         logger.info(f"生成MinIO预签名URL: {object_name}")
+        logger.info(f"MinIO内部预签名URL: {presigned_url}")
+        logger.info(f"MinIO对外上传URL: {upload_url}")
+        logger.info(f"MinIO对外文件URL: {file_url}")
 
         return {
-            "upload_url": presigned_url,
+            "upload_url": upload_url,
             "file_url": file_url,
             "filename": safe_filename,
             "bucket": bucket,

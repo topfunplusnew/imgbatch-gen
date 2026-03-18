@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     minio_bucket_name: str = "images"
     minio_secure: bool = False  # 是否使用HTTPS
     minio_url_prefix: Optional[str] = None  # MinIO文件访问URL前缀，从环境变量 MINIO_URL_PREFIX 读取
+    public_base_url: Optional[str] = None  # 对外访问的应用基础地址，用于生成给前端的完整URL
     
     # 任务引擎配置
     max_concurrent_tasks: int = 20

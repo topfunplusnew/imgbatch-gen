@@ -14,9 +14,11 @@ services:
       - minio_data:/data
 
   minio-init:
-    image: minio/mc:RELEASE.2025-02-21T16-00-46Z
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
     container_name: img-batch-agent-minio-init
     restart: "no"
+    entrypoint:
+      - /bin/sh
     depends_on:
       minio:
         condition: service_started
@@ -27,15 +29,15 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-${MINIO_ROOT_PASSWORD:-minioadmin}}
       MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-images}
     command:
-      - /bin/sh
       - -c
       - |
-        set -e
+        set -eu
         log() {
           printf '[minio-init] %s\n' "$$*"
         }
 
         log "Starting MinIO initialization"
+        mc --version
         log "Target endpoint: http://minio:9000"
         log "Root user: $$MINIO_ROOT_USER"
         log "Access user: $$MINIO_ACCESS_KEY"
