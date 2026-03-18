@@ -1,0 +1,1118 @@
+"""LangGraph orchestration for multimodal assistant execution."""
+
+from __future__ import annotations
+
+import base64
+import io
+import re
+from typing import Any, Dict, List, Optional, TypedDict
+
+import pdfplumber
+from docx import Document
+from loguru import logger
+from pydantic import BaseModel, Field
+
+from ..config.settings import settings
+from .multimodal_attachment_graph import (
+    AttachmentDescriptor,
+    build_attachment_route,
+    build_text_attachment_prompt,
+)
+
+try:
+    import fitz
+except ImportError:
+    fitz = None  # type: ignore[assignment]
+
+try:
+    import httpx
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from langchain_openai import ChatOpenAI
+    from langgraph.graph import END, START, StateGraph
+
+    LANGCHAIN_ASSISTANT_AVAILABLE = True
+except ImportError:
+    httpx = None  # type: ignore[assignment]
+    HumanMessage = None  # type: ignore[assignment]
+    SystemMessage = None  # type: ignore[assignment]
+    ChatOpenAI = None  # type: ignore[assignment]
+    StateGraph = None  # type: ignore[assignment]
+    START = END = None  # type: ignore[assignment]
+    LANGCHAIN_ASSISTANT_AVAILABLE = False
+
+
+class AssistantExecutionPlan(BaseModel):
+    mode: str = Field(..., description="chat or image")
+    confidence: float = Field(0.0, description="0-1 confidence")
+    reasoning: str = Field("", description="Why this route was chosen")
+    source: str = Field("fallback", description="Workflow source")
+    effective_model: Optional[str] = None
+    messages: List[Dict[str, Any]] = Field(default_factory=list)
+    prompt: Optional[str] = None
+    intent_type: Optional[str] = None
+    batch_count: int = 1
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class RequestRouteDecision(BaseModel):
+    route: str = Field(..., description="chat or image")
+    intent_type: str = Field(..., description="chat, single_generate, or batch_generate")
+    batch_count: int = Field(1, description="Requested image count when route=image")
+    confidence: float = Field(0.0, description="0-1 confidence")
+    reasoning: str = Field("", description="Why this route was selected")
+    source: str = Field("fallback", description="Workflow source")
+    planning_basis: str = Field("text", description="text or attachments")
+
+
+class TextIntentDecision(BaseModel):
+    route: str = Field(..., description="chat or image")
+    intent_type: str = Field(..., description="chat, single_generate, or batch_generate")
+    batch_count: int = Field(1, description="Requested image count when route=image")
+    confidence: float = Field(0.0, description="0-1 confidence")
+    reasoning: str = Field("", description="Why this route was selected")
+
+
+class AssistantExecutionState(TypedDict, total=False):
+    """Mutable graph state for assistant planning."""
+
+    messages: List[Dict[str, Any]]
+    files: List[str]
+    user_instruction: str
+    request_model: Optional[str]
+    request_model_type: Optional[str]
+    requested_count: Optional[int]
+    db_manager: Any
+    app_state: Any
+    api_key: Optional[str]
+    attachments: List[Dict[str, Any]]
+    route_decision: Dict[str, Any]
+    execution_plan: Dict[str, Any]
+
+
+def _has_llm_credentials(api_key: Optional[str] = None) -> bool:
+    return bool(api_key or settings.relay_api_key or settings.openai_api_key)
+
+
+def _is_placeholder_assistant_message(content: Any) -> bool:
+    text = _extract_message_text(content)
+    if not text:
+        return True
+
+    stripped = text.strip()
+    exact_matches = {
+        "图像生成完成！",
+        "抱歉，对话请求失败，请稍后重试。",
+        "消息列表为空，无法对话。",
+    }
+    prefix_matches = (
+        "正在上传文件",
+        "正在为您批量生成",
+        "正在处理",
+        "对话请求失败:",
+        "抱歉，对话请求失败",
+    )
+
+    if stripped in exact_matches:
+        return True
+    return any(stripped.startswith(prefix) for prefix in prefix_matches)
+
+
+def _extract_message_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts: List[str] = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                text = str(item.get("text", "")).strip()
+                if text:
+                    parts.append(text)
+        return "\n".join(parts).strip()
+    return str(content).strip() if content is not None else ""
+
+
+def _guess_extension(value: str) -> str:
+    if not value:
+        return ""
+    cleaned = value.split("?", 1)[0].split("#", 1)[0].strip().lower()
+    if "." not in cleaned:
+        return ""
+    return cleaned.rsplit(".", 1)[-1]
+
+
+def _get_default_text_model() -> str:
+    return settings.assistant_text_model or settings.langchain_pdf_prompt_model or settings.openai_model or "gpt-4o-mini"
+
+
+def _get_default_planner_model() -> str:
+    return settings.assistant_planner_model or settings.langchain_pdf_prompt_model or _get_default_text_model()
+
+
+def _get_default_ocr_model() -> str:
+    return settings.assistant_ocr_model or _get_default_text_model()
+
+
+def _trim_attachment_text(text: str, limit: Optional[int] = None) -> str:
+    text = (text or "").strip()
+    effective_limit = limit or settings.assistant_attachment_text_limit or 4000
+    if len(text) <= effective_limit:
+        return text
+    return text[: effective_limit - 3].rstrip() + "..."
+
+
+def _derive_batch_count(user_instruction: str, requested_count: Optional[int]) -> int:
+    if requested_count and requested_count > 0:
+        return max(1, min(requested_count, 10))
+
+    lowered_instruction = (user_instruction or "").lower()
+    patterns = (
+        r"(\d+)\s*(?:张|个|幅|版|套)",
+        r"(?:generate|create|make|draw|render)\s+(\d+)\s+(?:images?|variants?)",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, user_instruction or "", re.IGNORECASE)
+        if not match:
+            continue
+        try:
+            return max(1, min(int(match.group(1)), 10))
+        except ValueError:
+            continue
+    batch_markers = (
+        "多生成",
+        "多来",
+        "再来",
+        "多张",
+        "几张",
+        "多一些",
+        "类似图片",
+        "more images",
+        "more like this",
+        "variations",
+        "variants",
+    )
+    if any(marker in lowered_instruction for marker in batch_markers):
+        return 4
+    return 1
+
+
+def _build_model(api_key: Optional[str] = None, model: Optional[str] = None) -> "ChatOpenAI":
+    if not LANGCHAIN_ASSISTANT_AVAILABLE or ChatOpenAI is None:
+        raise RuntimeError("LangChain/LangGraph is not installed.")
+
+    base_url = settings.openai_base_url or settings.relay_base_url or None
+    if base_url and not base_url.rstrip("/").endswith("/v1"):
+        base_url = base_url.rstrip("/") + "/v1"
+
+    key = api_key or settings.relay_api_key or settings.openai_api_key
+    if not key:
+        raise RuntimeError("Missing API key for assistant execution workflow.")
+
+    return ChatOpenAI(
+        model=model or _get_default_planner_model(),
+        temperature=0,
+        api_key=key,
+        base_url=base_url,
+    )
+
+
+async def _resolve_file_reference(file_ref: str, db_manager) -> Dict[str, str]:
+    raw_ref = str(file_ref)
+    if raw_ref.startswith(("http://", "https://")):
+        name = raw_ref.split("?", 1)[0].rsplit("/", 1)[-1] or raw_ref
+        return {
+            "url": raw_ref,
+            "name": name,
+            "extension": _guess_extension(name),
+        }
+
+    file_info = await db_manager.get_file_by_id(file_ref)
+    if not file_info:
+        raise ValueError(f"File not found: {file_ref}")
+
+    file_url = getattr(file_info, "file_url", "") or ""
+    if file_url.startswith(("http://", "https://")):
+        resolved_url = file_url
+    else:
+        base_url = getattr(settings, "base_url", "http://backend:8888")
+        resolved_url = f"{base_url}{file_url}"
+
+    extension = (
+        (getattr(file_info, "file_extension", "") or "").lower().lstrip(".")
+        or _guess_extension(getattr(file_info, "original_filename", "") or "")
+        or _guess_extension(resolved_url)
+    )
+    name = getattr(file_info, "original_filename", "") or resolved_url.split("?", 1)[0].rsplit("/", 1)[-1]
+    return {
+        "url": resolved_url,
+        "name": name,
+        "extension": extension,
+    }
+
+
+async def _download_file_bytes(url: str) -> bytes:
+    if httpx is None:
+        raise RuntimeError("httpx is required for attachment loading.")
+
+    async with httpx.AsyncClient(timeout=120) as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        return response.content
+
+
+async def _extract_visual_excerpt(
+    *,
+    image_urls: List[str],
+    instruction: str,
+    api_key: Optional[str],
+) -> str:
+    if (
+        not image_urls
+        or not LANGCHAIN_ASSISTANT_AVAILABLE
+        or HumanMessage is None
+        or SystemMessage is None
+        or not _has_llm_credentials(api_key)
+    ):
+        return ""
+
+    try:
+        llm = _build_model(api_key=api_key, model=_get_default_ocr_model())
+        content: List[Dict[str, Any]] = [{"type": "text", "text": instruction}]
+        for image_url in image_urls:
+            content.append({"type": "image_url", "image_url": {"url": image_url}})
+
+        response = await llm.ainvoke(
+            [
+                SystemMessage(
+                    content=(
+                        "You extract grounded content from visual attachments. "
+                        "Return concise plain text that preserves visible text, key entities, "
+                        "important numbers, and a short visual summary when useful."
+                    )
+                ),
+                HumanMessage(content=content),
+            ]
+        )
+        raw_text = response.content if isinstance(response.content, str) else _extract_message_text(response.content)
+        return _trim_attachment_text(raw_text)
+    except Exception as exc:
+        logger.warning("Visual attachment extraction failed: {}", exc)
+        return ""
+
+
+def _extract_pdf_native_text(file_bytes: bytes) -> str:
+    max_pages = max(1, settings.assistant_pdf_ocr_max_pages or 6)
+    page_texts: List[str] = []
+    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+        for page_index, page in enumerate(pdf.pages[:max_pages], start=1):
+            extracted = (page.extract_text() or "").strip()
+            if extracted:
+                page_texts.append(f"[Page {page_index}]\n{extracted}")
+    return "\n\n".join(page_texts)
+
+
+def _render_pdf_pages_to_data_urls(file_bytes: bytes) -> List[str]:
+    if fitz is None:
+        return []
+
+    max_pages = max(1, settings.assistant_pdf_ocr_max_pages or 6)
+    document = fitz.open(stream=file_bytes, filetype="pdf")
+    page_urls: List[str] = []
+    try:
+        for page_index in range(min(document.page_count, max_pages)):
+            page = document.load_page(page_index)
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+            encoded = base64.b64encode(pixmap.tobytes("png")).decode("ascii")
+            page_urls.append(f"data:image/png;base64,{encoded}")
+    finally:
+        document.close()
+    return page_urls
+
+
+async def _extract_pdf_excerpt(file_bytes: bytes, api_key: Optional[str]) -> str:
+    native_text = _trim_attachment_text(_extract_pdf_native_text(file_bytes))
+    native_threshold = settings.assistant_pdf_native_text_threshold or 120
+    if len(native_text.strip()) >= native_threshold:
+        return native_text
+
+    page_urls = _render_pdf_pages_to_data_urls(file_bytes)
+    if not page_urls:
+        return native_text
+
+    ocr_pages: List[str] = []
+    for page_index, page_url in enumerate(page_urls, start=1):
+        page_text = await _extract_visual_excerpt(
+            image_urls=[page_url],
+            instruction=(
+                f"This is page {page_index} of a PDF. "
+                "Extract the visible text faithfully, preserve key numbers and headings, "
+                "and briefly mention diagrams or layout cues when they matter."
+            ),
+            api_key=api_key,
+        )
+        if page_text:
+            ocr_pages.append(f"[Page {page_index}]\n{page_text}")
+
+    ocr_text = _trim_attachment_text("\n\n".join(ocr_pages))
+    if len(ocr_text) >= len(native_text):
+        return ocr_text
+    return native_text
+
+
+def _extract_docx_excerpt(file_bytes: bytes) -> str:
+    document = Document(io.BytesIO(file_bytes))
+    text = "\n".join(paragraph.text for paragraph in document.paragraphs if paragraph.text.strip())
+    return _trim_attachment_text(text)
+
+
+async def _extract_image_excerpt(file_bytes: bytes, extension: str, api_key: Optional[str]) -> str:
+    mime_extension = "jpeg" if extension == "jpg" else extension
+    data_url = f"data:image/{mime_extension};base64,{base64.b64encode(file_bytes).decode('ascii')}"
+    return await _extract_visual_excerpt(
+        image_urls=[data_url],
+        instruction=(
+            "Describe this attachment for downstream reasoning. "
+            "Extract visible text, key entities, major objects, and the scene in concise plain text."
+        ),
+        api_key=api_key,
+    )
+
+
+async def _extract_attachment_excerpt(
+    *,
+    url: str,
+    extension: str,
+    api_key: Optional[str],
+) -> str:
+    if extension not in {"pdf", "docx", "doc", "jpg", "jpeg", "png", "gif", "webp", "bmp"}:
+        return ""
+
+    if extension == "pdf":
+        file_bytes = await _download_file_bytes(url)
+        return await _extract_pdf_excerpt(file_bytes, api_key)
+    if extension == "docx":
+        file_bytes = await _download_file_bytes(url)
+        return _extract_docx_excerpt(file_bytes)
+    if extension in {"jpg", "jpeg", "png", "gif", "webp", "bmp"}:
+        file_bytes = await _download_file_bytes(url)
+        return await _extract_image_excerpt(file_bytes, extension, api_key)
+    return ""
+
+
+async def _load_attachment_descriptors(
+    files: Optional[List[str]],
+    db_manager,
+    api_key: Optional[str],
+) -> List[AttachmentDescriptor]:
+    descriptors: List[AttachmentDescriptor] = []
+
+    for file_ref in files or []:
+        try:
+            resolved = await _resolve_file_reference(file_ref, db_manager)
+        except Exception:
+            continue
+
+        extension = resolved["extension"]
+        if extension in {"pdf", "docx", "doc"}:
+            try:
+                excerpt = await _extract_attachment_excerpt(
+                    url=resolved["url"],
+                    extension=extension,
+                    api_key=api_key,
+                )
+            except Exception:
+                excerpt = ""
+            descriptors.append(
+                AttachmentDescriptor(
+                    name=resolved["name"],
+                    kind=extension,
+                    source=resolved["url"],
+                    text_excerpt=excerpt or None,
+                )
+            )
+            continue
+
+        if extension in {"jpg", "jpeg", "png", "gif", "webp", "bmp"}:
+            try:
+                excerpt = await _extract_attachment_excerpt(
+                    url=resolved["url"],
+                    extension=extension,
+                    api_key=api_key,
+                )
+            except Exception:
+                excerpt = ""
+            descriptors.append(
+                AttachmentDescriptor(
+                    name=resolved["name"],
+                    kind="image",
+                    source=resolved["url"],
+                    text_excerpt=excerpt or None,
+                )
+            )
+
+    return descriptors
+
+
+async def _is_image_model_name(model_name: Optional[str], app_state) -> bool:
+    if not model_name:
+        return False
+
+    try:
+        model_registry = getattr(app_state, "model_registry", None)
+        if model_registry:
+            model_info = model_registry.get_model_info(model_name)
+            if model_info:
+                model_type = str(getattr(model_info, "model_type", "") or "").lower()
+                if any(token in model_type for token in ("image", "图像", "图片")):
+                    return True
+    except Exception:
+        pass
+
+    lowered = model_name.lower()
+    image_tokens = (
+        "dall-e",
+        "midjourney",
+        "ideogram",
+        "imagen",
+        "gpt-image",
+        "image-preview",
+        "flash-image",
+        "image-generation",
+        "stable-diffusion",
+        "flux",
+        "fal-ai",
+        "kling",
+        "wanx",
+        "seedream",
+    )
+    if any(token in lowered for token in image_tokens):
+        return True
+    return bool(re.search(r"(?:^|[-_/])(image|images)(?:[-_/]|$)", lowered))
+
+
+async def _resolve_chat_model_name(
+    request_model: Optional[str],
+    request_model_type: Optional[str],
+    app_state,
+) -> str:
+    if request_model_type and str(request_model_type).lower() == "image":
+        return _get_default_text_model()
+    if request_model and not await _is_image_model_name(request_model, app_state):
+        return request_model
+    return _get_default_text_model()
+
+
+async def _resolve_image_model_name(
+    request_model: Optional[str],
+    request_model_type: Optional[str],
+    app_state,
+) -> Optional[str]:
+    if request_model and request_model_type and str(request_model_type).lower() == "image":
+        return request_model
+    if request_model and await _is_image_model_name(request_model, app_state):
+        return request_model
+    return settings.openai_image_model or None
+
+
+def _normalize_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    normalized: List[Dict[str, Any]] = []
+    for message in messages:
+        role = str(message.get("role", "")).strip()
+        content = message.get("content", "")
+        if not role:
+            continue
+        if role == "assistant" and _is_placeholder_assistant_message(content):
+            continue
+        normalized.append({"role": role, "content": content})
+    return normalized
+
+
+def _apply_attachments_to_chat_messages(
+    messages: List[Dict[str, Any]],
+    attachments: List[AttachmentDescriptor],
+) -> List[Dict[str, Any]]:
+    normalized = _normalize_messages(messages)
+    if not normalized:
+        return normalized
+
+    last_user_index = None
+    for index in range(len(normalized) - 1, -1, -1):
+        if normalized[index]["role"] == "user":
+            last_user_index = index
+            break
+
+    if last_user_index is None or not attachments:
+        return normalized
+
+    text_blocks = [
+        f"[Attachment: {attachment.name}]\n{attachment.text_excerpt}"
+        for attachment in attachments
+        if attachment.text_excerpt
+    ]
+    image_urls = [
+        attachment.source
+        for attachment in attachments
+        if attachment.kind == "image" and attachment.source
+    ]
+
+    target_message = dict(normalized[last_user_index])
+    base_text = _extract_message_text(target_message.get("content", ""))
+    if text_blocks:
+        base_text = "\n\n".join(text_blocks + ([base_text] if base_text else []))
+
+    if image_urls:
+        multimodal_content = [{"type": "text", "text": base_text or "Please use the attached images."}]
+        for image_url in image_urls:
+            multimodal_content.append({"type": "image_url", "image_url": {"url": image_url}})
+        target_message["content"] = multimodal_content
+    else:
+        target_message["content"] = base_text
+
+    normalized[last_user_index] = target_message
+    return normalized
+
+
+def _fallback_text_route(
+    user_instruction: str,
+    model_hint: Optional[str],
+    requested_count: Optional[int],
+) -> TextIntentDecision:
+    text = (user_instruction or "").strip().lower()
+    batch_count = _derive_batch_count(user_instruction, requested_count)
+
+    chat_keywords = [
+        "summarize",
+        "summary",
+        "explain",
+        "analyze",
+        "translate",
+        "extract",
+        "review",
+        "read",
+        "question",
+        "总结",
+        "摘要",
+        "解释",
+        "分析",
+        "翻译",
+        "提取",
+        "阅读",
+        "问答",
+        "识别",
+        "内容",
+        "讲了什么",
+    ]
+    image_keywords = [
+        "generate image",
+        "generate",
+        "draw",
+        "render",
+        "illustration",
+        "poster",
+        "cover",
+        "concept art",
+        "生图",
+        "生成",
+        "画",
+        "绘制",
+        "创建图片",
+        "海报",
+        "封面",
+        "配图",
+        "渲染",
+        "出图",
+    ]
+
+    chat_keyword_score = sum(1 for keyword in chat_keywords if keyword in text)
+    image_keyword_score = sum(1 for keyword in image_keywords if keyword in text)
+    chat_score = chat_keyword_score
+    image_score = image_keyword_score
+
+    if model_hint == "chat":
+        chat_score += 1
+    elif model_hint == "image" and image_keyword_score > 0:
+        image_score += 1
+
+    if batch_count > 1:
+        image_score += 2
+
+    if not text:
+        if model_hint == "image":
+            return TextIntentDecision(
+                route="image",
+                intent_type="single_generate",
+                batch_count=1,
+                confidence=0.55,
+                reasoning="Empty instruction with image model hint; defaulting to image generation.",
+            )
+        return TextIntentDecision(
+            route="chat",
+            intent_type="chat",
+            batch_count=1,
+            confidence=0.8,
+            reasoning="Empty instruction; defaulting to chat.",
+        )
+
+    if image_score > chat_score and image_score >= 1 and (image_keyword_score > 0 or batch_count > 1):
+        return TextIntentDecision(
+            route="image",
+            intent_type="batch_generate" if batch_count > 1 else "single_generate",
+            batch_count=batch_count,
+            confidence=min(0.9, 0.58 + image_score * 0.08),
+            reasoning="Fallback rules detected image-generation intent from the text request.",
+        )
+
+    return TextIntentDecision(
+        route="chat",
+        intent_type="chat",
+        batch_count=1,
+        confidence=min(0.92, 0.68 + chat_score * 0.06),
+        reasoning="Fallback rules defaulted to chat understanding.",
+    )
+
+
+async def _classify_text_request(
+    *,
+    user_instruction: str,
+    request_model: Optional[str],
+    request_model_type: Optional[str],
+    requested_count: Optional[int],
+    app_state,
+    api_key: Optional[str],
+) -> RequestRouteDecision:
+    model_hint = request_model_type
+    if not model_hint and request_model:
+        model_hint = "image" if await _is_image_model_name(request_model, app_state) else "chat"
+
+    fallback = _fallback_text_route(user_instruction, model_hint, requested_count)
+    if (
+        not LANGCHAIN_ASSISTANT_AVAILABLE
+        or SystemMessage is None
+        or HumanMessage is None
+        or not _has_llm_credentials(api_key)
+    ):
+        return RequestRouteDecision(
+            route=fallback.route,
+            intent_type=fallback.intent_type,
+            batch_count=fallback.batch_count,
+            confidence=fallback.confidence,
+            reasoning=fallback.reasoning,
+            source="fallback",
+            planning_basis="text",
+        )
+
+    try:
+        llm = _build_model(
+            api_key=api_key,
+            model=_get_default_planner_model(),
+        )
+        structured = llm.with_structured_output(TextIntentDecision, method="function_calling")
+        decision = await structured.ainvoke(
+            [
+                SystemMessage(
+                    content=(
+                        "You route assistant requests. "
+                        "Choose route=chat and intent_type=chat for explanation, summary, QA, extraction, translation, "
+                        "or normal dialogue. Choose route=image only when the user explicitly wants to generate, draw, "
+                        "render, illustrate, or create images. When ambiguous, prefer chat."
+                    )
+                ),
+                HumanMessage(
+                    content=(
+                        f"User instruction: {user_instruction or 'None'}\n"
+                        f"Model hint: {model_hint or 'none'}\n"
+                        f"Requested image count hint: {_derive_batch_count(user_instruction, requested_count)}"
+                    )
+                ),
+            ]
+        )
+
+        batch_count = _derive_batch_count(user_instruction, requested_count)
+        if decision.route != "image":
+            return RequestRouteDecision(
+                route="chat",
+                intent_type="chat",
+                batch_count=1,
+                confidence=max(0.0, float(decision.confidence or 0.75)),
+                reasoning=decision.reasoning or "LangGraph classified the text request as chat.",
+                source="langgraph",
+                planning_basis="text",
+            )
+
+        llm_batch_count = decision.batch_count or batch_count
+        if requested_count and requested_count > 0:
+            llm_batch_count = requested_count
+        llm_batch_count = max(1, min(llm_batch_count, 10))
+        intent_type = "batch_generate" if llm_batch_count > 1 or decision.intent_type == "batch_generate" else "single_generate"
+        return RequestRouteDecision(
+            route="image",
+            intent_type=intent_type,
+            batch_count=llm_batch_count,
+            confidence=max(0.0, float(decision.confidence or 0.75)),
+            reasoning=decision.reasoning or "LangGraph classified the text request as image generation.",
+            source="langgraph",
+            planning_basis="text",
+        )
+    except Exception as exc:
+        logger.warning("Assistant text classification failed, falling back to rules: {}", exc)
+        return RequestRouteDecision(
+            route=fallback.route,
+            intent_type=fallback.intent_type,
+            batch_count=fallback.batch_count,
+            confidence=fallback.confidence,
+            reasoning=fallback.reasoning,
+            source="fallback",
+            planning_basis="text",
+        )
+
+
+async def _decide_execution_route(
+    *,
+    attachments: List[AttachmentDescriptor],
+    user_instruction: str,
+    request_model: Optional[str],
+    request_model_type: Optional[str],
+    requested_count: Optional[int],
+    app_state,
+    api_key: Optional[str],
+) -> RequestRouteDecision:
+    model_hint = request_model_type
+    if not model_hint and request_model:
+        model_hint = "image" if await _is_image_model_name(request_model, app_state) else "chat"
+
+    if attachments:
+        decision = await build_attachment_route(
+            user_instruction,
+            attachments,
+            api_key=api_key,
+            model_hint=model_hint,
+        )
+        if decision.route == "image":
+            batch_count = _derive_batch_count(user_instruction, requested_count)
+            return RequestRouteDecision(
+                route="image",
+                intent_type="batch_generate" if batch_count > 1 else "single_generate",
+                batch_count=batch_count,
+                confidence=decision.confidence,
+                reasoning=decision.reasoning,
+                source=decision.source,
+                planning_basis="attachments",
+            )
+        return RequestRouteDecision(
+            route="chat",
+            intent_type="chat",
+            batch_count=1,
+            confidence=decision.confidence,
+            reasoning=decision.reasoning,
+            source=decision.source,
+            planning_basis="attachments",
+        )
+
+    return await _classify_text_request(
+        user_instruction=user_instruction,
+        request_model=request_model,
+        request_model_type=request_model_type,
+        requested_count=requested_count,
+        app_state=app_state,
+        api_key=api_key,
+    )
+
+
+async def _build_image_prompt_from_attachments(
+    user_instruction: str,
+    attachments: List[AttachmentDescriptor],
+    api_key: Optional[str] = None,
+) -> str:
+    text_attachments = [attachment for attachment in attachments if attachment.text_excerpt]
+    image_attachments = [attachment for attachment in attachments if attachment.kind == "image" and attachment.source]
+
+    if (
+        image_attachments
+        and LANGCHAIN_ASSISTANT_AVAILABLE
+        and HumanMessage is not None
+        and SystemMessage is not None
+        and _has_llm_credentials(api_key)
+    ):
+        try:
+            llm = _build_model(api_key=api_key, model=_get_default_planner_model())
+            content: List[Dict[str, Any]] = []
+            attachment_lines = [
+                f"- {attachment.name}: {attachment.text_excerpt}"
+                for attachment in text_attachments
+                if attachment.text_excerpt
+            ]
+            prompt_text = (
+                f"User instruction: {user_instruction or 'None'}\n"
+                "Create one grounded image-generation prompt. "
+                "Use attached text documents and reference images only as evidence. "
+                "Do not invent unsupported details."
+            )
+            if attachment_lines:
+                prompt_text += "\nDocument excerpts:\n" + "\n".join(attachment_lines)
+            content.append({"type": "text", "text": prompt_text})
+            for attachment in image_attachments[:3]:
+                content.append({"type": "image_url", "image_url": {"url": attachment.source}})
+
+            response = await llm.ainvoke(
+                [
+                    SystemMessage(content="You turn multimodal attachments into a faithful image-generation prompt."),
+                    HumanMessage(content=content),
+                ]
+            )
+            prompt = response.content if isinstance(response.content, str) else _extract_message_text(response.content)
+            if prompt:
+                return prompt
+        except Exception as exc:
+            logger.warning("Attachment-grounded image prompt generation failed: {}", exc)
+
+    if text_attachments:
+        prompt_result = await build_text_attachment_prompt(user_instruction, text_attachments, api_key=api_key)
+        return prompt_result.prompt
+
+    if image_attachments:
+        reference_note = "Use the uploaded image as the primary visual reference."
+        if user_instruction:
+            return f"{user_instruction}\n\n{reference_note}"
+        return reference_note
+
+    return user_instruction or ""
+
+
+async def _build_chat_plan(
+    *,
+    messages: List[Dict[str, Any]],
+    attachments: List[AttachmentDescriptor],
+    route_decision: RequestRouteDecision,
+    request_model: Optional[str],
+    request_model_type: Optional[str],
+    app_state,
+) -> AssistantExecutionPlan:
+    return AssistantExecutionPlan(
+        mode="chat",
+        confidence=route_decision.confidence,
+        reasoning=route_decision.reasoning,
+        source=route_decision.source,
+        effective_model=await _resolve_chat_model_name(request_model, request_model_type, app_state),
+        messages=_apply_attachments_to_chat_messages(messages, attachments),
+        intent_type="chat",
+        batch_count=1,
+        metadata={
+            "attachment_route": "chat" if attachments else "none",
+            "attachment_count": len(attachments),
+            "planning_basis": route_decision.planning_basis,
+        },
+    )
+
+
+async def _build_image_plan(
+    *,
+    user_instruction: str,
+    attachments: List[AttachmentDescriptor],
+    route_decision: RequestRouteDecision,
+    request_model: Optional[str],
+    request_model_type: Optional[str],
+    app_state,
+    api_key: Optional[str],
+) -> AssistantExecutionPlan:
+    return AssistantExecutionPlan(
+        mode="image",
+        confidence=route_decision.confidence,
+        reasoning=route_decision.reasoning,
+        source=route_decision.source,
+        effective_model=await _resolve_image_model_name(request_model, request_model_type, app_state),
+        prompt=await _build_image_prompt_from_attachments(
+            user_instruction,
+            attachments,
+            api_key=api_key,
+        ),
+        intent_type=route_decision.intent_type,
+        batch_count=route_decision.batch_count,
+        metadata={
+            "attachment_route": "image" if attachments else "none",
+            "attachment_count": len(attachments),
+            "planning_basis": route_decision.planning_basis,
+        },
+    )
+
+
+async def _load_attachments_node(state: AssistantExecutionState) -> Dict[str, object]:
+    db_manager = state.get("db_manager")
+    if db_manager is None:
+        raise ValueError("db_manager is required for attachment loading")
+    attachments = await _load_attachment_descriptors(
+        state.get("files"),
+        db_manager,
+        state.get("api_key"),
+    )
+    return {"attachments": [attachment.model_dump() for attachment in attachments]}
+
+
+async def _route_request_node(state: AssistantExecutionState) -> Dict[str, object]:
+    attachments = [AttachmentDescriptor.model_validate(item) for item in state.get("attachments", [])]
+    decision = await _decide_execution_route(
+        attachments=attachments,
+        user_instruction=state.get("user_instruction", ""),
+        request_model=state.get("request_model"),
+        request_model_type=state.get("request_model_type"),
+        requested_count=state.get("requested_count"),
+        app_state=state.get("app_state"),
+        api_key=state.get("api_key"),
+    )
+    return {"route_decision": decision.model_dump()}
+
+
+def _select_branch(state: AssistantExecutionState) -> str:
+    decision = state.get("route_decision") or {}
+    return "prepare_image" if str(decision.get("route")) == "image" else "prepare_chat"
+
+
+async def _prepare_chat_node(state: AssistantExecutionState) -> Dict[str, object]:
+    attachments = [AttachmentDescriptor.model_validate(item) for item in state.get("attachments", [])]
+    route_decision = RequestRouteDecision.model_validate(state.get("route_decision") or {})
+    plan = await _build_chat_plan(
+        messages=state.get("messages", []),
+        attachments=attachments,
+        route_decision=route_decision,
+        request_model=state.get("request_model"),
+        request_model_type=state.get("request_model_type"),
+        app_state=state.get("app_state"),
+    )
+    return {"execution_plan": plan.model_dump()}
+
+
+async def _prepare_image_node(state: AssistantExecutionState) -> Dict[str, object]:
+    attachments = [AttachmentDescriptor.model_validate(item) for item in state.get("attachments", [])]
+    route_decision = RequestRouteDecision.model_validate(state.get("route_decision") or {})
+    plan = await _build_image_plan(
+        user_instruction=state.get("user_instruction", ""),
+        attachments=attachments,
+        route_decision=route_decision,
+        request_model=state.get("request_model"),
+        request_model_type=state.get("request_model_type"),
+        app_state=state.get("app_state"),
+        api_key=state.get("api_key"),
+    )
+    return {"execution_plan": plan.model_dump()}
+
+
+def _build_execution_graph():
+    if not LANGCHAIN_ASSISTANT_AVAILABLE or StateGraph is None:
+        return None
+
+    builder = StateGraph(AssistantExecutionState)
+    builder.add_node("load_attachments", _load_attachments_node)
+    builder.add_node("route_request", _route_request_node)
+    builder.add_node("prepare_chat", _prepare_chat_node)
+    builder.add_node("prepare_image", _prepare_image_node)
+    builder.add_edge(START, "load_attachments")
+    builder.add_edge("load_attachments", "route_request")
+    builder.add_conditional_edges(
+        "route_request",
+        _select_branch,
+        {
+            "prepare_chat": "prepare_chat",
+            "prepare_image": "prepare_image",
+        },
+    )
+    builder.add_edge("prepare_chat", END)
+    builder.add_edge("prepare_image", END)
+    return builder.compile()
+
+
+_ASSISTANT_EXECUTION_GRAPH = _build_execution_graph()
+
+
+async def _fallback_execution_plan(
+    *,
+    messages: List[Dict[str, Any]],
+    files: Optional[List[str]],
+    user_instruction: str,
+    request_model: Optional[str],
+    request_model_type: Optional[str],
+    requested_count: Optional[int],
+    db_manager,
+    app_state,
+    api_key: Optional[str],
+) -> AssistantExecutionPlan:
+    attachments = await _load_attachment_descriptors(files, db_manager, api_key)
+    route_decision = await _decide_execution_route(
+        attachments=attachments,
+        user_instruction=user_instruction,
+        request_model=request_model,
+        request_model_type=request_model_type,
+        requested_count=requested_count,
+        app_state=app_state,
+        api_key=api_key,
+    )
+    if route_decision.route == "image":
+        return await _build_image_plan(
+            user_instruction=user_instruction,
+            attachments=attachments,
+            route_decision=route_decision,
+            request_model=request_model,
+            request_model_type=request_model_type,
+            app_state=app_state,
+            api_key=api_key,
+        )
+    return await _build_chat_plan(
+        messages=messages,
+        attachments=attachments,
+        route_decision=route_decision,
+        request_model=request_model,
+        request_model_type=request_model_type,
+        app_state=app_state,
+    )
+
+
+async def plan_assistant_execution(
+    *,
+    messages: List[Dict[str, Any]],
+    files: Optional[List[str]],
+    user_instruction: str,
+    request_model: Optional[str],
+    request_model_type: Optional[str],
+    requested_count: Optional[int],
+    db_manager,
+    app_state,
+    api_key: Optional[str] = None,
+) -> AssistantExecutionPlan:
+    if _ASSISTANT_EXECUTION_GRAPH is None:
+        return await _fallback_execution_plan(
+            messages=messages,
+            files=files,
+            user_instruction=user_instruction,
+            request_model=request_model,
+            request_model_type=request_model_type,
+            requested_count=requested_count,
+            db_manager=db_manager,
+            app_state=app_state,
+            api_key=api_key,
+        )
+
+    try:
+        result = await _ASSISTANT_EXECUTION_GRAPH.ainvoke(
+            {
+                "messages": messages,
+                "files": files or [],
+                "user_instruction": user_instruction or "",
+                "request_model": request_model,
+                "request_model_type": request_model_type,
+                "requested_count": requested_count,
+                "db_manager": db_manager,
+                "app_state": app_state,
+                "api_key": api_key,
+            }
+        )
+        return AssistantExecutionPlan.model_validate(result["execution_plan"])
+    except Exception as exc:
+        logger.warning("Assistant execution graph failed, falling back to direct planner: {}", exc)
+        return await _fallback_execution_plan(
+            messages=messages,
+            files=files,
+            user_instruction=user_instruction,
+            request_model=request_model,
+            request_model_type=request_model_type,
+            requested_count=requested_count,
+            db_manager=db_manager,
+            app_state=app_state,
+            api_key=api_key,
+        )
