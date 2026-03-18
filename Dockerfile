@@ -3,7 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy \
+    UV_LINK_MODE=hardlink \
     UV_PYTHON_DOWNLOADS=never \
     UV_DEFAULT_INDEX=https://mirrors.aliyun.com/pypi/simple/
 
@@ -17,11 +17,13 @@ RUN pip install --no-cache-dir uv -i https://mirrors.aliyun.com/pypi/simple/
 
 COPY pyproject.toml uv.lock README.md ./
 
-RUN uv sync --frozen --no-install-project
+RUN uv sync --frozen --no-install-project \
+    && rm -rf /root/.cache/uv
 
 COPY . .
 
-RUN uv sync --frozen
+RUN uv sync --frozen \
+    && rm -rf /root/.cache/uv
 RUN mkdir -p /app/data /app/logs /app/storage
 
 EXPOSE 8888
