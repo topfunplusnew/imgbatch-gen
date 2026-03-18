@@ -57,6 +57,9 @@ check_*.py
 run_test.py
 query_*.py
 quick_check.py
+!tests/
+!tests/**/
+!tests/**/*.py
 
 # 文档
 *.md
