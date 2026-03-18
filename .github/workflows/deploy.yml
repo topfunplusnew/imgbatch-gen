@@ -241,7 +241,33 @@ jobs:
           mv web/dist.new web/dist
 
           docker compose --env-file .env up -d --build --remove-orphans minio minio-init backend
+          for i in $(seq 1 60); do
+            backend_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' img-batch-agent-backend 2>/dev/null || true)"
+            echo "Backend status attempt $i: ${backend_status:-missing}"
+            if [ "$backend_status" = "healthy" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ "$backend_status" != "healthy" ]; then
+            echo "Backend did not become healthy in time"
+            docker compose --env-file .env logs --tail=200 backend
+            exit 1
+          fi
           docker compose --env-file .env up -d --force-recreate frontend
+          for i in $(seq 1 30); do
+            frontend_status="$(docker inspect --format '{{.State.Status}}' img-batch-agent-frontend 2>/dev/null || true)"
+            echo "Frontend status attempt $i: ${frontend_status:-missing}"
+            if [ "$frontend_status" = "running" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ "$frontend_status" != "running" ]; then
+            echo "Frontend did not start in time"
+            docker compose --env-file .env logs --tail=200 frontend
+            exit 1
+          fi
           rm -rf web/dist.prev
 
           curl -fsS http://127.0.0.1/health >/dev/null
