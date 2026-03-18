@@ -29,14 +29,22 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-${MINIO_ROOT_USER:-minioadmin}}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-${MINIO_ROOT_PASSWORD:-minioadmin}}
       MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-images}
     command:
       - /bin/sh
       - -c
-      - >
-        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
-        mc mb --ignore-existing local/"$$MINIO_BUCKET_NAME" &&
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing local/"$$MINIO_BUCKET_NAME"
         mc anonymous set download local/"$$MINIO_BUCKET_NAME"
+        if [ "$$MINIO_ACCESS_KEY" != "$$MINIO_ROOT_USER" ]; then
+          mc admin user info local "$$MINIO_ACCESS_KEY" >/dev/null 2>&1 || \
+            mc admin user add local "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY"
+          mc admin policy attach local readwrite --user "$$MINIO_ACCESS_KEY"
+        fi
 
   backend:
     build:

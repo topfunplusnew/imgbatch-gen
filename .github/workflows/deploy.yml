@@ -1,0 +1,172 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [release]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.ref_name == 'release'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        run: python -m pip install uv
+
+      - name: Install backend dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Run backend tests
+        run: uv run pytest
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: web
+        run: npm run build
+
+      - name: Prepare deploy payload
+        run: |
+          mkdir -p deploy-root/web
+          cp Dockerfile .dockerignore pyproject.toml uv.lock README.md docker-compose.yml deploy-root/
+          cp -r src deploy-root/src
+          cp web/nginx.conf web/.env.production deploy-root/web/
+          tar czf deploy-root.tgz -C deploy-root .
+          tar czf frontend-dist.tgz -C web/dist .
+
+      - name: Upload deploy payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-root
+          path: deploy-root.tgz
+
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend-dist.tgz
+
+  deploy:
+    needs: build
+    if: github.ref_name == 'release'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Download deploy payload
+        uses: actions/download-artifact@v4
+        with:
+          name: deploy-root
+          path: artifacts
+
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: artifacts
+
+      - name: Extract deployment artifacts
+        run: |
+          mkdir -p deploy-root web/dist
+          tar xzf artifacts/deploy-root.tgz -C deploy-root
+          tar xzf artifacts/frontend-dist.tgz -C web/dist
+
+      - name: Configure SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$DEPLOY_PORT" "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Prepare remote directories
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "mkdir -p '$DEPLOY_PATH/web' '$DEPLOY_PATH/data' '$DEPLOY_PATH/logs' '$DEPLOY_PATH/storage' '$DEPLOY_PATH/src'"
+
+      - name: Sync files
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          rsync -az -e "ssh -p $DEPLOY_PORT" \
+            deploy-root/Dockerfile \
+            deploy-root/.dockerignore \
+            deploy-root/pyproject.toml \
+            deploy-root/uv.lock \
+            deploy-root/README.md \
+            deploy-root/docker-compose.yml \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
+
+          rsync -az --delete -e "ssh -p $DEPLOY_PORT" \
+            deploy-root/src/ \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/src/"
+
+          rsync -az -e "ssh -p $DEPLOY_PORT" \
+            deploy-root/web/nginx.conf \
+            deploy-root/web/.env.production \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/web/"
+
+          rsync -az --delete -e "ssh -p $DEPLOY_PORT" web/dist/ \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/web/dist.new/"
+
+      - name: Remote deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'EOF'
+          set -euo pipefail
+
+          cd "$DEPLOY_PATH"
+
+          rm -rf web/dist.prev
+          if [ -d web/dist ]; then
+            mv web/dist web/dist.prev
+          fi
+          mv web/dist.new web/dist
+
+          docker compose --env-file .env up -d --build --remove-orphans minio minio-init backend frontend
+          rm -rf web/dist.prev
+
+          curl -fsS http://127.0.0.1/health >/dev/null
+          curl -fsS http://127.0.0.1/api/v1/health/storage >/dev/null
+          EOF
