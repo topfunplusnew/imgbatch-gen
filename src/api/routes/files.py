@@ -135,6 +135,7 @@ def normalize_file_url(file_url: str) -> str:
 
 @router.post("/upload", response_model=FileUploadResponse)
 async def upload_file(
+    request: Request,
     file: UploadFile = File(...),
     conversation_id: Optional[str] = None,
     message_id: Optional[int] = None,
@@ -288,6 +289,7 @@ async def upload_file(
 
 @router.post("/upload/batch")
 async def upload_files_batch(
+    request: Request,
     files: List[UploadFile] = File(...),
     conversation_id: Optional[str] = None
 ):
@@ -310,7 +312,7 @@ async def upload_files_batch(
         for file in files:
             try:
                 # 上传单个文件
-                result = await upload_file(file, conversation_id)
+                result = await upload_file(request, file, conversation_id)
                 results.append(result)
             except Exception as e:
                 logger.warning(f"文件 {file.filename} 上传失败: {str(e)}")

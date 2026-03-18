@@ -57,6 +57,7 @@ jobs:
         run: |
           docker run --rm \
             --add-host backend:127.0.0.1 \
+            --add-host minio:127.0.0.1 \
             -v "$PWD/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
             -v "$PWD/web/dist:/usr/share/nginx/html:ro" \
             nginx:1.27-alpine nginx -t

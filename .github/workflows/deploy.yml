@@ -240,7 +240,8 @@ jobs:
           fi
           mv web/dist.new web/dist
 
-          docker compose --env-file .env up -d --build --remove-orphans minio minio-init backend frontend
+          docker compose --env-file .env up -d --build --remove-orphans minio minio-init backend
+          docker compose --env-file .env up -d --force-recreate frontend
           rm -rf web/dist.prev
 
           curl -fsS http://127.0.0.1/health >/dev/null
