@@ -22,7 +22,7 @@ RUN uv sync --frozen --no-install-project
 COPY . .
 
 RUN uv sync --frozen
-RUN mkdir -p /app/storage
+RUN mkdir -p /app/data /app/logs /app/storage
 
 EXPOSE 8888
 
