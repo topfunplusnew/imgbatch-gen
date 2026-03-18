@@ -63,6 +63,7 @@ quick_check.py
 
 # 文档
 *.md
+!README.md
 doc/
 docs/
 
