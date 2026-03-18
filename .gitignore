@@ -81,3 +81,6 @@ docs/
 data/*.db
 data/*.db-shm
 data/*.db-wal
+
+github-actions-deploy
+github-actions-deploy.pub
