@@ -807,6 +807,229 @@ export const useGeneratorStore = defineStore('generator', {
             this.activePollingTasks.delete(batchId)
             return false
         },
+        // 增量轮询批量任务状态：每个子任务完成后立即更新图片列表
+        async pollBatchStatusIncremental(batchId: string, messageId: number, totalCount: number, maxAttempts: number = 900, interval: number = 2000): Promise<boolean> {
+            const sessionWhenStarted = this.currentSessionId
+            let attempts = 0
+            let mockCompletedCount = 0
+            const completedTaskImages = new Map<string, any[]>()
+
+            const normalizeImage = (image: any, taskIndex: number, imageIndex: number) => {
+                if (!image) return null
+                if (typeof image === 'string') {
+                    return {
+                        url: image,
+                        alt: `生成图片 ${taskIndex + 1}-${imageIndex + 1}`
+                    }
+                }
+                if (!image.url) return null
+                return {
+                    ...image,
+                    alt: image.alt || `生成图片 ${taskIndex + 1}-${imageIndex + 1}`
+                }
+            }
+
+            const extractTaskImages = (task: any, taskIndex: number) => {
+                const rawImages: any[] = []
+
+                if (Array.isArray(task?.images)) {
+                    rawImages.push(...task.images)
+                }
+
+                if (Array.isArray(task?.result)) {
+                    rawImages.push(...task.result)
+                } else if (Array.isArray(task?.result?.images)) {
+                    rawImages.push(...task.result.images)
+                }
+
+                const dedup = new Set<string>()
+                const images: any[] = []
+                rawImages.forEach((image, imageIndex) => {
+                    const normalized = normalizeImage(image, taskIndex, imageIndex)
+                    const url = normalized?.url
+                    if (!url || dedup.has(url)) return
+                    dedup.add(url)
+                    images.push(normalized)
+                })
+                return images
+            }
+
+            const buildOrderedImages = (tasks: any[]) => {
+                const sortedTasks = [...tasks].sort((a, b) => {
+                    const taskIndexA = typeof a?.metadata?.task_index === 'number' ? a.metadata.task_index : Number.MAX_SAFE_INTEGER
+                    const taskIndexB = typeof b?.metadata?.task_index === 'number' ? b.metadata.task_index : Number.MAX_SAFE_INTEGER
+                    return taskIndexA - taskIndexB
+                })
+
+                const imageDedup = new Set<string>()
+                const orderedImages: any[] = []
+
+                sortedTasks.forEach((task, index) => {
+                    const taskKey = task?.task_id || `${batchId}_${index}`
+                    const taskImages = completedTaskImages.get(taskKey) || extractTaskImages(task, index)
+                    taskImages.forEach((image) => {
+                        const url = typeof image === 'string' ? image : image?.url
+                        if (!url || imageDedup.has(url)) return
+                        imageDedup.add(url)
+                        orderedImages.push(image)
+                    })
+                })
+
+                return orderedImages
+            }
+
+            this.activePollingTasks.set(batchId, sessionWhenStarted)
+
+            while (attempts < maxAttempts) {
+                if (this.currentSessionId !== sessionWhenStarted) {
+                    console.log(`批量轮询停止: 会话已切换 (${batchId})`)
+                    this.activePollingTasks.delete(batchId)
+                    return false
+                }
+
+                try {
+                    let batchTask
+                    if (isMockMode()) {
+                        if (attempts % 3 === 0 && mockCompletedCount < totalCount) {
+                            mockCompletedCount++
+                        }
+
+                        batchTask = {
+                            batch_id: batchId,
+                            status: mockCompletedCount >= totalCount ? 'completed' : 'processing',
+                            tasks: Array.from({ length: totalCount }, (_, i) => ({
+                                task_id: `${batchId}_${i}`,
+                                status: i < mockCompletedCount ? 'completed' : 'processing',
+                                images: i < mockCompletedCount ? [{
+                                    url: `https://picsum.photos/1024/1024?random=${Date.now()}_${i}`
+                                }] : []
+                            }))
+                        }
+                    } else {
+                        batchTask = await api.getBatchTaskStatus(batchId)
+                    }
+
+                    if (this.currentSessionId !== sessionWhenStarted) {
+                        console.log(`批量轮询停止: 会话已切换 (${batchId})`)
+                        this.activePollingTasks.delete(batchId)
+                        return false
+                    }
+
+                    const tasks = Array.isArray(batchTask?.tasks) ? batchTask.tasks : []
+                    let completedTaskCount = 0
+                    let failedTaskCount = 0
+                    let terminalTaskCount = 0
+
+                    tasks.forEach((task, index) => {
+                        const taskStatus = String(task?.status || '').toLowerCase()
+                        const taskKey = task?.task_id || `${batchId}_${index}`
+
+                        if (taskStatus === 'completed') {
+                            completedTaskCount++
+                            terminalTaskCount++
+                            const taskImages = extractTaskImages(task, index)
+                            if (taskImages.length > 0) {
+                                completedTaskImages.set(taskKey, taskImages)
+                            }
+                        } else if (['failed', 'error', 'cancelled', 'canceled'].includes(taskStatus)) {
+                            failedTaskCount++
+                            terminalTaskCount++
+                        }
+                    })
+
+                    const progressTotal = totalCount || tasks.length || 1
+                    const orderedImages = buildOrderedImages(tasks)
+                    const processingContent = failedTaskCount > 0
+                        ? `正在批量生成... (${completedTaskCount}/${progressTotal})，失败 ${failedTaskCount}`
+                        : `正在批量生成... (${completedTaskCount}/${progressTotal})`
+
+                    this.updateMessage(messageId, {
+                        content: processingContent,
+                        status: 'processing',
+                        images: orderedImages,
+                        batchProgress: {
+                            completed: completedTaskCount,
+                            total: progressTotal,
+                            images: orderedImages
+                        }
+                    })
+
+                    const batchStatus = String(batchTask?.status || '').toLowerCase()
+                    const isBatchTerminal = ['completed', 'failed', 'error', 'cancelled', 'canceled'].includes(batchStatus)
+                    const isAllTaskTerminal = totalCount > 0
+                        ? terminalTaskCount >= totalCount
+                        : (tasks.length > 0 && terminalTaskCount >= tasks.length)
+
+                    if (isBatchTerminal || isAllTaskTerminal) {
+                        const finalStatus = orderedImages.length > 0 ? 'completed' : 'error'
+                        const finalContent = failedTaskCount > 0
+                            ? `批量生成完成：成功 ${completedTaskCount}，失败 ${failedTaskCount}`
+                            : `批量生成完成！共 ${completedTaskCount} 张图片`
+
+                        this.updateMessage(messageId, {
+                            content: finalContent,
+                            status: finalStatus,
+                            images: orderedImages,
+                            batchProgress: {
+                                completed: completedTaskCount,
+                                total: progressTotal,
+                                images: orderedImages
+                            }
+                        })
+
+                        if (this.sessionSavedToHistory) {
+                            const historyStore = useHistoryStore()
+                            historyStore.updateSession(this.currentSessionId, {
+                                messages: this.messages,
+                                imageCount: this.messages.reduce((count, msg) =>
+                                    count + (msg.images?.length || 0), 0
+                                )
+                            })
+
+                            const completedMessage = this.messages.find(m => m.id === messageId)
+                            if (completedMessage) {
+                                this.saveMessageToServer(completedMessage)
+                            }
+                        }
+
+                        this.activePollingTasks.delete(batchId)
+                        return orderedImages.length > 0
+                    }
+
+                    await new Promise(resolve => setTimeout(resolve, interval))
+                    attempts++
+                } catch (error) {
+                    console.error('轮询批量任务状态失败:', error)
+                    if (this.currentSessionId !== sessionWhenStarted) {
+                        console.log(`批量轮询停止: 会话已切换 (${batchId})`)
+                        this.activePollingTasks.delete(batchId)
+                        return false
+                    }
+                    attempts++
+                    await new Promise(resolve => setTimeout(resolve, interval))
+                }
+            }
+
+            if (this.currentSessionId === sessionWhenStarted) {
+                const timeoutImages = Array.from(completedTaskImages.values()).reduce((all, taskImages) => {
+                    return all.concat(taskImages)
+                }, [] as any[])
+
+                this.updateMessage(messageId, {
+                    content: `批量生成超时，已返回 ${timeoutImages.length} 张图片`,
+                    status: 'timeout',
+                    images: timeoutImages,
+                    batchProgress: {
+                        completed: timeoutImages.length,
+                        total: totalCount || timeoutImages.length || 1,
+                        images: timeoutImages
+                    }
+                })
+            }
+
+            this.activePollingTasks.delete(batchId)
+            return false
+        },
         // 设置会话标题
         setSessionTitle(title) {
             if (title && title.trim()) {
@@ -981,7 +1204,7 @@ export const useGeneratorStore = defineStore('generator', {
                             status: 'processing',
                             batchCount: totalCount
                         })
-                        this.pollBatchStatus(response.batch_id, messageId, totalCount, 900, 2000)
+                        this.pollBatchStatusIncremental(response.batch_id, messageId, totalCount, 900, 2000)
                         return { success: true, batchId: response.batch_id }
 
                     } else {

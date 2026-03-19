@@ -545,7 +545,7 @@ const handleImageModelSend = async () => {
         notification.info('批量任务已创建', `共 ${totalCount} 张图片`)
 
         // 轮询批量任务状态
-        generatorStore.pollBatchStatus(response.batch_id, assistantMessage.id, totalCount, 900, 2000).then(success => {
+        generatorStore.pollBatchStatusIncremental(response.batch_id, assistantMessage.id, totalCount, 900, 2000).then(success => {
           if (success) {
             notification.success('批量生成完成！')
           }
