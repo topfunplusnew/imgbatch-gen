@@ -394,6 +394,19 @@ export const useGeneratorStore = defineStore('generator', {
             try {
                 // 使用新的保存消息接口
                 const apiUrl = '/api/v1/history/save_message'
+                const serializedFiles = Array.isArray(message.files)
+                    ? message.files
+                        .map(file => ({
+                            name: file?.name || file?.filename || file?.original_filename,
+                            original_filename: file?.original_filename || file?.name || file?.filename,
+                            file_url: file?.file_url || file?.url,
+                            file_id: file?.file_id,
+                            file_size: file?.file_size || file?.size,
+                            file_type: file?.file_type || file?.type,
+                            category: file?.category || ((file?.type || file?.file_type || '').startsWith('image/') ? 'image' : 'document')
+                        }))
+                        .filter(file => file.name || file.file_url)
+                    : undefined
 
                 const response = await fetch(apiUrl, {
                     method: 'POST',
@@ -408,7 +421,7 @@ export const useGeneratorStore = defineStore('generator', {
                         provider: 'unknown',
                         timestamp: new Date().toISOString(),
                         images: (message.images || []).map(img => typeof img === 'string' ? img : img.url).filter(Boolean),
-                        files: message.files || undefined
+                        files: serializedFiles && serializedFiles.length > 0 ? serializedFiles : undefined
                     })
                 })
 

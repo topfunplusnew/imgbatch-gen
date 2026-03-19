@@ -63,6 +63,55 @@
       </div>
 
       <!-- 单张图片 -->
+      <div
+        v-if="imageAttachments.length > 0 || fileAttachments.length > 0"
+        :class="[
+          'mt-3 space-y-3',
+          msg.role === 'user' ? 'ml-auto max-w-[85%] md:max-w-[80%]' : 'max-w-[85%] md:max-w-[80%]'
+        ]"
+      >
+        <div v-if="imageAttachments.length > 0" class="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <div
+            v-for="(file, index) in imageAttachments"
+            :key="`att-image-${index}`"
+            class="relative group aspect-square rounded-xl overflow-hidden border border-border-dark bg-white"
+          >
+            <img
+              :src="getFileUrl(file)"
+              :alt="getAttachmentName(file)"
+              class="w-full h-full object-cover"
+            >
+            <button
+              @click="downloadAttachment(file)"
+              :disabled="!getFileUrl(file)"
+              class="absolute right-2 bottom-2 p-1.5 rounded-lg bg-black/45 hover:bg-black/60 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title="下载图片附件"
+            >
+              <span class="material-symbols-outlined !text-sm">download</span>
+            </button>
+          </div>
+        </div>
+
+        <div v-if="fileAttachments.length > 0" class="space-y-2">
+          <button
+            v-for="(file, index) in fileAttachments"
+            :key="`att-file-${index}`"
+            @click="downloadAttachment(file)"
+            :disabled="!getFileUrl(file)"
+            class="w-full flex items-center gap-3 px-3 py-2 rounded-xl border border-border-dark bg-white text-left hover:bg-primary/5 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
+            <span class="material-symbols-outlined !text-lg text-primary">
+              {{ getAttachmentIcon(file) }}
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm text-ink-950 truncate">{{ getAttachmentName(file) }}</p>
+              <p class="text-xs text-ink-500">{{ formatAttachmentSize(file) }}</p>
+            </div>
+            <span class="material-symbols-outlined !text-base text-ink-500">download</span>
+          </button>
+        </div>
+      </div>
+
       <div v-if="msg.images && msg.images.length === 1" class="mt-3">
         <div class="relative group max-w-xs md:max-w-md w-full">
           <img
@@ -165,6 +214,95 @@ const emit = defineEmits(['retry'])
 const isDownloading = ref(false)
 const downloadProgress = ref({})
 const copied = ref(false)
+
+const messageFiles = computed(() => (Array.isArray(props.msg.files) ? props.msg.files : []))
+const imageAttachments = computed(() => messageFiles.value.filter((file) => isImageAttachment(file)))
+const fileAttachments = computed(() => messageFiles.value.filter((file) => !isImageAttachment(file)))
+
+function getAttachmentName(file) {
+  return file?.name || file?.filename || file?.original_filename || '附件'
+}
+
+function getAttachmentType(file) {
+  return (file?.type || file?.file_type || '').toLowerCase()
+}
+
+function getAttachmentSize(file) {
+  return Number(file?.size || file?.file_size || 0)
+}
+
+function formatBytes(bytes) {
+  const size = Number(bytes)
+  if (!Number.isFinite(size) || size <= 0) return '未知大小'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let value = size
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+  const fixed = unitIndex === 0 ? value.toFixed(0) : value.toFixed(2)
+  return `${fixed} ${units[unitIndex]}`
+}
+
+function formatAttachmentSize(file) {
+  return formatBytes(getAttachmentSize(file))
+}
+
+function isImageAttachment(file) {
+  const type = getAttachmentType(file)
+  if (type.startsWith('image/')) return true
+  const fileName = getAttachmentName(file).toLowerCase()
+  return /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(fileName)
+}
+
+function getAttachmentIcon(file) {
+  if (isImageAttachment(file)) return 'image'
+  const fileName = getAttachmentName(file).toLowerCase()
+  if (fileName.endsWith('.pdf')) return 'picture_as_pdf'
+  if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) return 'description'
+  if (fileName.endsWith('.xls') || fileName.endsWith('.xlsx')) return 'table_chart'
+  if (fileName.endsWith('.ppt') || fileName.endsWith('.pptx')) return 'slideshow'
+  if (fileName.endsWith('.zip') || fileName.endsWith('.rar') || fileName.endsWith('.7z')) return 'folder_zip'
+  return 'attach_file'
+}
+
+function getFileUrl(file) {
+  const rawUrl = file?.url || file?.file_url || file?.local_url || file?.preview_url || ''
+  if (!rawUrl) return ''
+  if (
+    rawUrl.startsWith('blob:') ||
+    rawUrl.startsWith('data:') ||
+    rawUrl.startsWith('http://') ||
+    rawUrl.startsWith('https://')
+  ) {
+    return rawUrl
+  }
+
+  const apiEndpoint = apiConfigStore.apiEndpoint
+  if (apiEndpoint) {
+    const baseUrl = apiEndpoint.replace(/\/$/, '')
+    return `${baseUrl}${rawUrl.startsWith('/') ? '' : '/'}${rawUrl}`
+  }
+  return rawUrl
+}
+
+function downloadAttachment(file) {
+  const url = getFileUrl(file)
+  if (!url) {
+    notification.error('下载失败', '附件链接不可用')
+    return
+  }
+
+  const link = document.createElement('a')
+  link.href = url
+  link.download = getAttachmentName(file)
+  link.target = '_blank'
+  link.rel = 'noopener noreferrer'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
 
 // 备用复制方法
 function fallbackCopyTextToClipboard(text) {

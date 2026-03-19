@@ -257,23 +257,20 @@ const handleSend = async () => {
 const handleChatModelSend = async () => {
   const prompt = generatorStore.prompt.trim();
   if (!prompt && generatorStore.attachments.length === 0) return;
+  const attachments = [...generatorStore.attachments];
+  const messageFiles = attachments.map(buildMessageFileMeta);
 
   // 添加用户消息
   const userMessage = {
     id: Date.now(),
     role: 'user',
     content: prompt,
-    files: generatorStore.attachments.map(f => ({
-      name: f.name,
-      size: f.size,
-      type: f.type
-    }))
+    files: messageFiles
   };
   await generatorStore.addMessage(userMessage);
 
   // 清空输入和附件
   generatorStore.prompt = '';
-  const attachments = [...generatorStore.attachments];
   generatorStore.clearAttachments();
 
   // 添加 AI 占位消息
@@ -309,6 +306,7 @@ const handleChatModelSend = async () => {
             content: `正在上传文件... (${current}/${total}) - ${progress}%`
           });
         });
+        patchMessageFilesWithUploadResults(userMessage.id, messageFiles, uploadResults);
 
         // 获取上传的文件URL列表（MinIO完整URL）
         const uploadedFileUrls = uploadResults.map(f => f.url).filter(url => url);
@@ -383,17 +381,14 @@ const handleImageModelSend = async () => {
   // 保存输入和附件
   const prompt = generatorStore.prompt.trim()
   const attachments = [...generatorStore.attachments]
+  const messageFiles = attachments.map(buildMessageFileMeta)
 
   // 添加用户消息（包含附件预览信息）
   const userMessage = {
     id: Date.now(),
     role: 'user',
     content: prompt,
-    files: attachments.map(f => ({
-      name: f.name,
-      size: f.size,
-      type: f.type
-    }))
+    files: messageFiles
   }
   await generatorStore.addMessage(userMessage)
 
@@ -508,6 +503,7 @@ const handleImageModelSend = async () => {
             })
           })
 
+          patchMessageFilesWithUploadResults(userMessage.id, messageFiles, uploadResults)
           uploadedFiles = uploadResults.map(f => f.url)
           notification.success('文件上传成功', `已上传 ${uploadedFiles.length} 个文件`)
         } catch (uploadError) {
