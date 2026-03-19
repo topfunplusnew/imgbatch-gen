@@ -368,6 +368,10 @@ from urllib.parse import unquote, urlsplit, urlunsplit
 
 def _get_public_base_url(request: Request) -> str:
     """Resolve the externally reachable base URL for browser-facing links."""
+    origin = request.headers.get("origin")
+    if origin and origin.startswith(("http://", "https://")):
+        return origin.rstrip("/")
+
     explicit_base = getattr(settings, "public_base_url", None)
     if explicit_base:
         return explicit_base.rstrip("/")
