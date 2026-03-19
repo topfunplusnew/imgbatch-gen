@@ -14,7 +14,7 @@ from ...models.image import ImageParams
 from ...models.task import BatchTask
 from ...parsers import get_parser
 from ...workflows import build_pdf_prompt
-from .chat import _extract_api_key
+from .chat import _require_api_key
 
 
 router = APIRouter(prefix="/api/v1", tags=["batch"])
@@ -53,7 +53,7 @@ async def batch_generate(
     """Submit a batch image-generation job."""
     try:
         db_manager = get_db_manager()
-        api_key = _extract_api_key(http_request) if http_request else None
+        api_key = _require_api_key(http_request)
         params_list: List[ImageParams] = []
         user_inputs: List[str] = []
 

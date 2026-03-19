@@ -18,7 +18,6 @@ class AsyncTaskProcessor:
         self.manager = get_async_task_manager()
         self.running = False
         self.default_base_url = os.getenv("RELAY_BASE_URL") or settings.relay_base_url
-        self.default_api_key = os.getenv("RELAY_API_KEY") or settings.relay_api_key
 
         if not self.default_base_url:
             logger.warning("Async task processor has no default relay base URL configured.")
@@ -141,8 +140,8 @@ class AsyncTaskProcessor:
             api_key = credential["api_key"]
             base_url = credential.get("base_url") or base_url
 
-        if not api_key:
-            api_key = self.default_api_key
+        if not credential_id:
+            raise ValueError("Async task is missing credential_id; API key must come from request.")
 
         if not base_url:
             raise ValueError("Relay base URL is not configured for the async task.")

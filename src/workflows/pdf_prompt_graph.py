@@ -90,7 +90,7 @@ def _build_model(api_key: Optional[str] = None) -> "ChatOpenAI":
     if base_url and not base_url.rstrip("/").endswith("/v1"):
         base_url = base_url.rstrip("/") + "/v1"
 
-    key = api_key or settings.relay_api_key or settings.openai_api_key
+    key = (api_key or "").strip()
     if not key:
         raise RuntimeError("Missing API key for LangChain PDF prompt workflow.")
 

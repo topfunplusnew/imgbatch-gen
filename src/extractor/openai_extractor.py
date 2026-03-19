@@ -22,12 +22,12 @@ class OpenAIExtractor(BaseExtractor):
         if config is None:
             config = ProviderConfig.get_openai_config()
 
-        self.api_key = api_key or config.get("api_key") or settings.openai_api_key
+        self.api_key = (api_key or "").strip()
         self.base_url = base_url or config.get("base_url") or settings.openai_base_url
         self.model = config.get("model") or settings.openai_model
 
         if not self.api_key:
-            raise ValueError("OpenAI extractor requires an API key from the request or server config.")
+            raise ValueError("OpenAI extractor requires API key from request.")
 
         self.client = AsyncOpenAI(
             api_key=self.api_key,

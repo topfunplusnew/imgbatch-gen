@@ -5,7 +5,6 @@ from typing import Optional
 from openai import AsyncOpenAI
 
 from ..config.settings import settings
-from ..config.providers import ProviderConfig
 from ..models.image import ImageParams
 from .base import BaseProvider
 
@@ -13,12 +12,12 @@ from .base import BaseProvider
 class OpenAIProvider(BaseProvider):
     """OpenAI DALL-E生图Provider"""
     
-    def __init__(self, config: dict = None):
+    def __init__(self, config: dict = None, api_key: Optional[str] = None):
         """初始化OpenAI Provider"""
         if config is None:
-            config = ProviderConfig.get_openai_config()
+            config = {}
         
-        self.api_key = config.get("api_key") or settings.openai_api_key
+        self.api_key = (api_key or config.get("api_key") or "").strip()
         self.base_url = config.get("base_url") or settings.openai_base_url
         self.image_model = config.get("image_model") or settings.openai_image_model
         

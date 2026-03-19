@@ -40,7 +40,7 @@ class RelayClient:
 
     def __init__(self, base_url: Optional[str] = None, api_key: Optional[str] = None):
         self.base_url = (base_url or settings.relay_base_url or "").rstrip("/")
-        self.api_key = api_key or settings.relay_api_key or ""
+        self.api_key = (api_key or "").strip()
 
         if not self.base_url:
             raise ValueError("Relay base URL is not configured.")

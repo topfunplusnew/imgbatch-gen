@@ -23,7 +23,7 @@ class ProviderConfig:
     def get_openai_config() -> Dict[str, Any]:
         """获取OpenAI配置"""
         return {
-            "api_key": settings.openai_api_key,
+            "api_key": None,
             "base_url": settings.openai_base_url,
             "model": settings.openai_model,
             "embedding_model": settings.openai_embedding_model,

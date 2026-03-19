@@ -1,9 +1,16 @@
 import { defineStore } from 'pinia'
 
+const API_CONFIG_STORAGE_KEY = 'apiConfig'
+
+type StoredApiConfig = {
+  apiKey?: string
+  defaultModel?: string
+  apiEndpoint?: string
+}
+
 export const useApiConfigStore = defineStore('apiConfig', {
   state: () => ({
     apiKey: '',
-    // 开发环境走vite代理（空字符串），生产环境使用环境变量
     apiEndpoint: import.meta.env.DEV ? '' : (import.meta.env.VITE_API_BASE_URL || ''),
     defaultModel: 'Stable Diffusion XL v1.0',
     isInitialized: false,
@@ -18,15 +25,34 @@ export const useApiConfigStore = defineStore('apiConfig', {
     setDefaultModel(model: string) {
       this.defaultModel = model
     },
-    async testConnection(): Promise<boolean> {
-      // API 端点已固定，直接测试
+    loadConfigFromStorage() {
+      if (typeof window === 'undefined') return
+
+      const raw = localStorage.getItem(API_CONFIG_STORAGE_KEY)
+      if (!raw) return
+
       try {
-        // 动态导入API模块以避免循环依赖
+        const saved = JSON.parse(raw) as StoredApiConfig
+        if (typeof saved.apiKey === 'string') {
+          this.apiKey = saved.apiKey
+        }
+        if (typeof saved.defaultModel === 'string' && saved.defaultModel.trim()) {
+          this.defaultModel = saved.defaultModel
+        }
+        if (typeof saved.apiEndpoint === 'string') {
+          this.apiEndpoint = saved.apiEndpoint
+        }
+      } catch (error) {
+        console.error('Failed to load API config from localStorage:', error)
+      }
+    },
+    async testConnection(): Promise<boolean> {
+      try {
         const { api } = await import('@/services/api')
         const response = await api.healthCheck()
         return response?.status === 'healthy'
       } catch (error) {
-        console.error('连接测试失败:', error)
+        console.error('Connection test failed:', error)
         return false
       }
     },
@@ -35,10 +61,6 @@ export const useApiConfigStore = defineStore('apiConfig', {
       this.apiEndpoint = ''
       this.defaultModel = 'Stable Diffusion XL v1.0'
     },
-
-    /**
-     * 从环境变量配置API
-     */
     configureFromEnv() {
       const endpoint = import.meta.env.VITE_API_BASE_URL
 
@@ -49,14 +71,12 @@ export const useApiConfigStore = defineStore('apiConfig', {
 
       return { endpoint: this.apiEndpoint, hasKey: !!this.apiKey }
     },
-
-    /**
-     * 初始化API配置
-     */
     async initializeConfig() {
       if (this.isInitialized) return
 
       try {
+        this.loadConfigFromStorage()
+
         if (!import.meta.env.VITE_API_BASE_URL) {
           console.warn('VITE_API_BASE_URL environment variable not found')
         }
@@ -77,4 +97,3 @@ export const useApiConfigStore = defineStore('apiConfig', {
     },
   },
 })
-

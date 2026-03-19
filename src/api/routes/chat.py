@@ -36,12 +36,9 @@ def _normalize_openai_base_url(base_url: str | None) -> str | None:
     return normalized
 
 
-def _get_openai_client(api_key: str = None) -> AsyncOpenAI:
-    """使用配置的中转站构建 OpenAI 兼容客户端
-
-    优先使用前端传入的 api_key，其次回退到 .env 配置
-    """
-    key = api_key or settings.relay_api_key or settings.openai_api_key
+def _get_openai_client(api_key: str | None = None) -> AsyncOpenAI:
+    """使用前端请求中的 API Key 构建 OpenAI 兼容客户端。"""
+    key = (api_key or "").strip()
     if not key:
         raise ValueError("API Key 未配置，请在前端页面设置 API Key")
     base_url = _normalize_openai_base_url(settings.openai_base_url or settings.relay_base_url or None)
@@ -58,6 +55,16 @@ def _extract_api_key(http_request: Request) -> str | None:
     if auth and auth.startswith("Bearer "):
         return auth[7:].strip() or None
     return None
+
+
+def _require_api_key(http_request: Request) -> str:
+    api_key = _extract_api_key(http_request)
+    if not api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="Missing Authorization Bearer API Key. Please configure API Key in frontend.",
+        )
+    return api_key
 
 
 def _get_model_endpoint_type(model_name: str, app_state) -> str:
@@ -298,12 +305,12 @@ async def chat_completions(http_request: Request):
     if not req.model or not req.messages:
         raise HTTPException(status_code=400, detail="model 与 messages 为必填")
 
-    request_api_key = _extract_api_key(http_request)
+    request_api_key = _require_api_key(http_request)
 
     try:
         client = _get_openai_client(request_api_key)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=401, detail=str(e))
 
     # 根据模型的 supported_endpoint_types 决定端点
     endpoint_type = _get_model_endpoint_type(req.model, http_request.app.state)
@@ -320,7 +327,7 @@ async def chat_completions(http_request: Request):
         messages_to_send = await session_manager.get_context_messages(
             session_id=req.session_id,
             new_messages=messages_to_send,
-            api_key=request_api_key or settings.relay_api_key or settings.openai_api_key,
+            api_key=request_api_key,
             base_url=settings.openai_base_url or settings.relay_base_url,
             summary_model=req.model
         )

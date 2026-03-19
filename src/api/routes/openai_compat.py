@@ -42,16 +42,20 @@ async def create_image(
             width, height = int(w), int(h)
 
         api_key = _parse_bearer_token(authorization)
-        credential_id = None
-        if api_key:
-            db_manager = get_db_manager()
-            credential = await db_manager.store_api_credential(
-                api_key=api_key,
-                provider="relay",
-                base_url=settings.relay_base_url,
-                user_id="openai-compat",
+        if not api_key:
+            raise HTTPException(
+                status_code=401,
+                detail="Missing Authorization Bearer API Key.",
             )
-            credential_id = credential.id
+        credential_id = None
+        db_manager = get_db_manager()
+        credential = await db_manager.store_api_credential(
+            api_key=api_key,
+            provider="relay",
+            base_url=settings.relay_base_url,
+            user_id="openai-compat",
+        )
+        credential_id = credential.id
 
         manager = get_async_task_manager()
         params = {

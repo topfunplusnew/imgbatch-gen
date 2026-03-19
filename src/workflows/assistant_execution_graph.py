@@ -90,7 +90,7 @@ class AssistantExecutionState(TypedDict, total=False):
 
 
 def _has_llm_credentials(api_key: Optional[str] = None) -> bool:
-    return bool(api_key or settings.relay_api_key or settings.openai_api_key)
+    return bool((api_key or "").strip())
 
 
 def _is_placeholder_assistant_message(content: Any) -> bool:
@@ -203,7 +203,7 @@ def _build_model(api_key: Optional[str] = None, model: Optional[str] = None) -> 
     if base_url and not base_url.rstrip("/").endswith("/v1"):
         base_url = base_url.rstrip("/") + "/v1"
 
-    key = api_key or settings.relay_api_key or settings.openai_api_key
+    key = (api_key or "").strip()
     if not key:
         raise RuntimeError("Missing API key for assistant execution workflow.")
 

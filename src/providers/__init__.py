@@ -37,7 +37,9 @@ def get_provider(provider: str = None, model_name: str = None, api_key: str = No
     """
     # 使用中转站的Provider，优先使用传入的 api_key
     base_url = settings.relay_base_url
-    key = api_key or settings.relay_api_key
+    key = (api_key or "").strip()
+    if not key:
+        raise ValueError("Missing API key in request.")
     
     # 如果提供了模型名称，尝试从模型注册表查找
     if model_name:

@@ -187,6 +187,49 @@ const formatFileSize = (bytes) => {
   return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 };
 
+const isImageAttachment = (file) => {
+  const type = (file?.type || '').toLowerCase();
+  if (type.startsWith('image/')) return true;
+  const fileName = (file?.name || '').toLowerCase();
+  return /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(fileName);
+};
+
+const buildMessageFileMeta = (file) => {
+  let localUrl = '';
+  try {
+    localUrl = URL.createObjectURL(file);
+  } catch (error) {
+    console.warn('[附件预览] 无法创建本地预览 URL:', error);
+  }
+
+  return {
+    name: file.name,
+    filename: file.name,
+    size: file.size,
+    type: file.type,
+    local_url: localUrl || undefined,
+    preview_url: localUrl || undefined,
+    is_image: isImageAttachment(file),
+  };
+};
+
+const patchMessageFilesWithUploadResults = (messageId, messageFiles, uploadResults) => {
+  if (!Array.isArray(messageFiles) || !Array.isArray(uploadResults)) return;
+
+  const mergedFiles = messageFiles.map((fileMeta, index) => {
+    const uploaded = uploadResults[index];
+    if (!uploaded) return fileMeta;
+    return {
+      ...fileMeta,
+      file_id: uploaded.file_id,
+      url: uploaded.url,
+      file_url: uploaded.url,
+    };
+  });
+
+  generatorStore.updateMessage(messageId, { files: mergedFiles });
+};
+
 /**
  * 发送消息 - 根据模型类型分流
  */

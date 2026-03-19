@@ -13,7 +13,7 @@ from ...database import get_db_manager
 from ...models.task import ImageTask
 from ...database.models import ConversationSession, ChatConversation, UploadedFile
 from ...engine import TaskManager
-from .chat import _extract_api_key
+from .chat import _require_api_key
 
 
 router = APIRouter(prefix="/api/v1", tags=["history"])
@@ -436,7 +436,7 @@ async def summarize_conversation(session_id: str, http_request: Request):
         # 调用 OpenAI 生成总结
         from ...config.settings import settings
         client = AsyncOpenAI(
-            api_key=_extract_api_key(http_request) or settings.relay_api_key or settings.openai_api_key,
+            api_key=_require_api_key(http_request),
             base_url=settings.openai_base_url or settings.relay_base_url
         )
 

@@ -13,7 +13,7 @@ from ...providers import get_provider_by_model
 from ...config.settings import settings
 from ...config.model_registry import get_model_registry
 from ...database import get_db_manager
-from ..routes.chat import _extract_api_key
+from ..routes.chat import _require_api_key
 
 router = APIRouter(prefix="/api/v1", tags=["generate"])
 
@@ -59,6 +59,8 @@ async def generate_image(
             logger.debug(f"未指定 Provider，使用默认值: {provider_name}")
         
         # 2. 构建参数
+        request_api_key = _require_api_key(http_request)
+
         params = ImageParams(
             prompt=request.prompt,
             width=request.width or 1024,
@@ -67,7 +69,7 @@ async def generate_image(
             quality=request.quality or "standard",
             n=request.n or 1,
             provider=provider_name,
-            api_key=_extract_api_key(http_request),
+            api_key=request_api_key,
             extra_params=request.extra_params or {},
         )
         

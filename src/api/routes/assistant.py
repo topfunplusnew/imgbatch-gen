@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Request, Depends, UploadFile, File
-from ...api.routes.chat import _extract_api_key, _get_openai_client
+from ...api.routes.chat import _require_api_key, _get_openai_client
 from fastapi.responses import StreamingResponse
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -611,7 +611,7 @@ async def assistant_chat(
     """
 
     try:
-        api_key = _extract_api_key(http_request)
+        api_key = _require_api_key(http_request)
         db_manager = get_db_manager()
 
         user_messages = [m for m in request.messages if m.role == "user"]

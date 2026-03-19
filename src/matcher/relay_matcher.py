@@ -22,11 +22,11 @@ class RelayMatcher(BaseMatcher):
 
         config = config or {}
         self.base_url = base_url or config.get("base_url") or settings.relay_base_url
-        self.api_key = api_key or config.get("api_key") or settings.relay_api_key
+        self.api_key = (api_key or "").strip()
         self.embedding_model = config.get("embedding_model") or settings.openai_embedding_model
 
         if not self.api_key:
-            raise ValueError("Relay matcher requires an API key from the request or server config.")
+            raise ValueError("Relay matcher requires API key from request.")
 
         client_base_url = (self.base_url or "").rstrip("/")
         if client_base_url and not client_base_url.endswith("/v1"):

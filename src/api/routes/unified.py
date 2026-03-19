@@ -24,7 +24,7 @@ from ...providers import (
 )
 from ...database import get_db_manager
 from ...workflows import build_pdf_prompt
-from .chat import _extract_api_key
+from .chat import _require_api_key
 
 
 def _debug_log(
@@ -396,7 +396,7 @@ async def unified_generate(
         prepared_params: List[ImageParams] = []
         prepared_user_inputs: List[str] = []
         consumed_inline_prompt = False
-        api_key = _extract_api_key(http_request)
+        api_key = _require_api_key(http_request)
 
         # 处理image字段（参考图片）
         if image_file and hasattr(image_file, 'filename') and image_file.filename:
