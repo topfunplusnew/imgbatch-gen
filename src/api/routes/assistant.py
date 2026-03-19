@@ -699,6 +699,13 @@ async def assistant_chat(
             )
         else:
             generation_prompt = execution_plan.prompt or original_user_text
+            logger.info(
+                "Image generation prompt prepared: chars={}, attachment_count={}, attachment_text_count={}, preview={}",
+                len(generation_prompt or ""),
+                route_metadata.get("attachment_count", 0),
+                route_metadata.get("attachment_text_count", 0),
+                (generation_prompt or "")[:400],
+            )
             generation_message = ChatMessage(role="user", content=generation_prompt)
             image_model = (
                 execution_plan.effective_model

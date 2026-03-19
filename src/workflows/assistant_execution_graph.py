@@ -6,6 +6,7 @@ import base64
 import io
 import re
 from typing import Any, Dict, List, Optional, TypedDict
+from urllib.parse import unquote, urlsplit
 
 import pdfplumber
 from docx import Document
@@ -140,6 +141,49 @@ def _guess_extension(value: str) -> str:
     return cleaned.rsplit(".", 1)[-1]
 
 
+def _build_internal_minio_url(object_path: str) -> str:
+    endpoint = (settings.minio_endpoint or "").strip()
+    if not endpoint:
+        return ""
+    scheme = "https" if settings.minio_secure else "http"
+    bucket = settings.minio_bucket_name or "images"
+    normalized_object_path = object_path.lstrip("/")
+    return f"{scheme}://{endpoint}/{bucket}/{normalized_object_path}"
+
+
+def _try_map_public_url_to_internal_minio(raw_ref: str) -> Optional[str]:
+    """Map browser-facing MinIO URL/path to backend-accessible MinIO URL."""
+    if not raw_ref:
+        return None
+
+    bucket = settings.minio_bucket_name or "images"
+    parsed = urlsplit(raw_ref) if raw_ref.startswith(("http://", "https://")) else None
+    raw_path = parsed.path if parsed else raw_ref
+    path = unquote(raw_path or "").strip()
+    if not path:
+        return None
+
+    candidate_prefixes: List[str] = [f"/{bucket}"]
+    prefix = (settings.minio_url_prefix or "").strip()
+    if prefix:
+        prefix_path = urlsplit(prefix).path if prefix.startswith(("http://", "https://")) else prefix
+        prefix_path = "/" + prefix_path.lstrip("/")
+        candidate_prefixes.insert(0, prefix_path.rstrip("/"))
+
+    for candidate in candidate_prefixes:
+        normalized_candidate = candidate.rstrip("/")
+        if not normalized_candidate:
+            continue
+        marker = normalized_candidate + "/"
+        if path.startswith(marker):
+            object_path = path[len(marker):]
+            internal_url = _build_internal_minio_url(object_path)
+            if internal_url:
+                return internal_url
+
+    return None
+
+
 def _get_default_text_model() -> str:
     return settings.assistant_text_model or settings.langchain_pdf_prompt_model or settings.openai_model or "gpt-4o-mini"
 
@@ -216,25 +260,56 @@ def _build_model(api_key: Optional[str] = None, model: Optional[str] = None) -> 
 
 
 async def _resolve_file_reference(file_ref: str, db_manager) -> Dict[str, str]:
-    raw_ref = str(file_ref)
+    raw_ref = str(file_ref).strip()
     if raw_ref.startswith(("http://", "https://")):
-        name = raw_ref.split("?", 1)[0].rsplit("/", 1)[-1] or raw_ref
+        parsed = urlsplit(raw_ref)
+        name = unquote(parsed.path.rsplit("/", 1)[-1]) or raw_ref
+        extension = _guess_extension(name) or _guess_extension(parsed.path)
+        resolved_url = _try_map_public_url_to_internal_minio(raw_ref) or raw_ref
+        logger.info(
+            "Resolved attachment URL: original={}, resolved={}, extension={}",
+            raw_ref,
+            resolved_url,
+            extension or "unknown",
+        )
         return {
-            "url": raw_ref,
+            "url": resolved_url,
             "name": name,
-            "extension": _guess_extension(name),
+            "extension": extension,
         }
+
+    if raw_ref.startswith("/"):
+        name = unquote(raw_ref.split("?", 1)[0].rsplit("/", 1)[-1]) or raw_ref
+        extension = _guess_extension(name) or _guess_extension(raw_ref)
+        resolved_url = _try_map_public_url_to_internal_minio(raw_ref)
+        if resolved_url:
+            logger.info(
+                "Resolved attachment path: original={}, resolved={}, extension={}",
+                raw_ref,
+                resolved_url,
+                extension or "unknown",
+            )
+            return {
+                "url": resolved_url,
+                "name": name,
+                "extension": extension,
+            }
 
     file_info = await db_manager.get_file_by_id(file_ref)
     if not file_info:
+        logger.warning("Attachment file reference not found in database: {}", file_ref)
         raise ValueError(f"File not found: {file_ref}")
 
     file_url = getattr(file_info, "file_url", "") or ""
     if file_url.startswith(("http://", "https://")):
-        resolved_url = file_url
+        resolved_url = _try_map_public_url_to_internal_minio(file_url) or file_url
     else:
-        base_url = getattr(settings, "base_url", "http://backend:8888")
-        resolved_url = f"{base_url}{file_url}"
+        minio_url = _try_map_public_url_to_internal_minio(file_url)
+        if minio_url:
+            resolved_url = minio_url
+        else:
+            base_url = getattr(settings, "base_url", "http://backend:8888")
+            resolved_url = f"{base_url}{file_url}"
 
     extension = (
         (getattr(file_info, "file_extension", "") or "").lower().lstrip(".")
@@ -242,6 +317,12 @@ async def _resolve_file_reference(file_ref: str, db_manager) -> Dict[str, str]:
         or _guess_extension(resolved_url)
     )
     name = getattr(file_info, "original_filename", "") or resolved_url.split("?", 1)[0].rsplit("/", 1)[-1]
+    logger.info(
+        "Resolved attachment file id={} -> url={}, extension={}",
+        file_ref,
+        resolved_url,
+        extension or "unknown",
+    )
     return {
         "url": resolved_url,
         "name": name,
@@ -254,9 +335,12 @@ async def _download_file_bytes(url: str) -> bytes:
         raise RuntimeError("httpx is required for attachment loading.")
 
     async with httpx.AsyncClient(timeout=120) as client:
+        logger.info("Downloading attachment bytes from {}", url)
         response = await client.get(url)
         response.raise_for_status()
-        return response.content
+        content = response.content
+        logger.info("Downloaded attachment bytes: {} bytes from {}", len(content), url)
+        return content
 
 
 async def _extract_visual_excerpt(
@@ -392,6 +476,9 @@ async def _extract_attachment_excerpt(
     if extension == "docx":
         file_bytes = await _download_file_bytes(url)
         return _extract_docx_excerpt(file_bytes)
+    if extension == "doc":
+        logger.warning("Legacy .doc extraction is not supported yet: {}", url)
+        return ""
     if extension in {"jpg", "jpeg", "png", "gif", "webp", "bmp"}:
         file_bytes = await _download_file_bytes(url)
         return await _extract_image_excerpt(file_bytes, extension, api_key)
@@ -408,10 +495,17 @@ async def _load_attachment_descriptors(
     for file_ref in files or []:
         try:
             resolved = await _resolve_file_reference(file_ref, db_manager)
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to resolve attachment reference {}: {}", file_ref, exc)
             continue
 
-        extension = resolved["extension"]
+        extension = (resolved.get("extension") or "").lower()
+        logger.info(
+            "Processing attachment: name={}, extension={}, url={}",
+            resolved.get("name", ""),
+            extension or "unknown",
+            resolved.get("url", ""),
+        )
         if extension in {"pdf", "docx", "doc"}:
             try:
                 excerpt = await _extract_attachment_excerpt(
@@ -419,8 +513,27 @@ async def _load_attachment_descriptors(
                     extension=extension,
                     api_key=api_key,
                 )
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "Failed to extract text from attachment {} ({}): {}",
+                    resolved.get("name", ""),
+                    extension,
+                    exc,
+                )
                 excerpt = ""
+            if excerpt:
+                logger.info(
+                    "Attachment text extracted: name={}, extension={}, chars={}",
+                    resolved.get("name", ""),
+                    extension,
+                    len(excerpt),
+                )
+            else:
+                logger.warning(
+                    "Attachment text extraction returned empty: name={}, extension={}",
+                    resolved.get("name", ""),
+                    extension,
+                )
             descriptors.append(
                 AttachmentDescriptor(
                     name=resolved["name"],
@@ -438,7 +551,13 @@ async def _load_attachment_descriptors(
                     extension=extension,
                     api_key=api_key,
                 )
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "Failed to extract image attachment context {} ({}): {}",
+                    resolved.get("name", ""),
+                    extension,
+                    exc,
+                )
                 excerpt = ""
             descriptors.append(
                 AttachmentDescriptor(
@@ -447,6 +566,13 @@ async def _load_attachment_descriptors(
                     source=resolved["url"],
                     text_excerpt=excerpt or None,
                 )
+            )
+
+        if extension not in {"pdf", "docx", "doc", "jpg", "jpeg", "png", "gif", "webp", "bmp"}:
+            logger.warning(
+                "Skipping unsupported attachment extension: name={}, extension={}",
+                resolved.get("name", ""),
+                extension or "unknown",
             )
 
     return descriptors
@@ -822,8 +948,40 @@ async def _build_image_prompt_from_attachments(
     attachments: List[AttachmentDescriptor],
     api_key: Optional[str] = None,
 ) -> str:
+    def _build_attachment_grounding_block() -> str:
+        blocks: List[str] = []
+        for index, attachment in enumerate(attachments, start=1):
+            header = f"[Attachment {index}] name={attachment.name}, kind={attachment.kind}"
+            excerpt = (attachment.text_excerpt or "").strip()
+            if excerpt:
+                snippet = _trim_attachment_text(excerpt, limit=1600)
+                blocks.append(f"{header}\n{snippet}")
+            else:
+                blocks.append(f"{header}\n(No OCR/text excerpt was extracted.)")
+        return "\n\n".join(blocks)
+
+    def _merge_prompt_with_grounding(base_prompt: str, grounding_block: str) -> str:
+        base = (base_prompt or "").strip()
+        if not grounding_block:
+            return base
+
+        if base:
+            merged = (
+                f"{base}\n\n"
+                "Grounding content extracted from uploaded files (must be reflected in the output):\n"
+                f"{grounding_block}"
+            )
+        else:
+            merged = (
+                "Generate an image strictly based on the uploaded files.\n\n"
+                "Grounding content extracted from uploaded files:\n"
+                f"{grounding_block}"
+            )
+        return _trim_attachment_text(merged, limit=settings.assistant_attachment_text_limit or 12000)
+
     text_attachments = [attachment for attachment in attachments if attachment.text_excerpt]
     image_attachments = [attachment for attachment in attachments if attachment.kind == "image" and attachment.source]
+    grounding_block = _build_attachment_grounding_block()
 
     if (
         image_attachments
@@ -860,21 +1018,21 @@ async def _build_image_prompt_from_attachments(
             )
             prompt = response.content if isinstance(response.content, str) else _extract_message_text(response.content)
             if prompt:
-                return prompt
+                return _merge_prompt_with_grounding(prompt, grounding_block)
         except Exception as exc:
             logger.warning("Attachment-grounded image prompt generation failed: {}", exc)
 
     if text_attachments:
         prompt_result = await build_text_attachment_prompt(user_instruction, text_attachments, api_key=api_key)
-        return prompt_result.prompt
+        return _merge_prompt_with_grounding(prompt_result.prompt, grounding_block)
 
     if image_attachments:
         reference_note = "Use the uploaded image as the primary visual reference."
         if user_instruction:
-            return f"{user_instruction}\n\n{reference_note}"
-        return reference_note
+            return _merge_prompt_with_grounding(f"{user_instruction}\n\n{reference_note}", grounding_block)
+        return _merge_prompt_with_grounding(reference_note, grounding_block)
 
-    return user_instruction or ""
+    return _merge_prompt_with_grounding(user_instruction or "", grounding_block)
 
 
 async def _build_chat_plan(
@@ -913,22 +1071,31 @@ async def _build_image_plan(
     app_state,
     api_key: Optional[str],
 ) -> AssistantExecutionPlan:
+    final_prompt = await _build_image_prompt_from_attachments(
+        user_instruction,
+        attachments,
+        api_key=api_key,
+    )
+    attachment_text_count = sum(1 for attachment in attachments if attachment.text_excerpt)
+    logger.info(
+        "Prepared grounded image prompt: chars={}, attachments={}, text_attachments={}",
+        len(final_prompt or ""),
+        len(attachments),
+        attachment_text_count,
+    )
     return AssistantExecutionPlan(
         mode="image",
         confidence=route_decision.confidence,
         reasoning=route_decision.reasoning,
         source=route_decision.source,
         effective_model=await _resolve_image_model_name(request_model, request_model_type, app_state),
-        prompt=await _build_image_prompt_from_attachments(
-            user_instruction,
-            attachments,
-            api_key=api_key,
-        ),
+        prompt=final_prompt,
         intent_type=route_decision.intent_type,
         batch_count=route_decision.batch_count,
         metadata={
             "attachment_route": "image" if attachments else "none",
             "attachment_count": len(attachments),
+            "attachment_text_count": attachment_text_count,
             "planning_basis": route_decision.planning_basis,
         },
     )
