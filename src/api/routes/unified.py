@@ -6,6 +6,7 @@ import tempfile
 import os
 import json
 import time
+import base64
 
 from ...models.task import ImageTask, BatchTask
 from ...models.image import ImageParams
@@ -24,7 +25,7 @@ from ...providers import (
 )
 from ...database import get_db_manager
 from ...workflows import build_pdf_prompt
-from .chat import _require_api_key
+from .chat import _require_api_key, _get_openai_client
 
 
 def _debug_log(
@@ -62,6 +63,86 @@ def _debug_log(
         pass
 
 router = APIRouter(prefix="/api/v1", tags=["unified"])
+
+
+async def _extract_image_ocr_for_generation(
+    *,
+    image_bytes: bytes,
+    filename: str,
+    api_key: str,
+) -> str:
+    """Extract OCR/context from an uploaded image for prompt grounding."""
+    if not image_bytes:
+        return ""
+
+    ext = os.path.splitext(filename or "")[1].lower().lstrip(".")
+    mime = {
+        "jpg": "jpeg",
+        "jpeg": "jpeg",
+        "png": "png",
+        "gif": "gif",
+        "webp": "webp",
+        "bmp": "bmp",
+    }.get(ext, "png")
+
+    model = (
+        settings.assistant_ocr_model
+        or settings.assistant_text_model
+        or settings.openai_model
+        or "gpt-4o-mini"
+    )
+
+    try:
+        client = _get_openai_client(api_key)
+        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+        data_url = f"data:image/{mime};base64,{image_b64}"
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You extract grounded content from an image for downstream image generation. "
+                        "Return concise plain text including: visible text (OCR), key entities, numbers, "
+                        "layout/structure hints, and critical visual attributes."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "请识别这张图片中的文字与关键信息，用于后续生图。"
+                                "输出要求：\n"
+                                "1) 保留关键 OCR 文本（标题/数字/专有名词）\n"
+                                "2) 描述核心视觉元素与布局\n"
+                                "3) 控制在 1200 字以内"
+                            ),
+                        },
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                    ],
+                },
+            ],
+            max_tokens=1200,
+        )
+        content = ""
+        if getattr(response, "choices", None):
+            content = (response.choices[0].message.content or "").strip()
+
+        if not content:
+            logger.warning("[Unified] Image OCR returned empty content: {}", filename)
+            return ""
+
+        max_len = 4000
+        if len(content) > max_len:
+            content = content[: max_len - 3].rstrip() + "..."
+
+        logger.info("[Unified] Image OCR extracted: file={}, chars={}", filename, len(content))
+        return content
+    except Exception as e:
+        logger.warning(f"[Unified] Image OCR extraction failed for {filename}: {str(e)}")
+        return ""
 
 
 def get_task_manager(request: Request) -> TaskManager:
@@ -393,6 +474,7 @@ async def unified_generate(
         all_prompts = []
         parsed_data = None
         reference_image_bytes = None
+        reference_image_filename = ""
         prepared_params: List[ImageParams] = []
         prepared_user_inputs: List[str] = []
         consumed_inline_prompt = False
@@ -401,6 +483,7 @@ async def unified_generate(
         # 处理image字段（参考图片）
         if image_file and hasattr(image_file, 'filename') and image_file.filename:
             reference_image_bytes = await image_file.read()
+            reference_image_filename = image_file.filename
             logger.info(f"✓ 接收到参考图片(image字段): {image_file.filename}, 大小: {len(reference_image_bytes)} bytes")
 
         # 处理file字段（文档或图片）
@@ -411,6 +494,7 @@ async def unified_generate(
             if file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']:
                 # 图片文件作为参考图
                 reference_image_bytes = await file.read()
+                reference_image_filename = file.filename or ""
                 logger.info(f"✓ 识别为参考图片: {file.filename}, 大小: {len(reference_image_bytes)} bytes")
             else:
                 # 非图片文件，解析为prompt
@@ -478,6 +562,46 @@ async def unified_generate(
             all_prompts.extend(prompts_list)
         
         # 3a. 如果是非标准生成操作（如 edit、blend 等），直接路由到对应 Provider 方法
+        # 鍥剧墖鐢熸垚锛氬厛OCR鎻愬彇鍐呭锛屽啀涓庣敤鎴锋彁绀鸿瘝鍚堝苟
+        if operation_type == "generate" and reference_image_bytes:
+            image_ocr_text = await _extract_image_ocr_for_generation(
+                image_bytes=reference_image_bytes,
+                filename=reference_image_filename or "reference_image.png",
+                api_key=api_key,
+            )
+            if image_ocr_text:
+                grounding_block = (
+                    "参考图片OCR/内容提取结果（生成时必须结合）:\n"
+                    f"{image_ocr_text}"
+                )
+
+                if prepared_params:
+                    for prepared_param in prepared_params:
+                        base_prompt = (prepared_param.prompt or "").strip()
+                        prepared_param.prompt = (
+                            f"{base_prompt}\n\n{grounding_block}"
+                            if base_prompt
+                            else grounding_block
+                        )
+
+                if all_prompts:
+                    all_prompts = [
+                        f"{prompt_item}\n\n{grounding_block}" if prompt_item else grounding_block
+                        for prompt_item in all_prompts
+                    ]
+                elif not prepared_params:
+                    all_prompts.append(grounding_block)
+
+                extra_params_dict = dict(extra_params_dict or {})
+                extra_params_dict["reference_image_ocr"] = image_ocr_text
+                logger.info(
+                    "[Unified] Image OCR merged into prompt chain: prompts={}, prepared_params={}",
+                    len(all_prompts),
+                    len(prepared_params),
+                )
+            else:
+                logger.warning("[Unified] Image OCR is empty, keeping original prompts")
+
         if operation_type != "generate":
             # 对于非 generate 操作，prompt 可能是可选的（取决于具体操作类型）
             primary_prompt = all_prompts[0] if all_prompts else None
