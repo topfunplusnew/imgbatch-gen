@@ -233,6 +233,12 @@ jobs:
           set -euo pipefail
 
           cd "$DEPLOY_PATH"
+          if [ -f .env ]; then
+            set -a
+            . ./.env
+            set +a
+          fi
+          frontend_port="${FRONTEND_PORT:-8080}"
 
           rm -rf web/dist.prev
           if [ -d web/dist ]; then
@@ -270,8 +276,8 @@ jobs:
           fi
           rm -rf web/dist.prev
 
-          curl -fsS http://127.0.0.1/health >/dev/null
-          curl -fsS http://127.0.0.1/api/v1/health/storage >/dev/null
+          curl -fsS "http://127.0.0.1:${frontend_port}/health" >/dev/null
+          curl -fsS "http://127.0.0.1:${frontend_port}/api/v1/health/storage" >/dev/null
           EOF
 
       - name: Collect remote logs on failure
