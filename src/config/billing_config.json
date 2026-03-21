@@ -1,0 +1,148 @@
+{
+  "billing": {
+    "mode": "hybrid",
+    "description": "计费模式: hybrid(混合), subscription(订阅), points(积分), pay_per_use(按次)",
+    "currency": "CNY",
+    "currency_symbol": "¥"
+  },
+  "points_exchange": {
+    "rate": 100,
+    "description": "1元 = 100积分，33积分 ≈ 0.33元（1张图）"
+  },
+  "initial_quota": {
+    "points": 100,
+    "free_generations": 0,
+    "description": "新用户注册赠送100临时积分（每日23:59:59清零）"
+  },
+  "daily_checkin": {
+    "reward_points": 40,
+    "description": "每日签到奖励40永久积分（不清零）"
+  },
+  "model_pricing": {
+    "description": "模型定价配置，不同模型消耗不同积分/金额",
+    "models": {
+      "dall-e-3": {
+        "name": "DALL-E 3",
+        "points": 33,
+        "amount": 33,
+        "description": "OpenAI DALL-E 3，消耗33积分或0.33元"
+      },
+      "dall-e-2": {
+        "name": "DALL-E 2",
+        "points": 20,
+        "amount": 20,
+        "description": "OpenAI DALL-E 2，消耗20积分或0.2元"
+      },
+      "midjourney": {
+        "name": "Midjourney",
+        "points": 50,
+        "amount": 50,
+        "description": "Midjourney，消耗50积分或0.5元"
+      },
+      "flux-pro": {
+        "name": "Flux Pro",
+        "points": 20,
+        "amount": 20,
+        "description": "Flux Pro，消耗20积分或0.2元"
+      },
+      "flux-dev": {
+        "name": "Flux Dev",
+        "points": 10,
+        "amount": 10,
+        "description": "Flux Dev，消耗10积分或0.1元"
+      },
+      "ideogram-v2": {
+        "name": "Ideogram V2",
+        "points": 25,
+        "amount": 25,
+        "description": "Ideogram V2，消耗25积分或0.25元"
+      },
+      "stable-diffusion": {
+        "name": "Stable Diffusion",
+        "points": 10,
+        "amount": 10,
+        "description": "Stable Diffusion，消耗10积分或0.1元"
+      },
+      "kling": {
+        "name": "可灵(Kling)",
+        "points": 40,
+        "amount": 40,
+        "description": "可灵图像生成，消耗40积分或0.4元"
+      },
+      "wanx": {
+        "name": "通义万相",
+        "points": 25,
+        "amount": 25,
+        "description": "阿里云通义万相，消耗25积分或0.25元"
+      },
+      "default": {
+        "name": "默认模型",
+        "points": 33,
+        "amount": 33,
+        "description": "未配置模型使用默认价格"
+      }
+    }
+  },
+  "recharge_options": {
+    "description": "充值选项，20元起充",
+    "options": [
+      {
+        "id": "recharge_1",
+        "name": "基础充值",
+        "amount": 2000,
+        "amount_yuan": 20,
+        "points": 2000,
+        "bonus": 0,
+        "popular": false,
+        "description": "20元 = 2000积分"
+      },
+      {
+        "id": "recharge_2",
+        "name": "超值充值",
+        "amount": 5000,
+        "amount_yuan": 50,
+        "points": 5500,
+        "bonus": 500,
+        "popular": true,
+        "description": "50元 = 5500积分（赠送500）"
+      },
+      {
+        "id": "recharge_3",
+        "name": "豪华充值",
+        "amount": 10000,
+        "amount_yuan": 100,
+        "points": 12000,
+        "bonus": 2000,
+        "popular": false,
+        "description": "100元 = 12000积分（赠送2000）"
+      },
+      {
+        "id": "recharge_4",
+        "name": "尊享充值",
+        "amount": 20000,
+        "amount_yuan": 200,
+        "points": 26000,
+        "bonus": 6000,
+        "popular": false,
+        "description": "200元 = 26000积分（赠送6000）"
+      }
+    ]
+  },
+  "subscription_plans": {
+    "description": "订阅套餐配置(暂时未启用，保留扩展)",
+    "plans": []
+  },
+  "limits": {
+    "description": "用户限制配置",
+    "guest": {
+      "daily_limit": 5,
+      "description": "游客每日生成次数限制"
+    },
+    "free_user": {
+      "daily_limit": 20,
+      "description": "免费用户每日生成次数限制(超出免费额度后)"
+    },
+    "order_expire_minutes": 30,
+    "description": "支付订单过期时间(分钟)"
+  }
+}

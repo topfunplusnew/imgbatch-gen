@@ -153,8 +153,24 @@ async def batch_generate(
             raise HTTPException(status_code=400, detail="娌℃湁鏈夋晥鐨勮緭鍏ユ暟鎹?")
 
         try:
+            # 尝试从请求中获取user_id（如果有认证）
+            user_id = "anonymous"
+            if http_request:
+                # 尝试从header或cookie中获取token并解析user_id
+                auth_header = http_request.headers.get("authorization", "")
+                if auth_header and auth_header.startswith("Bearer "):
+                    try:
+                        from ...services.auth_service import get_auth_service
+                        auth_service = get_auth_service()
+                        token = auth_header.split(" ")[1]
+                        payload = auth_service.decode_token(token)
+                        if payload:
+                            user_id = payload.get("user_id", "anonymous")
+                    except Exception:
+                        pass
+
             user_request = await db_manager.create_user_request(
-                user_id="anonymous",
+                user_id=user_id,
                 user_ip=http_request.client.host if http_request else "127.0.0.1",
                 user_agent=http_request.headers.get("user-agent", "") if http_request else "",
                 request_type="batch_generation",
@@ -165,11 +181,13 @@ async def batch_generate(
         except Exception as e:
             logger.warning(f"Failed to create batch user request: {str(e)}")
             user_request = None
+            user_id = "anonymous"
 
         batch_task = await task_manager.create_batch_task(
             params_list,
             user_inputs,
             user_request.id if user_request else None,
+            user_id,
         )
 
         if user_request:

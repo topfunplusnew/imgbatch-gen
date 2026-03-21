@@ -121,7 +121,7 @@ class ConversationSession(BaseModel):
     __tablename__ = "conversation_sessions"
 
     # 会话信息
-    session_id = Column(String(100), primary_key=True, comment="会话ID")
+    session_id = Column(String(100), unique=True, nullable=False, index=True, comment="会话ID")
     client_id = Column(String(100), index=True, comment="客户端Cookie ID，用于区分不同客户端")
     title = Column(String(200), comment="对话标题")
     model = Column(String(100), comment="使用的模型")
@@ -143,7 +143,7 @@ class ConversationSession(BaseModel):
     messages = relationship("ChatConversation", back_populates="session")
 
     def __repr__(self):
-        return f"<ConversationSession(id={self.session_id}, title={self.title})>"
+        return f"<ConversationSession(id={self.id}, session_id={self.session_id}, title={self.title})>"
 
 
 class StoredCredential(BaseModel):
@@ -218,3 +218,44 @@ class UploadedFile(BaseModel):
 
     def __repr__(self):
         return f"<UploadedFile(id={self.id}, original_name={self.original_filename}, size={self.file_size})>"
+
+
+class Case(BaseModel):
+    """案例表 - 管理员上传的生图案例"""
+    __tablename__ = "cases"
+
+    # 基本信息
+    title = Column(String(200), nullable=False, comment="案例标题")
+    description = Column(Text, comment="案例描述")
+
+    # 行业分类（电商、广告、动漫、室内、logo等）
+    category = Column(String(50), nullable=False, index=True, comment="行业分类")
+    tags = Column(JSON, comment="标签列表（JSON数组）")
+
+    # 图片信息
+    thumbnail_url = Column(String(500), comment="缩略图URL")
+    image_url = Column(String(500), comment="完整图片URL")
+    image_path = Column(String(500), comment="图片存储路径")
+
+    # 生成参数
+    prompt = Column(Text, nullable=False, comment="提示词")
+    negative_prompt = Column(Text, comment="负面提示词")
+
+    # 参数配置（JSON格式）
+    parameters = Column(JSON, comment="生成参数配置")
+
+    # 模型信息
+    provider = Column(String(100), comment="Provider名称")
+    model = Column(String(100), comment="模型名称")
+
+    # 状态管理
+    is_published = Column(Boolean, default=True, index=True, comment="是否发布")
+    sort_order = Column(Integer, default=0, index=True, comment="排序权重")
+    view_count = Column(Integer, default=0, comment="浏览次数")
+    use_count = Column(Integer, default=0, comment="使用次数")
+
+    # 创建者信息
+    created_by = Column(String(100), comment="创建者ID（管理员）")
+
+    def __repr__(self):
+        return f"<Case(id={self.id}, title={self.title}, category={self.category})>"

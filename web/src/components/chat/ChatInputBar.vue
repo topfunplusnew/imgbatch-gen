@@ -5,24 +5,56 @@
       <div
         v-for="(file, index) in generatorStore.attachments"
         :key="index"
-        class="flex items-center gap-1.5 px-2 py-1 bg-white border border-border-dark rounded-lg text-xs shadow-lg">
-        <span class="material-symbols-outlined !text-sm text-primary">{{ getFileIcon(file) }}</span>
-        <span class="text-ink-700 max-w-[120px] truncate">{{ file.name }}</span>
-        <button @click="removeFile(index)" class="text-ink-500 hover:text-red-400 transition-colors">
-          <span class="material-symbols-outlined !text-sm">close</span>
-        </button>
+        class="relative flex items-center gap-1.5 px-2 py-1 bg-white border border-border-dark rounded-lg text-xs shadow-lg overflow-hidden"
+        :class="{ 'ring-2 ring-primary': isHoveringFile === index }">
+
+        <!-- File content (z-index 10 to stay above overlay) -->
+        <div class="relative z-10 flex items-center gap-1.5">
+          <!-- 图片预览或文件图标 -->
+          <div v-if="isImageFile(file)" class="relative shrink-0">
+            <img
+              :src="getFilePreviewUrl(file)"
+              :alt="file.name"
+              class="w-[60px] h-[60px] object-cover rounded-lg border border-border-dark"
+              @load="revokeFilePreviewUrl(file)">
+          </div>
+          <span v-else class="material-symbols-outlined !text-sm text-primary">{{ getFileIcon(file) }}</span>
+
+          <!-- 文件名（图片时不显示） -->
+          <span v-if="!isImageFile(file)" class="text-ink-700 max-w-[120px] truncate">{{ file.name }}</span>
+
+          <button
+            @click.stop="removeFile(index)"
+            @mouseenter="isHoveringFile = index"
+            @mouseleave="isHoveringFile = null"
+            class="text-ink-500 hover:text-red-400 transition-colors shrink-0">
+            <span class="material-symbols-outlined !text-sm">close</span>
+          </button>
+        </div>
+
+        <!-- Hover overlay with absolute positioning -->
+        <div
+          class="absolute inset-0 z-0 grid place-items-center transition-opacity duration-200"
+          :class="isHoveringFile === index ? 'opacity-100' : 'opacity-0'">
+          <button
+            class="px-3 py-1 bg-primary text-white rounded-full border-2 border-white shadow-lg text-xs font-medium hover:bg-primary-deep transition-colors">
+            {{ file.name }}
+          </button>
+        </div>
       </div>
     </div>
 
-    <div class="px-3 md:px-6 py-2 md:py-4">
-      <div class="max-w-full md:max-w-4xl mx-auto w-full">
+    <div class="px-3 xs:px-4 md:px-6 py-2 xs:py-2.5 md:py-4 min-h-[80px] xs:min-h-[100px] md:min-h-[120px]">
+      <div class="w-full">
         <div
           ref="inputBoxRef"
           @dragover.prevent="handleDragOver"
           @dragleave="handleDragLeave"
           @drop.prevent="handleDrop"
           :class="[
-            'relative z-10 bg-white/95 border rounded-2xl shadow-xl w-full min-w-[200px] md:min-w-[280px] max-w-full md:max-w-[800px]',
+            'relative z-10 bg-white/95 border rounded-2xl shadow-xl',
+            'min-w-[200px] xs:min-w-[240px] md:min-w-[280px]',
+            'w-full',
             isDragging ? 'border-primary border-2 bg-primary/5' : 'border-border-dark'
           ]">
 
@@ -54,6 +86,7 @@
             <textarea
               v-model="generatorStore.prompt"
               @keydown.enter.exact.prevent="handleSend"
+              @focus="handleFocus"
               :style="{ height: textareaHeight + 'px' }"
               class="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2 px-2 overflow-y-auto custom-scrollbar min-w-0 resize-none text-ink-950 placeholder:text-ink-500"
               placeholder="描述您想要创建的图像...">
@@ -78,15 +111,25 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onUnmounted } from 'vue';
 import { useGeneratorStore } from '@/store/useGeneratorStore';
+import { useAppStore } from '@/store/useAppStore';
 import { notification } from '@/utils/notification';
 import { api } from '@/services/api';
 
 const generatorStore = useGeneratorStore();
+const appStore = useAppStore();
 const fileInputRef = ref(null);
 const inputBoxRef = ref(null);
 const isDragging = ref(false);
+const isHoveringFile = ref(null);
+
+// 聚焦时清除案例详情
+const handleFocus = () => {
+  if (appStore.selectedCase) {
+    appStore.clearSelectedCase();
+  }
+};
 
 const textareaHeight = ref(80)
 
@@ -161,6 +204,11 @@ const handleFileSelect = (event) => {
 
 // 移除文件
 const removeFile = (index) => {
+  const file = generatorStore.attachments[index];
+  if (file && filePreviewUrls.has(file.name)) {
+    URL.revokeObjectURL(filePreviewUrls.get(file.name));
+    filePreviewUrls.delete(file.name);
+  }
   generatorStore.removeAttachment(index);
 };
 
@@ -185,6 +233,45 @@ const formatFileSize = (bytes) => {
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+};
+
+// 判断是否为图片文件
+const isImageFile = (file) => {
+  const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml'];
+  return imageTypes.includes(file.type);
+};
+
+// 获取文件预览URL（用于图片）
+const filePreviewUrls = new Map();
+
+const getFilePreviewUrl = (file) => {
+  if (!isImageFile(file)) return null;
+
+  // 如果已经创建过URL，直接返回
+  if (filePreviewUrls.has(file.name)) {
+    return filePreviewUrls.get(file.name);
+  }
+
+  // 创建新的URL
+  const url = URL.createObjectURL(file);
+  filePreviewUrls.set(file.name, url);
+  return url;
+};
+
+// 释放文件预览URL
+const revokeFilePreviewUrl = (file) => {
+  if (filePreviewUrls.has(file.name)) {
+    URL.revokeObjectURL(filePreviewUrls.get(file.name));
+    // 不删除Map中的条目，保持引用以避免重复创建
+  }
+};
+
+// 清理所有预览URL
+const cleanupFilePreviewUrls = () => {
+  filePreviewUrls.forEach((url) => {
+    URL.revokeObjectURL(url);
+  });
+  filePreviewUrls.clear();
 };
 
 /**
@@ -596,6 +683,11 @@ const handleImageModelSend = async () => {
     generatorStore.isGenerating = false
   }
 };
+
+// 组件卸载时清理预览URL
+onUnmounted(() => {
+  cleanupFilePreviewUrls();
+});
 </script>
 
 <style scoped>

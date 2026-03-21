@@ -36,7 +36,8 @@ class AsyncTaskManager:
         model: str,
         prompt: str,
         params: dict,
-        platform_task_id: Optional[str] = None
+        platform_task_id: Optional[str] = None,
+        user_id: Optional[str] = None
     ) -> AsyncTask:
         """创建任务"""
         async with self.async_session() as session:
@@ -47,6 +48,7 @@ class AsyncTaskManager:
                 model=model,
                 prompt=prompt,
                 params=params,
+                user_id=user_id,
                 status="pending",
                 submit_time=datetime.now()
             )
@@ -114,6 +116,38 @@ class AsyncTaskManager:
             query = query.limit(limit)
             result = await session.execute(query)
             return list(result.scalars().all())
+
+    async def get_user_tasks(
+        self,
+        user_id: str,
+        status: Optional[str] = None,
+        limit: int = 50
+    ) -> List[AsyncTask]:
+        """获取指定用户的异步任务"""
+        from sqlalchemy import func
+        async with self.async_session() as session:
+            query = select(AsyncTask).where(AsyncTask.user_id == user_id)
+
+            if status:
+                query = query.where(AsyncTask.status == status)
+
+            query = query.order_by(AsyncTask.submit_time.desc()).limit(limit)
+            result = await session.execute(query)
+            return list(result.scalars().all())
+
+    async def get_user_tasks_count(
+        self,
+        user_id: str,
+        status: Optional[str] = None
+    ) -> int:
+        """获取用户的异步任务数量"""
+        from sqlalchemy import func
+        async with self.async_session() as session:
+            query = select(func.count(AsyncTask.id)).where(AsyncTask.user_id == user_id)
+            if status:
+                query = query.where(AsyncTask.status == status)
+            result = await session.execute(query)
+            return result.scalar() or 0
 
 
 _manager: Optional[AsyncTaskManager] = None

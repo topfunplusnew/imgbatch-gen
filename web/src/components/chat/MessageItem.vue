@@ -18,35 +18,122 @@
       <!-- 文本内容 -->
       <div v-if="msg.content"
            :class="[
-             'leading-relaxed mb-6 px-4 py-3 rounded-2xl block text-left',
+             'leading-relaxed mb-2 px-4 py-3 rounded-2xl block text-left',
+             'text-sm xs:text-base md:text-base',
              msg.role === 'user'
                ? 'bg-white text-ink-950 border border-primary/20 shadow-sm ml-auto max-w-[85%] md:max-w-[80%]'
                : getStatusClasses(msg.status) + ' max-w-[85%] md:max-w-[80%]'
            ]">
         <span v-if="msg.role === 'assistant'" class="markdown-body" v-html="renderMarkdown(msg.content)"></span>
         <span v-else>{{ msg.content }}</span>
+      </div>
 
-        <!-- 复制按钮 -->
-        <div :class="msg.role === 'user' ? 'text-right' : 'text-left'">
-          <button
-            v-if="msg.content"
-            @click="copyContent"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/90 hover:bg-primary/5 text-ink-500 hover:text-ink-950 border border-border-dark rounded-lg text-xs transition-colors">
-            <span class="material-symbols-outlined !text-base">
-              {{ copied ? 'check' : 'content_copy' }}
-            </span>
-            <span>{{ copied ? '已复制' : '复制内容' }}</span>
-          </button>
-        </div>
+      <!-- Message Action Bar - Only for assistant messages (outside the bubble) -->
+      <div v-if="msg.role === 'assistant'" class="mt-2">
+        <!-- Action buttons container -->
+        <div class="flex items-center gap-1.5 flex-wrap">
 
-        <!-- 重试按钮 -->
-        <button
-          v-if="(msg.status === 'error' || msg.status === 'timeout') && msg.role === 'assistant'"
-          @click="retryMessage"
-          class="mt-3 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-ink-950 rounded-lg text-sm flex items-center gap-2 transition-colors">
-          <span class="material-symbols-outlined !text-base">refresh</span>
-          重试
-        </button>
+            <!-- Copy button -->
+            <button
+              v-if="msg.content"
+              @click="copyContent"
+              class="inline-flex items-center gap-1.5 px-2 py-1.5 bg-white/90 hover:bg-primary/5 text-ink-500 hover:text-ink-950 border border-border-dark rounded-lg text-xs transition-colors"
+              title="复制内容">
+              <span class="material-symbols-outlined !text-base">
+                {{ copied ? 'check' : 'content_copy' }}
+              </span>
+            </button>
+
+            <!-- Like button -->
+            <button
+              @click="toggleLike"
+              class="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-colors"
+              :class="isLiked
+                ? 'bg-primary/10 text-primary border-2 border-primary/30'
+                : 'bg-white/90 text-ink-500 hover:bg-pink-50 hover:text-pink-600 border border-border-dark'"
+              title="喜欢">
+              <span class="material-symbols-outlined !text-base">thumb_up</span>
+            </button>
+
+            <!-- Dislike button -->
+            <button
+              @click="toggleDislike"
+              class="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-colors"
+              :class="isDisliked
+                ? 'bg-red-500/10 text-red-600 border-2 border-red-500/30'
+                : 'bg-white/90 text-ink-500 hover:bg-red-50 hover:text-red-600 border border-border-dark'"
+              title="不喜欢">
+              <span class="material-symbols-outlined !text-base">thumb_down</span>
+            </button>
+
+            <!-- Share button -->
+            <button
+              @click="shareMessage"
+              class="inline-flex items-center gap-1.5 px-2 py-1.5 bg-white/90 hover:bg-primary/5 text-ink-500 hover:text-ink-950 border border-border-dark rounded-lg text-xs transition-colors"
+              title="分享对话">
+              <span class="material-symbols-outlined !text-base">share</span>
+            </button>
+
+            <!-- Quote button -->
+            <button
+              v-if="msg.content"
+              @click="quoteMessage"
+              class="inline-flex items-center gap-1.5 px-2 py-1.5 bg-white/90 hover:bg-primary/5 text-ink-500 hover:text-ink-950 border border-border-dark rounded-lg text-xs transition-colors"
+              title="引用">
+              <span class="material-symbols-outlined !text-base">format_quote</span>
+            </button>
+
+            <!-- Retry button (only shows on error/timeout) -->
+            <button
+              v-if="msg.status === 'error' || msg.status === 'timeout'"
+              @click="retryMessage"
+              class="inline-flex items-center gap-1.5 px-2 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 border border-amber-500/30 rounded-lg text-xs transition-colors"
+              title="重试">
+              <span class="material-symbols-outlined !text-base">refresh</span>
+            </button>
+
+            <!-- Model Toggle Dropdown -->
+            <div class="relative" data-model-dropdown>
+              <button
+                @click="toggleModelDropdown"
+                class="inline-flex items-center gap-1.5 px-2 py-1.5 bg-white/90 hover:bg-primary/5 text-ink-500 hover:text-ink-950 border border-border-dark rounded-lg text-xs transition-colors"
+                title="切换模型">
+                <span class="material-symbols-outlined !text-base">auto_awesome</span>
+                <span class="material-symbols-outlined !text-sm" :class="showModelDropdown ? 'rotate-180' : ''">expand_more</span>
+              </button>
+
+              <transition
+                enter-active-class="transition ease-out duration-200"
+                enter-from-class="opacity-0 scale-95 translate-y-2"
+                enter-to-class="opacity-100 scale-100 translate-y-0"
+                leave-active-class="transition ease-in duration-150"
+                leave-from-class="opacity-100 scale-100 translate-y-0"
+                leave-to-class="opacity-0 scale-95 translate-y-2">
+                <div
+                  v-if="showModelDropdown"
+                  class="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-xl border border-border-dark overflow-hidden z-20 min-w-[200px]">
+                  <div class="py-1">
+                    <button
+                      v-for="model in availableModels"
+                      :key="model.model_name"
+                      @click="selectModel(model)"
+                      class="w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors"
+                      :class="generatorStore.model === model.model_name
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'text-ink-700 hover:bg-primary/5'">
+                      <span class="material-symbols-outlined !text-lg">
+                        {{ generatorStore.model === model.model_name ? 'check_circle' : 'radio_button_unchecked' }}
+                      </span>
+                      <div class="flex-1">
+                        <p class="font-medium">{{ model.display_name || model.model_name }}</p>
+                        <p class="text-xs text-ink-500">{{ model.provider }}</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </transition>
+            </div>
+          </div>
 
         <!-- 批量进度 -->
         <div v-if="msg.batchProgress" class="mt-3">
@@ -98,11 +185,11 @@
         </div>
 
         <!-- 图片网格 -->
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div class="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 xs:gap-3 md:gap-4">
           <div
             v-for="(image, index) in msg.images"
             :key="index"
-            class="relative group aspect-square bg-white rounded-xl overflow-hidden border border-border-dark shadow-lg">
+            class="relative group aspect-square bg-white rounded-xl overflow-hidden border border-border-dark shadow-lg hover:shadow-xl transition-shadow cursor-pointer">
             <img
               :src="getImageUrl(image, true)"
               :alt="typeof image === 'object' ? (image.alt || `图片 ${index + 1}`) : `图片 ${index + 1}`"
@@ -133,7 +220,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
 import { notification } from '@/utils/notification'
 import { useApiConfigStore } from '@/store/useApiConfigStore'
@@ -165,6 +252,16 @@ const emit = defineEmits(['retry'])
 const isDownloading = ref(false)
 const downloadProgress = ref({})
 const copied = ref(false)
+
+// Message interaction state
+const isLiked = ref(false)
+const isDisliked = ref(false)
+const showModelDropdown = ref(false)
+
+// Get available models from generator store (empty array if not available yet)
+const availableModels = computed(() => {
+  return generatorStore.availableModels || []
+})
 
 // 备用复制方法
 function fallbackCopyTextToClipboard(text) {
@@ -426,6 +523,151 @@ async function downloadAllImages() {
     downloadProgress.value = {}
   }
 }
+
+// Toggle like
+function toggleLike() {
+  isLiked.value = !isLiked.value
+  if (isLiked.value) {
+    isDisliked.value = false
+  }
+  console.log('Message liked:', props.msg.id, isLiked.value)
+}
+
+// Toggle dislike
+function toggleDislike() {
+  isDisliked.value = !isDisliked.value
+  if (isDisliked.value) {
+    isLiked.value = false
+  }
+  console.log('Message disliked:', props.msg.id, isDisliked.value)
+}
+
+// Share message - Convert conversation to markdown and generate shareable link
+async function shareMessage() {
+  try {
+    // Build markdown content from conversation
+    let markdown = `# AI 生图对话\n\n`
+    markdown += `**时间**: ${new Date().toLocaleString()}\n\n`
+    markdown += `---\n\n`
+
+    // Find current message index and include context
+    const msgIndex = generatorStore.messages.findIndex(m => m.id === props.msg.id)
+    const messagesToInclude = generatorStore.messages.slice(0, msgIndex + 1)
+
+    messagesToInclude.forEach((msg, idx) => {
+      if (msg.role === 'user') {
+        markdown += `## 👤 用户\n\n${msg.content}\n\n`
+      } else if (msg.role === 'assistant') {
+        markdown += `## 🤖 AI 助手\n\n`
+        if (msg.content) {
+          markdown += `${msg.content}\n\n`
+        }
+        if (msg.images && msg.images.length > 0) {
+          markdown += `**生成的图片** (${msg.images.length}张):\n\n`
+          msg.images.forEach((img, imgIdx) => {
+            const imgUrl = typeof img === 'string' ? img : img.url
+            markdown += `${imgIdx + 1}. [图片 ${imgIdx + 1}](${imgUrl})\n`
+          })
+          markdown += `\n`
+        }
+      }
+      markdown += `---\n\n`
+    })
+
+    // Encode markdown to base64 for URL
+    const encodedMarkdown = btoa(unescape(encodeURIComponent(markdown)))
+    const shareUrl = `${window.location.origin}${window.location.pathname}#share=${encodedMarkdown}`
+
+    // Copy shareable link to clipboard
+    await navigator.clipboard.writeText(shareUrl)
+    notification.success('分享链接已复制', '对话已转换为 Markdown，分享链接已复制到剪贴板')
+
+  } catch (error) {
+    console.error('分享失败:', error)
+    notification.error('分享失败', error.message || '生成分享链接时出错')
+  }
+}
+
+// Toggle model dropdown
+function toggleModelDropdown() {
+  showModelDropdown.value = !showModelDropdown.value
+}
+
+// Select model
+function selectModel(model) {
+  generatorStore.setSelectedModel(model.model_name)
+  generatorStore.setSelectedModelInfo(model)
+  showModelDropdown.value = false
+  notification.success('模型已切换', `已切换到 ${model.display_name || model.model_name}`)
+  if (props.msg.role === 'assistant' && props.msg.status === 'completed') {
+    if (confirm(`是否使用 ${model.display_name || model.model_name} 重新生成?`)) {
+      retryMessage()
+    }
+  }
+}
+
+// Copy prompt
+function copyPrompt() {
+  const userMessages = generatorStore.messages.filter(m => m.role === 'user')
+  if (userMessages.length > 0) {
+    const lastUserMessage = userMessages[userMessages.length - 1]
+    fallbackCopyTextToClipboard(lastUserMessage.content)
+    notification.success('提示词已复制', '提示词已复制到剪贴板')
+  }
+}
+
+// Quote message
+function quoteMessage() {
+  if (!props.msg.content) return
+
+  // 将引用的消息存储到 store 中
+  generatorStore.quotedMessage = {
+    id: props.msg.id,
+    content: props.msg.content
+  }
+
+  notification.success('已引用', '消息内容已引用，将在发送时附加到提示词')
+}
+
+// Download image (for more menu)
+function downloadImage() {
+  if (props.msg.images && props.msg.images.length > 0) {
+    downloadSingleImage(props.msg.images[0])
+  }
+}
+
+// Regenerate message
+function regenerate() {
+  showMoreMenu.value = false
+  retryMessage()
+}
+
+// Delete message
+function deleteMessage() {
+  if (confirm('确定要删除这条消息吗？')) {
+    const index = generatorStore.messages.findIndex(m => m.id === props.msg.id)
+    if (index > -1) {
+      generatorStore.messages.splice(index, 1)
+      notification.success('删除成功', '消息已删除')
+    }
+  }
+}
+
+// Close dropdowns when clicking outside
+function handleClickOutside(event) {
+  const modelDropdown = document.querySelector('[data-model-dropdown]')
+  if (modelDropdown && !modelDropdown.contains(event.target)) {
+    showModelDropdown.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 </script>
 
 <style scoped>

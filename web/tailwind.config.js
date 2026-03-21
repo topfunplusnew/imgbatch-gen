@@ -7,6 +7,14 @@ export default {
   darkMode: 'class', // 确保支持暗色模式
   theme: {
     extend: {
+      screens: {
+        'xs': '475px',
+        '3xl': '1920px',
+      },
+      spacing: {
+        '18': '4.5rem',
+        '128': '32rem',
+      },
       colors: {
         // 复刻设计稿中的 UI 颜色
         "primary": "#00DC82",

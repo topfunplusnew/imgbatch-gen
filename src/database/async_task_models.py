@@ -35,5 +35,9 @@ class AsyncTask(Base):
 
     # 元数据
     task_metadata = Column(JSON, comment="其他元数据")
+
+    # 用户关联
+    user_id = Column(String(100), index=True, nullable=True, comment="用户ID")
+
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)

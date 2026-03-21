@@ -4,52 +4,38 @@
     <MainSidebar :class="['hidden md:flex']" />
 
     <!-- 主交互区 -->
-    <main class="flex-1 flex flex-col relative bg-white/60 min-w-0 md:min-w-[400px] h-screen overflow-hidden">
+    <main class="flex-1 flex flex-col relative bg-white/60 min-w-0 xs:min-w-[300px] md:min-w-[400px] lg:min-w-[500px] h-screen overflow-hidden">
       <TopHeader
         @openModelSelector="showModelSelector = true"
         @toggleSettings="showSettingsDrawer = !showSettingsDrawer"
+        @openHistory="showHistoryDrawer = true"
+        @openTemplates="appStore.toggleTemplateDrawer()"
       />
+
+      <!-- 通知轮播 (显示重要公告) -->
+      <div class="px-3 xs:px-4 sm:px-6 md:px-8 pt-4">
+        <NotificationCarousel :autoplay="true" :autoplay-interval="5000" :max-items="3" />
+      </div>
 
       <!-- 对话滚动区域 -->
       <div
         ref="chatAreaRef"
-        class="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 min-h-0 pb-36 md:pb-8"
+        class="flex-1 overflow-y-auto custom-scrollbar p-3 xs:p-4 sm:p-6 md:p-8 min-h-0 pb-8"
         :style="chatAreaStyle">
-        <div class="max-w-full md:max-w-4xl mx-auto space-y-8">
+
+        <!-- 案例详情面板 -->
+        <CaseDetailPanel />
+
+        <!-- 创作记录详情面板 -->
+        <CreationDetailPanel />
+
+        <div class="max-w-full md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto space-y-6 md:space-y-8">
           <MessageItem v-for="msg in generatorStore.messages" :key="msg.id" :msg="msg" />
         </div>
       </div>
 
       <!-- 底部输入框 -->
       <ChatInputBar />
-
-      <!-- 移动端底部 tab 导航 -->
-      <nav class="md:hidden flex border-t border-border-dark bg-white/95 backdrop-blur-xl shrink-0 h-14">
-        <button
-          @click="appStore.setCurrentPage('agent')"
-          :class="['flex-1 flex flex-col items-center justify-center py-2 text-[10px] gap-1 transition-colors', appStore.currentPage === 'agent' ? 'text-primary' : 'text-slate-400']">
-          <span class="material-symbols-outlined !text-lg">smart_toy</span>
-          工作室
-        </button>
-        <button
-          @click="showSettingsDrawer = true"
-          :class="['flex-1 flex flex-col items-center justify-center py-2 text-[10px] gap-1 transition-colors', showSettingsDrawer ? 'text-primary' : 'text-slate-400']">
-          <span class="material-symbols-outlined !text-lg">tune</span>
-          参数
-        </button>
-        <button
-          @click="showHistoryDrawer = true"
-          class="flex-1 flex flex-col items-center justify-center py-2 text-[10px] gap-1 text-slate-400 transition-colors">
-          <span class="material-symbols-outlined !text-lg">history</span>
-          历史
-        </button>
-        <button
-          @click="appStore.setCurrentPage('api')"
-          :class="['flex-1 flex flex-col items-center justify-center py-2 text-[10px] gap-1 transition-colors', appStore.currentPage === 'api' ? 'text-primary' : 'text-slate-400']">
-          <span class="material-symbols-outlined !text-lg">api</span>
-          配置
-        </button>
-      </nav>
     </main>
 
     <!-- 右侧参数面板 (hidden on mobile) -->
@@ -59,15 +45,15 @@
       class="w-1 cursor-col-resize bg-border-dark hover:bg-primary/30 transition-colors shrink-0 select-none"
       @mousedown="startResize">
     </div>
-    <SettingsSidebar v-if="!isMobile" :style="{ width: sidebarWidth + 'px', minWidth: sidebarWidth + 'px' }" />
+    <SettingsSidebar v-if="!isMobile && !showSettingsDrawer" :style="{ width: sidebarWidth + 'px', minWidth: sidebarWidth + 'px' }" />
 
     <!-- 移动端参数抽屉 -->
     <Transition name="drawer">
-      <div v-if="showSettingsDrawer" class="lg:hidden fixed inset-0 z-40" @click.self="showSettingsDrawer = false">
+      <div v-if="showSettingsDrawer" class="fixed inset-0 z-40" @click.self="showSettingsDrawer = false">
         <!-- 遮罩 -->
         <div class="absolute inset-0 bg-ink-950/10 backdrop-blur-sm" @click="showSettingsDrawer = false"></div>
         <!-- 抽屉面板 -->
-        <div class="absolute right-0 top-0 w-[60vw] max-w-[260px] h-full flex flex-col bg-white/95 backdrop-blur-xl border-l border-border-dark shadow-xl">
+        <div class="absolute right-0 top-0 w-[85vw] max-w-[320px] md:max-w-[400px] h-full flex flex-col bg-white/95 backdrop-blur-xl border-l border-border-dark shadow-xl">
           <div class="flex items-center justify-between p-3 border-b border-border-dark shrink-0">
             <span class="font-bold text-sm uppercase tracking-wider">生成参数</span>
             <button @click="showSettingsDrawer = false" class="text-ink-500 hover:text-ink-950">
@@ -85,7 +71,7 @@
     <Transition name="drawer-left">
       <div v-if="showHistoryDrawer" class="md:hidden fixed inset-0 z-40">
         <div class="absolute inset-0 bg-ink-950/10 backdrop-blur-sm" @click="showHistoryDrawer = false"></div>
-        <div class="absolute left-0 top-0 w-[60vw] max-w-[260px] h-full bg-white/95 backdrop-blur-xl border-r border-border-dark flex flex-col shadow-xl">
+        <div class="absolute left-0 top-0 w-[85vw] max-w-[320px] md:max-w-[400px] h-full bg-white/95 backdrop-blur-xl border-r border-border-dark flex flex-col shadow-xl">
           <div class="flex items-center justify-between p-3 border-b border-border-dark shrink-0">
             <span class="font-bold text-sm uppercase tracking-wider">历史记录</span>
             <button @click="showHistoryDrawer = false" class="text-ink-500 hover:text-ink-950">
@@ -98,12 +84,36 @@
       </div>
     </Transition>
 
+    <!-- 创作记录右侧抽屉 -->
+    <Transition name="drawer">
+      <div v-if="appStore.showCreationRecords" class="fixed inset-0 z-50" @click.self="appStore.closeCreationRecords()">
+        <!-- 遮罩 -->
+        <div class="absolute inset-0 bg-ink-950/10 backdrop-blur-sm" @click="appStore.closeCreationRecords()"></div>
+        <!-- 抽屉面板 -->
+        <div class="absolute right-0 top-0 w-[85vw] md:w-[60vw] lg:w-[50vw] xl:w-[40vw] h-full flex flex-col bg-white/95 backdrop-blur-xl border-l border-border-dark shadow-xl">
+          <CreationRecordList />
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 模板列表抽屉 -->
+    <Transition name="drawer">
+      <div v-if="appStore.showTemplateDrawer" class="fixed inset-0 z-50" @click.self="appStore.closeTemplateDrawer()">
+        <!-- 遮罩 -->
+        <div class="absolute inset-0 bg-ink-950/10 backdrop-blur-sm" @click="appStore.closeTemplateDrawer()"></div>
+        <!-- 抽屉面板 -->
+        <div class="absolute right-0 top-0 w-[85vw] md:w-[60vw] lg:w-[50vw] xl:w-[40vw] h-full flex flex-col bg-white/95 backdrop-blur-xl border-l border-border-dark shadow-xl">
+          <TemplateDrawer />
+        </div>
+      </div>
+    </Transition>
+
     <!-- 模型选择器弹窗 -->
     <div
       v-if="showModelSelector"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/10 p-4 backdrop-blur-sm"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/10 p-4 xs:p-6 md:p-8 backdrop-blur-sm"
       @click.self="showModelSelector = false">
-      <div class="w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+      <div class="w-full max-w-full xs:max-w-2xl md:max-w-3xl max-h-[90vh] overflow-y-auto custom-scrollbar">
         <ModelSelector
           :current-model="generatorStore.model"
           :attachments="generatorStore.attachments"
@@ -116,13 +126,18 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import MainSidebar from '../components/sidebar/MainSidebar.vue'
 import SettingsSidebar from '../components/sidebar/SettingsSidebar.vue'
 import TopHeader from '../components/layout/TopHeader.vue'
 import MessageItem from '../components/chat/MessageItem.vue'
 import ChatInputBar from '../components/chat/ChatInputBar.vue'
 import ModelSelector from '../components/ModelSelector.vue'
+import CaseDetailPanel from '../components/cases/CaseDetailPanel.vue'
+import CreationDetailPanel from '../components/creation/CreationDetailPanel.vue'
+import CreationRecordList from '../components/creation/CreationRecordList.vue'
+import NotificationCarousel from '../components/NotificationCarousel.vue'
+import TemplateDrawer from '../components/cases/TemplateDrawer.vue'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import { useAppStore } from '@/store/useAppStore'
 
@@ -137,13 +152,26 @@ const windowWidth = ref(window.innerWidth)
 const isMobile = computed(() => windowWidth.value < 1024)
 
 // 拖拽调整侧边栏宽度
-const sidebarWidth = ref(280)
+const sidebarWidth = ref(parseInt(localStorage.getItem('sidebarWidth') || '280'))
 const sidebarMinWidth = 200
 const sidebarMaxWidth = 500
 let isResizing = false
 
+// 监听 sidebarWidth 变化并保存到 localStorage
+watch(sidebarWidth, (newWidth) => {
+  localStorage.setItem('sidebarWidth', newWidth.toString())
+})
+
 const startResize = (e) => {
   isResizing = true
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+
+  // 创建遮罩层以防止拖拽时的干扰
+  const overlay = document.createElement('div')
+  overlay.className = 'fixed inset-0 z-50 resize-overlay'
+  document.body.appendChild(overlay)
+
   document.addEventListener('mousemove', onResize)
   document.addEventListener('mouseup', stopResize)
   e.preventDefault()
@@ -157,6 +185,12 @@ const onResize = (e) => {
 
 const stopResize = () => {
   isResizing = false
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+
+  // 移除遮罩层
+  document.querySelector('.resize-overlay')?.remove()
+
   document.removeEventListener('mousemove', onResize)
   document.removeEventListener('mouseup', stopResize)
 }
@@ -200,6 +234,9 @@ onMounted(() => {
   } catch (error) {
     console.error('恢复模型选择失败:', error)
   }
+
+  // Fetch available models
+  generatorStore.fetchAvailableModels()
 })
 </script>
 
@@ -239,4 +276,10 @@ onMounted(() => {
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d8d3; border-radius: 10px; }
+
+/* 侧边栏调整大小遮罩 */
+.resize-overlay {
+  background: transparent;
+  cursor: col-resize;
+}
 </style>

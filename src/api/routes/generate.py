@@ -1,7 +1,8 @@
 """生图接口"""
 
-from fastapi import APIRouter, HTTPException, Depends, Request
-from typing import Optional
+from fastapi import APIRouter, HTTPException, Depends, Request, Query
+from typing import Optional, List, Literal
+from pydantic import BaseModel, Field
 
 from ...models.request import GenerateRequest
 from ...models.task import ImageTask
@@ -14,8 +15,53 @@ from ...config.settings import settings
 from ...config.model_registry import get_model_registry
 from ...database import get_db_manager
 from ..routes.chat import _extract_api_key
+from ..auth import RequiredAuthDependency
 
 router = APIRouter(prefix="/api/v1", tags=["generate"])
+
+
+# ==================== 响应模型 ====================
+
+
+class GenerationRecordResponse(BaseModel):
+    """生成历史记录响应"""
+    id: str
+    user_request_id: str
+    provider: str
+    model: str
+    prompt: str
+    negative_prompt: str = ""
+    width: int
+    height: int
+    n: int
+    style: Optional[str] = None
+    quality: Optional[str] = None
+    status: str
+    image_urls: List[str] = []
+    image_paths: List[str] = []
+    processing_time: Optional[float] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    created_at: str
+    extra_params: dict = {}
+
+
+class UnifiedGenerationRecord(BaseModel):
+    """统一生成记录响应模型"""
+    id: str
+    type: Literal["chat", "async"]  # 标识来源
+    model: str
+    prompt: str
+    status: str
+    image_urls: List[str] = []
+    timestamp: str  # 统一时间戳
+    created_at: str  # 显示用时间
+
+    # 可选字段
+    provider: Optional[str] = None
+    platform: Optional[str] = None  # 异步任务的平台
+    processing_time: Optional[float] = None
+    error: Optional[str] = None
 
 
 def get_task_manager(request: Request) -> TaskManager:
@@ -141,7 +187,8 @@ async def generate_image(
                     "n": params.n,
                     "credential_id": credential_id,
                     "relay_base_url": settings.relay_base_url,
-                }
+                },
+                user_id=request.user_id  # 传递用户ID
             )
 
             # 返回异步任务信息
@@ -174,14 +221,149 @@ async def generate_image(
         )
 
         # 6. 创建并提交任务
-        task = task_manager.create_task(params, request.prompt, user_request.id)
+        task = task_manager.create_task(params, request.prompt, user_request.id, request.user_id)
         await task_manager.submit_task(task)
 
         # 关联任务和用户请求
         task.user_request_id = user_request.id
 
         return task
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"生图失败: {str(e)}")
+
+
+@router.get("/generate/history", response_model=List[GenerationRecordResponse], summary="获取生成历史")
+async def get_generation_history(
+    limit: int = Query(20, ge=1, le=100, description="返回记录数量"),
+    offset: int = Query(0, ge=0, description="偏移量"),
+    status: Optional[str] = Query(None, description="状态筛选: completed, failed"),
+    user: dict = Depends(RequiredAuthDependency())
+):
+    """
+    获取当前用户的图片生成历史记录
+
+    按时间倒序排列，最新的在前
+    """
+    db_manager = get_db_manager()
+
+    records = await db_manager.get_user_generation_records(
+        user_id=user["id"],
+        limit=limit,
+        offset=offset,
+        status=status
+    )
+
+    return [GenerationRecordResponse(**record) for record in records]
+
+
+@router.get("/generate/history/count", summary="获取生成历史总数")
+async def get_generation_history_count(
+    status: Optional[str] = Query(None, description="状态筛选: completed, failed"),
+    user: dict = Depends(RequiredAuthDependency())
+):
+    """获取当前用户的图片生成记录总数"""
+    db_manager = get_db_manager()
+
+    count = await db_manager.get_user_generation_records_count(
+        user_id=user["id"],
+        status=status
+    )
+
+    return {"count": count}
+
+
+@router.get("/generate/history/unified", response_model=List[UnifiedGenerationRecord], summary="获取统一生成历史")
+async def get_unified_generation_history(
+    limit: int = Query(20, ge=1, le=100, description="返回记录数量"),
+    offset: int = Query(0, ge=0, description="偏移量"),
+    status: Optional[str] = Query(None, description="状态筛选: completed, failed"),
+    user: dict = Depends(RequiredAuthDependency())
+):
+    """
+    获取统一生成历史，包含：
+    - 对话生成（ImageGenerationRecord）
+    - 异步任务（AsyncTask）
+
+    按时间倒序排列，最新的在前
+    """
+    from ...database.async_task_manager import get_async_task_manager
+
+    db_manager = get_db_manager()
+    async_manager = get_async_task_manager()
+    user_id = user["id"]
+
+    # 1. 从两个数据源获取数据
+    chat_records = await db_manager.get_user_generation_records(
+        user_id=user_id,
+        limit=limit * 2,  # 多取一些用于合并
+        offset=0,
+        status=status
+    )
+
+    async_records = await async_manager.get_user_tasks(
+        user_id=user_id,
+        status=status,
+        limit=limit * 2
+    )
+
+    # 2. 标准化为统一格式
+    unified = []
+
+    for record in chat_records:
+        unified.append({
+            "id": record["id"],
+            "type": "chat",
+            "model": record["model"],
+            "prompt": record["prompt"],
+            "status": record["status"],
+            "image_urls": record["image_urls"] or [],
+            "timestamp": record["created_at"],
+            "created_at": record["created_at"],
+            "provider": record.get("provider")
+        })
+
+    for task in async_records:
+        unified.append({
+            "id": task.id,
+            "type": "async",
+            "model": task.model,
+            "prompt": task.prompt,
+            "status": task.status,
+            "image_urls": task.result_urls or [],
+            "timestamp": task.submit_time.isoformat(),
+            "created_at": task.submit_time.isoformat(),
+            "platform": task.platform
+        })
+
+    # 3. 按时间排序（最新的在前）
+    unified.sort(key=lambda x: x["timestamp"], reverse=True)
+
+    # 4. 应用分页
+    return unified[offset:offset + limit]
+
+
+@router.get("/generate/history/unified/count", summary="获取统一生成历史总数")
+async def get_unified_generation_history_count(
+    status: Optional[str] = Query(None, description="状态筛选: completed, failed"),
+    user: dict = Depends(RequiredAuthDependency())
+):
+    """获取统一生成记录总数"""
+    from ...database.async_task_manager import get_async_task_manager
+
+    db_manager = get_db_manager()
+    async_manager = get_async_task_manager()
+    user_id = user["id"]
+
+    chat_count = await db_manager.get_user_generation_records_count(
+        user_id=user_id,
+        status=status
+    )
+
+    async_count = await async_manager.get_user_tasks_count(
+        user_id=user_id,
+        status=status
+    )
+
+    return {"count": chat_count + async_count}
 

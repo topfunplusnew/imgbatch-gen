@@ -1,5 +1,5 @@
 <template>
-  <aside :class="['flex flex-col bg-white/90 backdrop-blur-xl shrink-0', inDrawer ? 'w-full border-0' : 'w-64 xl:w-80 border-l border-border-dark']">
+  <aside :class="['flex flex-col bg-white/90 backdrop-blur-xl shrink-0 transition-all duration-300', inDrawer ? 'w-full border-0' : 'w-56 md:w-64 lg:w-72 xl:w-80 border-l border-border-dark']">
     <div v-if="!inDrawer" class="p-6 border-b border-border-dark flex items-center justify-between shrink-0">
       <h2 class="font-bold text-sm uppercase tracking-wider">生成参数</h2>
       <button
@@ -9,7 +9,7 @@
       </button>
     </div>
 
-    <div class="p-6 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
+    <div class="p-4 xs:p-5 md:p-6 space-y-4 md:space-y-6 overflow-y-auto flex-1 custom-scrollbar">
       <!-- 参数预设（暂时隐藏） -->
       <!-- <PresetManager /> -->
 
@@ -51,13 +51,13 @@
       <!-- 图像质量 -->
       <div class="space-y-3">
         <label class="text-xs font-bold text-slate-500 uppercase">图像质量</label>
-        <div class="grid grid-cols-3 gap-2">
+        <div class="grid grid-cols-3 gap-1.5 xs:gap-2">
           <button
             v-for="quality in qualityOptions"
             :key="quality.value"
             @click="generatorStore.setQuality(quality.value)"
             :class="[
-              'py-2 text-[10px] font-bold rounded-lg transition-colors',
+              'py-2 xs:py-2.5 text-[10px] font-bold rounded-lg transition-colors',
               generatorStore.quality === quality.value
                 ? 'bg-primary-strong text-white shadow-sm'
                 : 'bg-white text-ink-700 border border-border-dark hover:bg-primary/5'
@@ -77,7 +77,7 @@
         </div>
 
         <!-- 比例选择网格 -->
-        <div class="grid grid-cols-3 gap-2">
+        <div class="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 gap-1.5 xs:gap-2">
           <button
             v-for="ratio in ratioOptions"
             :key="ratio.value"
@@ -107,13 +107,13 @@
         <div v-if="showCustomSize" class="grid grid-cols-2 gap-2 mt-2">
           <div class="relative flex items-center">
             <input type="number" v-model.number="generatorStore.width"
-              class="w-full bg-white border border-border-dark rounded-xl text-sm py-2 px-3 focus:ring-1 focus:ring-primary">
-            <span class="absolute right-2 text-[10px] text-slate-500">W</span>
+              class="w-full bg-white border border-border-dark rounded-xl text-sm py-2 px-3 focus:ring-1 focus:ring-primary focus:ring-offset-0">
+            <span class="absolute right-2 text-[10px] text-slate-500 pointer-events-none">W</span>
           </div>
           <div class="relative flex items-center">
             <input type="number" v-model.number="generatorStore.height"
-              class="w-full bg-white border border-border-dark rounded-xl text-sm py-2 px-3 focus:ring-1 focus:ring-primary">
-            <span class="absolute right-2 text-[10px] text-slate-500">H</span>
+              class="w-full bg-white border border-border-dark rounded-xl text-sm py-2 px-3 focus:ring-1 focus:ring-primary focus:ring-offset-0">
+            <span class="absolute right-2 text-[10px] text-slate-500 pointer-events-none">H</span>
           </div>
         </div>
       </div>
@@ -172,10 +172,10 @@
   <div
     v-if="showHelp"
     @click="showHelp = false"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/10 p-4 backdrop-blur-sm">
+    class="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/10 p-4 xs:p-6 backdrop-blur-sm">
     <div
       @click.stop
-      class="bg-white border border-border-dark rounded-2xl p-6 max-w-md w-full mx-4 space-y-4 shadow-xl">
+      class="bg-white border border-border-dark rounded-2xl p-4 xs:p-6 max-w-md w-full mx-4 space-y-4 shadow-xl">
       <div class="flex items-center justify-between">
         <h3 class="text-lg font-semibold">参数说明</h3>
         <button @click="showHelp = false" class="text-ink-500 hover:text-ink-950">

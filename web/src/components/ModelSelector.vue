@@ -53,34 +53,9 @@
           </button>
         </div>
 
-        <label class="relative block">
-          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 !text-base text-ink-500">
-            search
-          </span>
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="搜索模型名称、标签或提供商"
-            class="w-full rounded-xl border border-border-dark bg-white px-10 py-3 text-sm text-ink-950 focus:border-primary focus:ring-1 focus:ring-primary"
-          >
-        </label>
 
-        <div v-if="popularTags.length" class="flex flex-wrap gap-2">
-          <button
-            v-for="tag in popularTags"
-            :key="tag"
-            @click="toggleTag(tag)"
-            :class="[
-              'rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
-              selectedTags.has(tag)
-                ? 'border-primary/25 bg-primary/10 text-primary-deep'
-                : 'border-border-dark bg-white text-ink-700 hover:border-primary/30 hover:bg-primary/5'
-            ]"
-            type="button"
-          >
-            {{ tag }}
-          </button>
-        </div>
+
+
       </div>
     </div>
 

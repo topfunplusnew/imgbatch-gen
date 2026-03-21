@@ -9,6 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tiptap/extension-image": "^3.20.4",
+    "@tiptap/extension-link": "^3.20.4",
+    "@tiptap/extension-text-align": "^3.20.4",
+    "@tiptap/extension-underline": "^3.20.4",
+    "@tiptap/starter-kit": "^3.20.4",
+    "@tiptap/vue-3": "^3.20.4",
     "autoprefixer": "^10.4.27",
     "axios": "^1.13.6",
     "marked": "^17.0.4",
@@ -16,7 +22,8 @@
     "pdfjs-dist": "^5.5.207",
     "pinia": "^3.0.4",
     "postcss": "^8.5.8",
-    "vue": "^3.5.29"
+    "vue": "^3.5.29",
+    "vue-router": "^5.0.4"
   },
   "devDependencies": {
     "@tailwindcss/forms": "^0.5.11",

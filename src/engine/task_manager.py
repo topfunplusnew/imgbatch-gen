@@ -114,7 +114,7 @@ class TaskManager:
                 logger.error(f"工作协程 {worker.worker_id} 错误: {str(e)}")
                 await asyncio.sleep(1)
     
-    def create_task(self, params: ImageParams, user_input: Optional[str] = None, user_request_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> ImageTask:
+    def create_task(self, params: ImageParams, user_input: Optional[str] = None, user_request_id: Optional[str] = None, user_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> ImageTask:
         """创建任务"""
         from loguru import logger
         task_id = str(uuid.uuid4())
@@ -134,6 +134,7 @@ class TaskManager:
 
         task = ImageTask(
             task_id=task_id,
+            user_id=user_id,
             user_request_id=user_request_id,
             status=TaskStatus.PENDING,
             params=params,
@@ -158,6 +159,7 @@ class TaskManager:
         params_list: List[ImageParams],
         user_inputs: Optional[List[str]] = None,
         user_request_id: Optional[str] = None,
+        user_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None
     ) -> BatchTask:
         """创建批量任务"""
@@ -171,7 +173,7 @@ class TaskManager:
             task_metadata["batch_id"] = batch_id
             task_metadata["task_index"] = i
 
-            task = self.create_task(params, user_input, user_request_id, task_metadata)
+            task = self.create_task(params, user_input, user_request_id, user_id, task_metadata)
             tasks.append(task)
 
         batch_task = BatchTask(
