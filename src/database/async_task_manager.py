@@ -15,10 +15,10 @@ from ..config.settings import settings
 class AsyncTaskManager:
     """异步任务管理器"""
 
-    def __init__(self):
-        # 使用独立的数据库
-        db_url = "sqlite+aiosqlite:///./data/async_tasks.db"
-        self.engine = create_async_engine(db_url, echo=False)
+    def __init__(self, database_url: str = None):
+        # 使用主数据库（PostgreSQL）
+        db_url = database_url or settings.database_url
+        self.engine = create_async_engine(db_url, echo=settings.database_echo)
         self.async_session = sessionmaker(
             self.engine, class_=AsyncSession, expire_on_commit=False
         )

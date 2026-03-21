@@ -8,8 +8,6 @@ aiohttp==3.13.3
     #   langchain-community
 aiosignal==1.4.0
     # via aiohttp
-aiosqlite==0.22.1
-    # via agent-py
 alembic==1.16.5 ; python_full_version < '3.10'
     # via agent-py
 alembic==1.18.4 ; python_full_version >= '3.10'

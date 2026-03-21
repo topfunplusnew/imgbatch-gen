@@ -145,7 +145,7 @@ services:
       STORAGE_TYPE: ${STORAGE_TYPE:-minio}
       STORAGE_PATH: ${STORAGE_PATH:-/app/storage}
       STORAGE_URL_PREFIX: ${STORAGE_URL_PREFIX:-/storage}
-      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:///./data/agent.db}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@postgres:5432/agent_db}
       DEFAULT_IMAGE_PROVIDER: ${DEFAULT_IMAGE_PROVIDER:-openai}
       DEFAULT_LLM_PROVIDER: ${DEFAULT_LLM_PROVIDER:-relay}
       DEFAULT_EMBEDDING_PROVIDER: ${DEFAULT_EMBEDDING_PROVIDER:-relay}

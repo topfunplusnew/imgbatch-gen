@@ -1566,7 +1566,7 @@ async def save_conversation_history(request: ChatRequest, http_request: Request,
 
                 await db_manager.create_chat_conversation(
                     user_request_id=user_request_id,
-                    conversation_id=session_id,
+                    session_id=session_id,
                     role=message.role,
                     content=message.content,
                     model=model or "unknown",

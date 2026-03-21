@@ -15,7 +15,7 @@
 - 会话历史接口支持创建会话、保存消息、查询历史、生成摘要。
 - 模型注册表支持从远端配置接口动态拉取模型与 provider 映射。
 - 支持 PDF 提示词工作流，使用 LangChain/LangGraph 将 PDF 内容转为图像生成提示词。
-- 默认使用 SQLite，启动时自动建表；异步任务使用独立的 `data/async_tasks.db`。
+- 使用 PostgreSQL 数据库，启动时自动建表。
 
 ## 适用场景
 
@@ -41,7 +41,7 @@ agent_py/
 │  ├─ storage/             本地/MinIO 存储实现
 │  ├─ utils/               上下文、加密、向量检索等工具
 │  └─ workflows/           PDF 与附件相关 LangGraph 工作流
-├─ data/                   SQLite 数据文件
+├─ data/                   本地数据存储目录（可选）
 ├─ doc/                    补充文档与 OpenAPI 导出
 ├─ examples/               调用示例
 ├─ logs/                   日志目录
@@ -90,7 +90,7 @@ STORAGE_TYPE=local
 STORAGE_PATH=./storage
 STORAGE_URL_PREFIX=/storage
 
-DATABASE_URL=sqlite+aiosqlite:///./data/agent.db
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/agent_db
 
 # 二选一：
 # 1. 在这里配置默认 Key
@@ -126,7 +126,7 @@ MINIO_URL_PREFIX=http://127.0.0.1:9000/images
 
 - 环境变量大小写不敏感，`BaseSettings` 会自动读取 `.env`
 - 数据库表会在应用启动时自动创建
-- 异步任务数据库固定使用 `data/async_tasks.db`
+- 异步任务表存储在主数据库中
 
 ### 3. 启动服务
 

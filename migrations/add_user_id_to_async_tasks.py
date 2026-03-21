@@ -1,5 +1,5 @@
 """
-数据库迁移脚本：为 async_tasks 表添加 user_id 字段
+数据库迁移脚本：为 async_tasks 表添加 user_id 字段 (PostgreSQL)
 
 运行方式：
     python migrations/add_user_id_to_async_tasks.py
@@ -24,10 +24,13 @@ async def migrate():
     print("开始迁移：为 async_tasks 表添加 user_id 字段")
 
     async with manager.engine.begin() as conn:
-        # 检查列是否已存在
-        result = await conn.execute(text(
-            "SELECT COUNT(*) as count FROM pragma_table_info('async_tasks') WHERE name='user_id'"
-        ))
+        # 检查列是否已存在 (PostgreSQL 语法)
+        result = await conn.execute(text("""
+            SELECT COUNT(*) as count
+            FROM information_schema.columns
+            WHERE table_name = 'async_tasks'
+            AND column_name = 'user_id'
+        """))
         row = result.fetchone()
 
         if row[0] > 0:
@@ -61,17 +64,18 @@ async def rollback():
     print("开始回滚：移除 async_tasks 表的 user_id 字段")
 
     async with manager.engine.begin() as conn:
-        # SQLite 不支持 DROP COLUMN，需要重建表
-        print("警告：SQLite 不支持直接删除列")
-        print("如需回滚，请手动重建 async_tasks 表")
-
-        # 但我们可以删除索引
+        # PostgreSQL 支持 DROP COLUMN
         print("→ 删除索引 idx_async_tasks_user_id...")
         await conn.execute(text(
             "DROP INDEX IF EXISTS idx_async_tasks_user_id"
         ))
 
-        print("✓ 索引已删除（列仍需手动处理）")
+        print("→ 删除列 user_id...")
+        await conn.execute(text(
+            "ALTER TABLE async_tasks DROP COLUMN IF EXISTS user_id"
+        ))
+
+        print("✓ 回滚完成！")
 
 
 if __name__ == "__main__":

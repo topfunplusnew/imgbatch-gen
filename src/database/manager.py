@@ -405,7 +405,7 @@ class DatabaseManager:
     async def create_chat_conversation(
         self,
         user_request_id: str,
-        conversation_id: str,
+        session_id: str,
         role: str,
         content: str,
         model: str,
@@ -415,7 +415,7 @@ class DatabaseManager:
         async with self.get_session() as session:
             conversation = ChatConversation(
                 user_request_id=user_request_id,
-                session_id=conversation_id,  # 修复：使用 session_id 而不是 conversation_id
+                session_id=session_id,
                 role=role,
                 content=content,
                 model=model,
@@ -429,14 +429,14 @@ class DatabaseManager:
 
     async def get_conversation_history(
         self,
-        conversation_id: str,
+        session_id: str,
         limit: int = 50
     ) -> List[ChatConversation]:
         """获取对话历史"""
         async with self.get_session() as session:
             stmt = (
                 select(ChatConversation)
-                .where(ChatConversation.conversation_id == conversation_id)
+                .where(ChatConversation.session_id == session_id)
                 .order_by(ChatConversation.created_at.asc())
                 .limit(limit)
             )
@@ -449,7 +449,7 @@ class DatabaseManager:
         offset: int = 0
     ) -> List[Dict[str, any]]:
         """
-        获取对话列表（按conversation_id分组）
+        获取对话列表（按session_id分组）
 
         返回每个对话的摘要信息，包括对话ID、标题（第一条用户消息）、创建时间等。
         """
@@ -462,12 +462,12 @@ class DatabaseManager:
             result = await session.execute(stmt)
             all_conversations = list(result.scalars().all())
 
-            # 按conversation_id分组
+            # 按session_id分组
             conversations_dict = {}
             for conv in all_conversations:
-                if conv.conversation_id not in conversations_dict:
-                    conversations_dict[conv.conversation_id] = {
-                        "conversation_id": conv.conversation_id,
+                if conv.session_id not in conversations_dict:
+                    conversations_dict[conv.session_id] = {
+                        "conversation_id": conv.session_id,
                         "title": conv.content[:50] if conv.content else "空对话",
                         "created_at": conv.created_at,
                         "message_count": 0,
@@ -475,20 +475,20 @@ class DatabaseManager:
                         "model": conv.model,
                         "provider": conv.provider
                     }
-                conv_data = conversations_dict[conv.conversation_id]
+                conv_data = conversations_dict[conv.session_id]
                 conv_data["message_count"] += 1
 
             # 转换为列表并分页
             conversations_list = list(conversations_dict.values())
             return conversations_list[offset:offset + limit]
 
-    async def delete_conversation(self, conversation_id: str) -> int:
+    async def delete_conversation(self, session_id: str) -> int:
         """删除特定对话及其所有消息记录"""
         async with self.get_session() as session:
             # 删除所有匹配的对话记录
             stmt = (
                 select(ChatConversation)
-                .where(ChatConversation.conversation_id == conversation_id)
+                .where(ChatConversation.session_id == session_id)
             )
             result = await session.execute(stmt)
             conversations = result.scalars().all()
@@ -498,7 +498,7 @@ class DatabaseManager:
                 await session.delete(conv)
                 deleted_count += 1
 
-            logger.info(f"删除对话 {conversation_id}，删除了 {deleted_count} 条记录")
+            logger.info(f"删除对话 {session_id}，删除了 {deleted_count} 条记录")
             return deleted_count
 
     # ============ 系统日志相关 ============
