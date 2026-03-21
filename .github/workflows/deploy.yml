@@ -37,7 +37,18 @@ jobs:
         run: uv sync --frozen --extra dev
 
       - name: Run backend tests
-        run: uv run pytest
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          uv run pytest
+          status=$?
+          set -e
+          if [ "$status" -eq 5 ]; then
+            echo "No pytest tests were collected, continuing release build."
+            exit 0
+          fi
+          exit "$status"
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -54,11 +65,25 @@ jobs:
         working-directory: web
         run: npm run build
 
+      - name: Validate docker compose file
+        run: docker compose -f docker-compose.yml config
+
+      - name: Validate nginx configuration
+        run: |
+          docker run --rm \
+            --add-host backend:127.0.0.1 \
+            --add-host minio:127.0.0.1 \
+            -v "$PWD/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
+            -v "$PWD/web/dist:/usr/share/nginx/html:ro" \
+            nginx:1.27-alpine nginx -t
+
       - name: Prepare deploy payload
         run: |
           mkdir -p deploy-root/web
-          cp Dockerfile .dockerignore pyproject.toml uv.lock README.md docker-compose.yml deploy-root/
+          cp Dockerfile .dockerignore pyproject.toml uv.lock README.md docker-compose.yml env.example deploy-root/
           cp -r src deploy-root/src
+          if [ -d migrations ]; then cp -r migrations deploy-root/; fi
+          if [ -d sql ]; then cp -r sql deploy-root/; fi
           cp web/nginx.conf web/.env.production deploy-root/web/
           tar czf deploy-root.tgz -C deploy-root .
           tar czf frontend-dist.tgz -C web/dist .
@@ -185,51 +210,74 @@ jobs:
             "$DEPLOY_USER@$DEPLOY_HOST" "echo ok"
 
       - name: Prepare remote directories
+        shell: bash
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
-          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "mkdir -p '$DEPLOY_PATH/web' '$DEPLOY_PATH/data' '$DEPLOY_PATH/logs' '$DEPLOY_PATH/storage' '$DEPLOY_PATH/src'"
+          set -euo pipefail
+          ssh_cmd="ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -p $DEPLOY_PORT"
+          $ssh_cmd "$DEPLOY_USER@$DEPLOY_HOST" \
+            "mkdir -p '$DEPLOY_PATH/web' '$DEPLOY_PATH/data' '$DEPLOY_PATH/logs' '$DEPLOY_PATH/storage' '$DEPLOY_PATH/src' '$DEPLOY_PATH/migrations' '$DEPLOY_PATH/sql'"
 
       - name: Sync files
+        shell: bash
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
-          rsync -az -e "ssh -p $DEPLOY_PORT" \
+          set -euo pipefail
+          rsync_ssh="ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -p $DEPLOY_PORT"
+
+          rsync -az -e "$rsync_ssh" \
             deploy-root/Dockerfile \
             deploy-root/.dockerignore \
             deploy-root/pyproject.toml \
             deploy-root/uv.lock \
             deploy-root/README.md \
+            deploy-root/env.example \
             deploy-root/docker-compose.yml \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
 
-          rsync -az --delete -e "ssh -p $DEPLOY_PORT" \
+          rsync -az --delete -e "$rsync_ssh" \
             deploy-root/src/ \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/src/"
 
-          rsync -az -e "ssh -p $DEPLOY_PORT" \
+          if [ -d deploy-root/migrations ]; then
+            rsync -az --delete -e "$rsync_ssh" \
+              deploy-root/migrations/ \
+              "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/migrations/"
+          fi
+
+          if [ -d deploy-root/sql ]; then
+            rsync -az --delete -e "$rsync_ssh" \
+              deploy-root/sql/ \
+              "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/sql/"
+          fi
+
+          rsync -az -e "$rsync_ssh" \
             deploy-root/web/nginx.conf \
             deploy-root/web/.env.production \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/web/"
 
-          rsync -az --delete -e "ssh -p $DEPLOY_PORT" web/dist/ \
+          rsync -az --delete -e "$rsync_ssh" web/dist/ \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/web/dist.new/"
 
       - name: Remote deploy
+        shell: bash
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
-          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'EOF'
+          set -euo pipefail
+          ssh_cmd="ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -p $DEPLOY_PORT"
+          $ssh_cmd "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'EOF'
           set -euo pipefail
 
           cd "$DEPLOY_PATH"
@@ -238,15 +286,21 @@ jobs:
             . ./.env
             set +a
           fi
+
+          compose_cmd=(docker compose)
+          if [ -f .env ]; then
+            compose_cmd+=(--env-file .env)
+          fi
           frontend_port="${FRONTEND_PORT:-8080}"
 
-          rm -rf web/dist.prev
-          if [ -d web/dist ]; then
-            mv web/dist web/dist.prev
+          if [ ! -d web/dist.new ]; then
+            echo "web/dist.new does not exist"
+            exit 1
           fi
-          mv web/dist.new web/dist
 
-          docker compose --env-file .env up -d --build --remove-orphans minio minio-init backend
+          "${compose_cmd[@]}" config >/dev/null
+
+          "${compose_cmd[@]}" up -d --build --remove-orphans minio minio-init backend
           for i in $(seq 1 60); do
             backend_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' img-batch-agent-backend 2>/dev/null || true)"
             echo "Backend status attempt $i: ${backend_status:-missing}"
@@ -257,27 +311,54 @@ jobs:
           done
           if [ "$backend_status" != "healthy" ]; then
             echo "Backend did not become healthy in time"
-            docker compose --env-file .env logs --tail=200 backend
+            "${compose_cmd[@]}" logs --tail=200 backend
             exit 1
           fi
-          docker compose --env-file .env up -d --force-recreate frontend
+
+          rollback_frontend() {
+            echo "Rolling back frontend dist"
+            rm -rf web/dist
+            if [ -d web/dist.prev ]; then
+              mv web/dist.prev web/dist
+              "${compose_cmd[@]}" up -d --force-recreate frontend || true
+            fi
+          }
+
+          rm -rf web/dist.prev
+          if [ -d web/dist ]; then
+            mv web/dist web/dist.prev
+          fi
+          mv web/dist.new web/dist
+
+          "${compose_cmd[@]}" up -d --force-recreate frontend
           for i in $(seq 1 30); do
-            frontend_status="$(docker inspect --format '{{.State.Status}}' img-batch-agent-frontend 2>/dev/null || true)"
+            frontend_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' img-batch-agent-frontend 2>/dev/null || true)"
             echo "Frontend status attempt $i: ${frontend_status:-missing}"
-            if [ "$frontend_status" = "running" ]; then
+            if [ "$frontend_status" = "healthy" ]; then
               break
             fi
             sleep 2
           done
-          if [ "$frontend_status" != "running" ]; then
+          if [ "$frontend_status" != "healthy" ]; then
             echo "Frontend did not start in time"
-            docker compose --env-file .env logs --tail=200 frontend
+            "${compose_cmd[@]}" logs --tail=200 frontend
+            rollback_frontend
             exit 1
           fi
-          rm -rf web/dist.prev
 
-          curl -fsS "http://127.0.0.1:${frontend_port}/health" >/dev/null
-          curl -fsS "http://127.0.0.1:${frontend_port}/api/v1/health/storage" >/dev/null
+          curl -fsS "http://127.0.0.1:${frontend_port}/nginx-health" >/dev/null || {
+            "${compose_cmd[@]}" logs --tail=200 frontend
+            rollback_frontend
+            exit 1
+          }
+          curl -fsS "http://127.0.0.1:${frontend_port}/api/v1/health/storage" >/dev/null || {
+            "${compose_cmd[@]}" logs --tail=200 backend frontend
+            rollback_frontend
+            exit 1
+          }
+
+          rm -rf web/dist.prev
+          "${compose_cmd[@]}" ps
           EOF
 
       - name: Collect remote logs on failure

@@ -30,7 +30,18 @@ jobs:
         run: uv sync --frozen --extra dev
 
       - name: Run backend tests
-        run: uv run pytest
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          uv run pytest
+          status=$?
+          set -e
+          if [ "$status" -eq 5 ]; then
+            echo "No pytest tests were collected, continuing CI."
+            exit 0
+          fi
+          exit "$status"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
