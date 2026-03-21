@@ -20,6 +20,7 @@ class TaskStatus(str, Enum):
 class ImageTask(BaseModel):
     """生图任务模型"""
     task_id: str = Field(..., description="任务ID")
+    user_id: Optional[str] = Field(None, description="用户ID")
     user_request_id: Optional[str] = Field(None, description="关联的用户请求ID")
     status: TaskStatus = Field(TaskStatus.PENDING, description="任务状态")
     params: ImageParams = Field(..., description="生图参数")

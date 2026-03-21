@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { useHistoryStore } from './useHistoryStore'
-import { useAsyncTaskStore } from './useAsyncTaskStore'
 import { api } from '@/services/api'
 import { mockGenerateImage, mockGetTaskStatus, isMockMode } from '@/utils/mockApi'
 
@@ -27,6 +26,8 @@ export const useGeneratorStore = defineStore('generator', {
         activePollingTasks: new Map(), // 活跃的轮询任务映射 {taskId: sessionId}
         sessionSavedToHistory: false, // 当前会话是否已保存到历史记录（防止重复添加）
         justCreatedSession: false, // 标记是否刚刚创建了新会话
+        availableModels: [] as Array<{model_name: string, display_name?: string, provider?: string, model_type?: string}>, // 可用模型列表
+        quotedMessage: null as {id: string, content: string} | null, // 引用的消息
     }),
     getters: {
         // 动态计算宽高比
@@ -230,7 +231,14 @@ export const useGeneratorStore = defineStore('generator', {
             }
         },
         async generateImage(customPrompt?: string): Promise<{ success: boolean; taskId?: string; error?: string }> {
-            const promptToUse = customPrompt || this.prompt
+            let promptToUse = customPrompt || this.prompt
+
+            // 如果有引用的消息，将其附加到提示词中
+            if (this.quotedMessage && this.quotedMessage.content) {
+                promptToUse = `引用：${this.quotedMessage.content}\n\n${promptToUse}`
+                // 清除引用，避免重复添加
+                this.quotedMessage = null
+            }
 
             if (!promptToUse.trim()) {
                 return { success: false, error: '请输入描述文字' }
@@ -290,20 +298,11 @@ export const useGeneratorStore = defineStore('generator', {
                 // 检查是否是异步任务
                 if (response.is_async) {
                     console.log('[异步任务] 任务已提交到异步队列:', taskId)
-                    // 添加到异步任务store
-                    const asyncTaskStore = useAsyncTaskStore()
-                    asyncTaskStore.addTask({
-                        task_id: taskId,
-                        model: this.model,
-                        prompt: promptToUse,
-                        status: 'pending',
-                        progress: 0
-                    })
                     // 显示提示消息
                     this.messages.push({
                         id: `msg_${Date.now()}`,
                         type: 'system',
-                        content: '异步任务已提交，请在"异步任务"页面查看进度',
+                        content: '异步任务已提交，请在"生成历史"中查看进度',
                         timestamp: new Date().toISOString()
                     })
                     this.isGenerating = false
@@ -1244,26 +1243,23 @@ export const useGeneratorStore = defineStore('generator', {
             }
         },
 
-        // 提交异步任务
-        async submitAsyncTask(customPrompt?: string) {
-            const asyncTaskStore = useAsyncTaskStore()
-            const promptToUse = customPrompt || this.prompt
-
-            if (!promptToUse.trim()) {
-                return { success: false, error: '请输入描述文字' }
+        // Fetch available models from API
+        async fetchAvailableModels() {
+            try {
+                const response = await api.getModels()
+                if (response && response.models) {
+                    this.availableModels = response.models.map(model => ({
+                        model_name: model.model_name,
+                        display_name: model.display_name || model.model_name,
+                        provider: model.provider || 'unknown',
+                        model_type: model.model_type || 'image'
+                    }))
+                    console.log('Available models loaded:', this.availableModels.length)
+                }
+            } catch (error) {
+                console.error('Failed to fetch available models:', error)
+                this.availableModels = []
             }
-
-            const params = {
-                width: this.width,
-                height: this.height,
-                quality: this.quality,
-                batchSize: this.batchSize,
-                negativePrompt: this.negativePrompt,
-                seed: this.seed,
-            }
-
-            const task = await asyncTaskStore.submitTask(promptToUse, params, this.selectedModelInfo?.model_type || 'image')
-            return { success: true, taskId: task.id }
         }
     }
 })

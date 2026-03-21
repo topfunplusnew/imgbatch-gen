@@ -10,6 +10,10 @@ from contextlib import asynccontextmanager
 from loguru import logger
 
 from .models import UserRequest, ImageGenerationRecord, ChatConversation, SystemLog, ConversationSession, UploadedFile, StoredCredential, UploadedFile
+from .auth_models import User, UserAuth, LoginLog
+from .billing_models import Account, Transaction, ConsumptionRecord, Withdrawal
+from .payment_models import PaymentOrder
+from .download_models import DownloadRecord
 from .base import Base
 from ..config.settings import settings
 from ..utils.credential_crypto import encrypt_api_key, decrypt_api_key, mask_api_key
@@ -25,18 +29,19 @@ class DatabaseManager:
         Args:
             database_url: 数据库连接URL
                 PostgreSQL格式: postgresql+asyncpg://user:password@host:port/database
-                SQLite格式: sqlite+aiosqlite:///path/to/database.db
             echo: 是否输出SQL日志
             """
-        self.database_url = database_url or "sqlite+aiosqlite:///./data/agent.db"
+        self.database_url = database_url or "postgresql+asyncpg://postgres:1234@localhost:5432/agent_db"
         self.echo = echo
 
-        # SQLite 不支持连接池参数
-        is_sqlite = self.database_url.startswith("sqlite")
-        engine_kwargs = dict(echo=echo, pool_pre_ping=True)
-        if not is_sqlite:
-            engine_kwargs["pool_size"] = 10
-            engine_kwargs["max_overflow"] = 20
+        # PostgreSQL 连接池配置
+        engine_kwargs = dict(
+            echo=echo,
+            pool_pre_ping=True,  # 在使用连接前测试连接
+            pool_recycle=3600,  # 1小时后回收连接
+            pool_size=5,  # 连接池大小
+            max_overflow=10,  # 最大溢出连接数
+        )
 
         # 创建异步引擎
         self.engine = create_async_engine(
@@ -154,6 +159,13 @@ class DatabaseManager:
             )
             result = await session.execute(stmt)
             return list(result.scalars().all())
+
+    async def get_user_request_by_id(self, user_request_id: str) -> Optional[UserRequest]:
+        """根据ID获取用户请求"""
+        async with self.get_session() as session:
+            stmt = select(UserRequest).where(UserRequest.id == user_request_id)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
 
     async def store_api_credential(
         self,
@@ -942,6 +954,561 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"保存图片到对话失败: {str(e)}")
             return False
+
+    # ==================== 用户认证相关 ====================
+
+    async def create_user(self, user: User) -> User:
+        """创建用户"""
+        async with self.get_session() as session:
+            session.add(user)
+            await session.flush()
+            await session.commit()
+            await session.refresh(user)
+            logger.info(f"创建用户: {user.id}")
+            return user
+
+    async def get_user_by_id(self, user_id: str) -> Optional[User]:
+        """根据ID获取用户"""
+        async with self.get_session() as session:
+            stmt = select(User).where(User.id == user_id)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def get_user_by_phone(self, phone: str) -> Optional[User]:
+        """根据手机号获取用户"""
+        async with self.get_session() as session:
+            stmt = select(User).where(User.phone == phone)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def get_user_by_username(self, username: str) -> Optional[User]:
+        """根据用户名获取用户"""
+        async with self.get_session() as session:
+            stmt = select(User).where(User.username == username)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def update_user(self, user: User) -> User:
+        """更新用户"""
+        async with self.get_session() as session:
+            await session.merge(user)
+            await session.commit()
+            logger.info(f"更新用户: {user.id}")
+            return user
+
+    async def create_user_auth(self, auth: UserAuth) -> UserAuth:
+        """创建用户认证记录"""
+        async with self.get_session() as session:
+            session.add(auth)
+            await session.flush()
+            await session.commit()
+            await session.refresh(auth)
+            logger.info(f"创建用户认证记录: {auth.id}")
+            return auth
+
+    async def get_user_auth(self, identifier: str, auth_type: str) -> Optional[UserAuth]:
+        """获取用户认证记录"""
+        async with self.get_session() as session:
+            stmt = select(UserAuth).where(
+                and_(
+                    UserAuth.auth_identifier == identifier,
+                    UserAuth.auth_type == auth_type
+                )
+            )
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def update_verify_code(
+        self, identifier: str, auth_type: str, code: str, expiry: datetime
+    ) -> bool:
+        """更新验证码"""
+        async with self.get_session() as session:
+            stmt = select(UserAuth).where(
+                and_(
+                    UserAuth.auth_identifier == identifier,
+                    UserAuth.auth_type == auth_type
+                )
+            )
+            result = await session.execute(stmt)
+            auth = result.scalar_one_or_none()
+            if auth:
+                auth.verify_code = code
+                auth.verify_code_expiry = expiry
+                await session.commit()
+                return True
+            return False
+
+    async def create_login_log(self, log: LoginLog) -> LoginLog:
+        """创建登录日志"""
+        async with self.get_session() as session:
+            session.add(log)
+            await session.flush()
+            await session.commit()
+            await session.refresh(log)
+            return log
+
+    # ==================== 账户计费相关 ====================
+
+    async def create_user_account(self, user_id: str) -> Account:
+        """创建用户账户"""
+        async with self.get_session() as session:
+            account = Account(user_id=user_id)
+            session.add(account)
+            await session.flush()
+            await session.commit()
+            await session.refresh(account)
+            logger.info(f"创建用户账户: {account.id}, user_id: {user_id}")
+            return account
+
+    async def get_account_by_user(self, user_id: str) -> Optional[Account]:
+        """获取用户账户"""
+        async with self.get_session() as session:
+            stmt = select(Account).where(Account.user_id == user_id)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def update_account(self, account: Account) -> Account:
+        """更新账户"""
+        async with self.get_session() as session:
+            await session.merge(account)
+            await session.commit()
+            return account
+
+    async def get_account_by_invite_code(self, invite_code: str) -> Optional[Account]:
+        """根据邀请码获取账户"""
+        async with self.get_session() as session:
+            stmt = select(Account).where(Account.invite_code == invite_code)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def add_transaction(
+        self,
+        user_id: str,
+        transaction_type: str,
+        amount: int = 0,
+        points_change: int = 0,
+        description: str = "",
+        related_order_id: str = None,
+        related_request_id: str = None,
+        metadata: Dict = None,
+    ) -> Transaction:
+        """添加交易记录"""
+        async with self.get_session() as session:
+            # 获取当前账户
+            account = await self.get_account_by_user(user_id)
+            if not account:
+                raise ValueError(f"用户账户不存在: {user_id}")
+
+            # 计算交易后状态
+            balance_after = account.balance + amount
+            points_after = account.points + points_change
+
+            transaction = Transaction(
+                user_id=user_id,
+                transaction_type=transaction_type,
+                amount=amount,
+                points_change=points_change,
+                balance_after=balance_after,
+                points_after=points_after,
+                related_order_id=related_order_id,
+                related_request_id=related_request_id,
+                description=description,
+                metadata=metadata,
+            )
+            session.add(transaction)
+
+            # 更新账户
+            account.balance = balance_after
+            account.points = points_after
+
+            await session.flush()
+            await session.commit()
+            await session.refresh(transaction)
+            logger.info(f"添加交易记录: {transaction.id}, type={transaction_type}, amount={amount}")
+            return transaction
+
+    async def get_user_transactions(
+        self, user_id: str, limit: int = 50, offset: int = 0
+    ) -> List[Transaction]:
+        """获取用户交易记录"""
+        async with self.get_session() as session:
+            stmt = (
+                select(Transaction)
+                .where(Transaction.user_id == user_id)
+                .order_by(Transaction.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
+
+    async def create_consumption_record(
+        self,
+        user_id: str,
+        model_name: str,
+        provider: str,
+        cost_type: str,
+        points_used: int = 0,
+        amount: int = 0,
+        request_id: str = None,
+        prompt: str = None,
+        image_count: int = 1,
+        image_urls: List[str] = None,
+        status: str = "success",
+        error_reason: str = None,
+    ) -> ConsumptionRecord:
+        """创建消费记录"""
+        async with self.get_session() as session:
+            record = ConsumptionRecord(
+                user_id=user_id,
+                request_id=request_id,
+                model_name=model_name,
+                provider=provider,
+                cost_type=cost_type,
+                points_used=points_used,
+                amount=amount,
+                prompt=prompt,
+                image_count=image_count,
+                image_urls=image_urls,
+                status=status,
+                error_reason=error_reason,
+            )
+            session.add(record)
+            await session.flush()
+            await session.commit()
+            await session.refresh(record)
+            logger.info(f"创建消费记录: {record.id}, user={user_id}, model={model_name}, status={status}")
+            return record
+
+    async def get_user_consumption_records(
+        self, user_id: str, limit: int = 50, offset: int = 0
+    ) -> List[ConsumptionRecord]:
+        """获取用户消费记录"""
+        async with self.get_session() as session:
+            stmt = (
+                select(ConsumptionRecord)
+                .where(ConsumptionRecord.user_id == user_id)
+                .order_by(ConsumptionRecord.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
+
+    # ==================== 提现相关 ====================
+
+    async def create_withdrawal(self, withdrawal: Withdrawal) -> Withdrawal:
+        """创建提现申请"""
+        async with self.get_session() as session:
+            session.add(withdrawal)
+            await session.flush()
+            await session.commit()
+            await session.refresh(withdrawal)
+            logger.info(f"创建提现申请: {withdrawal.withdrawal_id}, user_id={withdrawal.user_id}, amount={withdrawal.amount}")
+            return withdrawal
+
+    async def get_withdrawal_by_id(self, withdrawal_id: str) -> Optional[Withdrawal]:
+        """根据提现单号获取提现记录"""
+        async with self.get_session() as session:
+            stmt = select(Withdrawal).where(Withdrawal.withdrawal_id == withdrawal_id)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def get_user_withdrawals(
+        self, user_id: str, limit: int = 50, offset: int = 0
+    ) -> List[Withdrawal]:
+        """获取用户提现记录"""
+        async with self.get_session() as session:
+            stmt = (
+                select(Withdrawal)
+                .where(Withdrawal.user_id == user_id)
+                .order_by(Withdrawal.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
+
+    async def get_all_withdrawals(
+        self, status: str = None, limit: int = 50, offset: int = 0
+    ) -> List[Withdrawal]:
+        """获取所有提现记录（管理员用）"""
+        async with self.get_session() as session:
+            stmt = select(Withdrawal)
+            if status:
+                stmt = stmt.where(Withdrawal.status == status)
+            stmt = stmt.order_by(Withdrawal.created_at.desc()).offset(offset).limit(limit)
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
+
+    async def get_withdrawals_count(self, status: str = None) -> int:
+        """获取提现记录总数"""
+        async with self.get_session() as session:
+            from sqlalchemy import func
+            stmt = select(func.count(Withdrawal.id))
+            if status:
+                stmt = stmt.where(Withdrawal.status == status)
+            result = await session.execute(stmt)
+            return result.scalar()
+
+    async def update_withdrawal(self, withdrawal: Withdrawal) -> Withdrawal:
+        """更新提现记录"""
+        async with self.get_session() as session:
+            await session.merge(withdrawal)
+            await session.commit()
+            logger.info(f"更新提现记录: {withdrawal.withdrawal_id}, status={withdrawal.status}")
+            return withdrawal
+
+    # ==================== 下载记录相关 ====================
+
+    async def create_download_record(self, record: DownloadRecord) -> DownloadRecord:
+        """创建下载记录"""
+        async with self.get_session() as session:
+            session.add(record)
+            await session.flush()
+            await session.commit()
+            await session.refresh(record)
+            logger.info(f"创建下载记录: {record.id}, user_id={record.user_id}")
+            return record
+
+    async def get_user_download_records(
+        self, user_id: str, limit: int = 50, offset: int = 0
+    ) -> List[DownloadRecord]:
+        """获取用户下载记录"""
+        async with self.get_session() as session:
+            stmt = (
+                select(DownloadRecord)
+                .where(DownloadRecord.user_id == user_id)
+                .order_by(DownloadRecord.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
+
+    async def get_user_download_records_count(self, user_id: str) -> int:
+        """获取用户下载记录总数"""
+        from sqlalchemy import func
+        async with self.get_session() as session:
+            stmt = select(func.count(DownloadRecord.id)).where(DownloadRecord.user_id == user_id)
+            result = await session.execute(stmt)
+            return result.scalar() or 0
+
+    async def get_user_generation_records(
+        self, user_id: str, limit: int = 20, offset: int = 0, status: str = None
+    ) -> List[Dict[str, Any]]:
+        """
+        获取用户的图片生成记录
+
+        Args:
+            user_id: 用户ID
+            limit: 返回记录数量
+            offset: 偏移量
+            status: 状态筛选 (completed, failed)
+
+        Returns:
+            生成记录列表
+        """
+        async with self.get_session() as session:
+            # 构建查询语句
+            stmt = (
+                select(ImageGenerationRecord, UserRequest)
+                .join(UserRequest, ImageGenerationRecord.user_request_id == UserRequest.id)
+                .where(UserRequest.user_id == user_id)
+            )
+
+            # 添加状态筛选
+            if status:
+                stmt = stmt.where(ImageGenerationRecord.status == status)
+
+            # 按创建时间倒序排列
+            stmt = stmt.order_by(ImageGenerationRecord.created_at.desc())
+            stmt = stmt.offset(offset).limit(limit)
+
+            result = await session.execute(stmt)
+            records = result.all()
+
+            # 构建返回数据
+            record_list = []
+            for gen_record, user_request in records:
+                # 从request_data中获取prompt
+                prompt = gen_record.prompt
+                if not prompt and user_request.request_data:
+                    prompt = user_request.request_data.get("prompt", "")
+
+                record_list.append({
+                    "id": gen_record.id,
+                    "user_request_id": gen_record.user_request_id,
+                    "provider": gen_record.provider or "unknown",
+                    "model": gen_record.model or "unknown",
+                    "prompt": prompt or "",
+                    "negative_prompt": gen_record.negative_prompt or "",
+                    "width": gen_record.width or 1024,
+                    "height": gen_record.height or 1024,
+                    "n": gen_record.n or 1,
+                    "style": gen_record.style,
+                    "quality": gen_record.quality,
+                    "status": gen_record.status or "unknown",
+                    "image_urls": gen_record.image_urls or [],
+                    "image_paths": gen_record.image_paths or [],
+                    "processing_time": gen_record.processing_time,
+                    "start_time": gen_record.start_time.isoformat() if gen_record.start_time else None,
+                    "end_time": gen_record.end_time.isoformat() if gen_record.end_time else None,
+                    "created_at": gen_record.created_at.isoformat() if gen_record.created_at else None,
+                    "extra_params": gen_record.extra_params or {},
+                })
+
+            return record_list
+
+    async def get_user_generation_records_count(self, user_id: str, status: str = None) -> int:
+        """
+        获取用户的图片生成记录总数
+
+        Args:
+            user_id: 用户ID
+            status: 状态筛选 (completed, failed)
+
+        Returns:
+            记录总数
+        """
+        from sqlalchemy import func
+        async with self.get_session() as session:
+            stmt = (
+                select(func.count(ImageGenerationRecord.id))
+                .join(UserRequest, ImageGenerationRecord.user_request_id == UserRequest.id)
+                .where(UserRequest.user_id == user_id)
+            )
+
+            if status:
+                stmt = stmt.where(ImageGenerationRecord.status == status)
+
+            result = await session.execute(stmt)
+            return result.scalar() or 0
+
+    # ==================== 管理员相关 ====================
+
+    async def get_users_list(
+        self,
+        keyword: str = None,
+        status: str = None,
+        role: str = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> List[User]:
+        """获取用户列表（支持角色筛选）"""
+        from sqlalchemy.orm import selectinload
+        async with self.get_session() as session:
+            stmt = select(User).options(selectinload(User.account))
+
+            # 筛选条件
+            conditions = []
+            if keyword:
+                conditions.append(
+                    or_(
+                        User.phone.like(f"%{keyword}%"),
+                        User.username.like(f"%{keyword}%"),
+                    )
+                )
+            if status:
+                conditions.append(User.status == status)
+            if role:
+                conditions.append(User.role == role)
+
+            if conditions:
+                stmt = stmt.where(and_(*conditions))
+
+            stmt = stmt.order_by(User.created_at.desc()).offset(offset).limit(limit)
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
+
+    async def get_users_count(self, keyword: str = None, status: str = None, role: str = None) -> int:
+        """获取用户总数（支持角色筛选）"""
+        from sqlalchemy import func
+        async with self.get_session() as session:
+            stmt = select(func.count(User.id))
+
+            # 筛选条件
+            conditions = []
+            if keyword:
+                conditions.append(
+                    or_(
+                        User.phone.like(f"%{keyword}%"),
+                        User.username.like(f"%{keyword}%"),
+                    )
+                )
+            if status:
+                conditions.append(User.status == status)
+            if role:
+                conditions.append(User.role == role)
+
+            if conditions:
+                stmt = stmt.where(and_(*conditions))
+
+            result = await session.execute(stmt)
+            return result.scalar() or 0
+
+    async def get_platform_statistics(self) -> Dict[str, Any]:
+        """获取平台统计数据"""
+        from sqlalchemy import func, select
+        from datetime import date, datetime, timedelta
+
+        async with self.get_session() as session:
+            # 总用户数
+            total_users_stmt = select(func.count(User.id))
+            total_users = (await session.execute(total_users_stmt)).scalar() or 0
+
+            # 活跃用户数（最近30天有登录记录）
+            active_users_stmt = select(func.count(User.id)).where(
+                User.last_login_at >= datetime.now() - timedelta(days=30)
+            )
+            active_users = (await session.execute(active_users_stmt)).scalar() or 0
+
+            # 今日新增用户
+            today = date.today()
+            today_start = datetime.combine(today, datetime.min.time())
+            today_users_stmt = select(func.count(User.id)).where(User.created_at >= today_start)
+            today_users = (await session.execute(today_users_stmt)).scalar() or 0
+
+            # 账户统计
+            accounts_stmt = select(
+                func.sum(Account.total_generated).label("total_generated"),
+                func.sum(Account.total_spent).label("total_revenue"),
+            )
+            accounts_result = await session.execute(accounts_stmt)
+            row = accounts_result.first()
+            total_generated = row.total_generated or 0
+            total_revenue = row.total_revenue or 0
+
+            # 今日生成次数和收入（从交易表统计）
+            today_transactions_stmt = select(
+                func.sum(Transaction.amount).label("today_revenue")
+            ).where(
+                and_(
+                    Transaction.transaction_type == "consumption",
+                    Transaction.created_at >= today_start,
+                )
+            )
+            today_revenue_result = await session.execute(today_transactions_stmt)
+            today_revenue = abs(today_revenue_result.scalar() or 0)
+
+            # 今日生成次数
+            today_generation_stmt = select(func.count(ConsumptionRecord.id)).where(
+                and_(
+                    ConsumptionRecord.status == "success",
+                    ConsumptionRecord.created_at >= today_start,
+                )
+            )
+            today_generated = (await session.execute(today_generation_stmt)).scalar() or 0
+
+            return {
+                "total_users": total_users,
+                "active_users": active_users,
+                "total_generated": total_generated,
+                "total_revenue": total_revenue,  # 分
+                "today_users": today_users,
+                "today_generated": today_generated,
+                "today_revenue": today_revenue,  # 分
+            }
 
 
 # 全局数据库管理器实例

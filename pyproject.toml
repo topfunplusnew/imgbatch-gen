@@ -34,14 +34,19 @@ dependencies = [
     "minio>=7.2.0",
     "sqlalchemy>=2.0.0",
     "alembic>=1.12.0",
-    "aiosqlite",
+    "asyncpg>=0.29.0",
     "python-dotenv>=1.0.0",
     "requests>=2.31.0",
     "loguru>=0.7.0",
+    "passlib>=1.7.4",
+    "argon2-cffi>=23.0.0",
+    "python-jose[cryptography]>=3.3.0",
+    "email-validator>=2.0.0",
 ]
 
 [project.scripts]
-agent-py = "src.api.main:run"
+agent-py = "run_app:main"
+start = "run_app:main"
 
 [project.optional-dependencies]
 dev = [
@@ -49,6 +54,20 @@ dev = [
     "pytest-asyncio>=0.21.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
+]
+
+# 短信服务依赖（根据需要选择安装）
+aliyun = [
+    "alibabacloud-dysmsapi20170525>=3.0.0",
+]
+
+tencent = [
+    "tencentcloud-sdk-python>=3.0.0",
+]
+
+# 所有短信服务
+sms = [
+    "agent-py[aliyun,tencent]",
 ]
 
 [tool.setuptools.packages.find]

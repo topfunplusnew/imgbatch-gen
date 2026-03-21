@@ -718,9 +718,24 @@ async def unified_generate(
         # 5. 创建用户请求记录（仅用于日志和监控，不作为对话历史显示）
         # 注意：这个记录用于后台日志，不应该被前端作为"历史记录"显示
         user_request_id = None
+        user_id = "anonymous"  # 默认用户ID
+
+        # 尝试从token中获取user_id
+        try:
+            auth_header = http_request.headers.get("authorization", "")
+            if auth_header and auth_header.startswith("Bearer "):
+                from ...services.auth_service import get_auth_service
+                auth_service = get_auth_service()
+                token = auth_header.split(" ")[1]
+                payload = auth_service.decode_token(token)
+                if payload:
+                    user_id = payload.get("user_id", "anonymous")
+        except Exception:
+            pass
+
         try:
             user_request = await db_manager.create_user_request(
-                user_id="anonymous",  # 默认用户ID，可根据实际情况修改
+                user_id=user_id,
                 user_ip=http_request.client.host,
                 user_agent=http_request.headers.get("user-agent", ""),
                 request_type="image_generation",
@@ -740,7 +755,8 @@ async def unified_generate(
             batch_task = await task_manager.create_batch_task(
                 params_list,
                 user_inputs,
-                user_request.id if user_request else None
+                user_request.id if user_request else None,
+                user_id
             )
             # 关联用户请求ID到批量任务
             if user_request:
@@ -755,7 +771,7 @@ async def unified_generate(
             return batch_task
         else:
             # 单图任务
-            task = task_manager.create_task(params_list[0], user_inputs[0], user_request.id if user_request else None)
+            task = task_manager.create_task(params_list[0], user_inputs[0], user_request.id if user_request else None, user_id)
             await task_manager.submit_task(task)
             # 关联用户请求ID
             if user_request:

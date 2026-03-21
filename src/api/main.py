@@ -14,7 +14,7 @@ from ..config.model_registry import get_model_registry
 from ..engine import TaskManager
 from ..database import get_db_manager
 from .middleware import setup_cors, logging_middleware
-from .routes import generate, batch, status, models, unified, chat, assistant, health, history, files, async_tasks
+from .routes import generate, batch, status, models, unified, chat, assistant, health, history, files, async_tasks, auth, account, payment, checkin, download, referral, admin, system_config, withdrawal, case_management, notifications, maintenance
 
 
 # 配置日志
@@ -28,7 +28,8 @@ logger.add(
     f"{settings.log_dir}/app.log",
     rotation=settings.log_rotation,
     retention=settings.log_retention,
-    level=settings.log_level
+    level=settings.log_level,
+    encoding="utf-8"
 )
 
 
@@ -38,19 +39,13 @@ async def lifespan(app: FastAPI):
     # 启动时
     logger.info("启动应用...")
 
-    # 初始化数据库
+    # 初始化数据库管理器（不自动建表）
     try:
         db_manager = get_db_manager()
-        # 自动建表
-        from ..database.base import Base
-        from ..database import models  # noqa: F401 确保所有模型注册到 Base
-        async with db_manager.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
         app.state.db_manager = db_manager
-        logger.info("数据库初始化成功")
+        logger.info("数据库管理器初始化成功")
     except Exception as e:
-        logger.error(f"数据库初始化失败: {str(e)}")
-        # 数据库初始化失败不影响应用启动
+        logger.error(f"数据库管理器初始化失败: {str(e)}")
         app.state.db_manager = None
 
     # 初始化异步任务数据库
@@ -90,6 +85,69 @@ async def lifespan(app: FastAPI):
     await task_manager.start()
     app.state.task_manager = task_manager
 
+    # 初始化SSE管理器
+    try:
+        from ..utils.sse_manager import get_sse_manager
+        sse_manager = get_sse_manager()
+        await sse_manager.start()
+        app.state.sse_manager = sse_manager
+        logger.info("SSE管理器已启动")
+    except Exception as e:
+        logger.warning(f"SSE管理器启动失败: {str(e)}")
+        app.state.sse_manager = None
+
+    # 初始化后台调度器和数据保留清理服务
+    try:
+        from ..scheduler.background_scheduler import BackgroundScheduler
+        from ..services.retention_cleanup import RetentionCleanupService
+
+        scheduler = BackgroundScheduler()
+        await scheduler.start()
+        app.state.scheduler = scheduler
+
+        # 创建清理服务实例
+        cleanup_service = RetentionCleanupService()
+        app.state.cleanup_service = cleanup_service
+
+        # 安排定期清理任务
+        interval_seconds = settings.cleanup_interval_hours * 3600
+        scheduler.schedule_periodic(
+            name="retention_cleanup",
+            interval_seconds=interval_seconds,
+            coroutine_func=cleanup_service.cleanup_expired_records,
+            retention_days=settings.retention_days,
+            batch_size=settings.cleanup_batch_size,
+            dry_run=settings.cleanup_dry_run
+        )
+
+        logger.info(
+            f"数据保留清理服务已启动，"
+            f"保留期: {settings.retention_days}天，"
+            f"清理间隔: {settings.cleanup_interval_hours}小时"
+        )
+
+        # 如果配置了启动时清理
+        if settings.cleanup_on_startup:
+            logger.info("执行启动时清理...")
+            from ..models.cleanup import CleanupReport
+            report = await cleanup_service.cleanup_expired_records(
+                retention_days=settings.retention_days,
+                batch_size=settings.cleanup_batch_size,
+                dry_run=settings.cleanup_dry_run
+            )
+            report.triggered_by = "startup"
+            logger.info(
+                f"启动时清理完成: "
+                f"状态={report.status}, "
+                f"删除记录={report.total_image_records_deleted}, "
+                f"耗时={report.duration_seconds:.2f}秒"
+            )
+
+    except Exception as e:
+        logger.error(f"数据保留清理服务初始化失败: {str(e)}")
+        app.state.scheduler = None
+        app.state.cleanup_service = None
+
     logger.info("应用启动完成")
 
     yield
@@ -101,6 +159,15 @@ async def lifespan(app: FastAPI):
     # 停止异步任务处理器
     if hasattr(app.state, 'async_processor') and app.state.async_processor:
         await app.state.async_processor.stop()
+
+    # 停止SSE管理器
+    if hasattr(app.state, 'sse_manager') and app.state.sse_manager:
+        await app.state.sse_manager.stop()
+
+    # 停止后台调度器
+    if hasattr(app.state, 'scheduler') and app.state.scheduler:
+        await app.state.scheduler.stop()
+        logger.info("后台调度器已停止")
 
     # 关闭数据库连接
     if app.state.db_manager:
@@ -122,6 +189,20 @@ setup_cors(app)
 app.middleware("http")(logging_middleware)
 
 # 注册路由
+app.include_router(auth.router)  # 认证路由
+app.include_router(account.router)  # 账户路由
+app.include_router(payment.router)  # 支付路由
+app.include_router(checkin.router)  # 签到路由
+app.include_router(download.router)  # 下载记录路由
+app.include_router(referral.router)  # 邀请码路由
+app.include_router(admin.router)  # 管理员路由
+app.include_router(system_config.router)  # 系统配置路由
+app.include_router(withdrawal.router)  # 提现路由
+app.include_router(case_management.router)  # 案例管理路由（用户）
+app.include_router(case_management.admin_router)  # 案例管理路由（管理员）
+app.include_router(notifications.router)  # 通知系统路由（用户）
+app.include_router(notifications.admin_router)  # 通知系统路由（管理员）
+app.include_router(maintenance.router)  # 维护和清理路由
 app.include_router(generate.router)
 app.include_router(batch.router)
 app.include_router(status.router)

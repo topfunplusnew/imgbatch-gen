@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 from typing import Any, Dict, Optional, Union
 
@@ -64,98 +65,209 @@ class RelayClient:
         json: Optional[Dict[str, Any]] = None,
         files: Optional[Dict[str, Union[bytes, io.BytesIO, tuple]]] = None,
         timeout: float = 300.0,
+        max_retries: int = 2,
     ) -> Dict[str, Any]:
+        """
+        POST请求（带重试）
+
+        Args:
+            endpoint: API端点
+            data: 表单数据
+            json: JSON数据
+            files: 文件数据
+            timeout: 超时时间（秒）
+            max_retries: 最大重试次数（默认2次）
+        """
         url = f"{self.base_url}{endpoint}"
         logger.info(f"-> POST {url} timeout={timeout}")
 
-        try:
-            timeout_config = httpx.Timeout(connect=30.0, read=timeout, write=30.0, pool=30.0)
-            async with httpx.AsyncClient(timeout=timeout_config, follow_redirects=True) as client:
-                logger.info(f"-> files={files is not None}, json={json is not None}, data={data is not None}")
-                if files:
-                    headers = self._get_headers("multipart/form-data")
-                    processed_files = {}
-                    for field_name, file_data in files.items():
-                        if isinstance(file_data, tuple):
-                            processed_files[field_name] = file_data
-                        elif isinstance(file_data, bytes):
-                            processed_files[field_name] = (field_name, io.BytesIO(file_data), "image/png")
-                        else:
-                            if hasattr(file_data, "seek"):
-                                file_data.seek(0)
-                            processed_files[field_name] = (field_name, file_data, "image/png")
+        max_attempts = max_retries + 1
+        base_delay = getattr(settings, 'retry_base_delay', 1.0)
+        max_delay = getattr(settings, 'retry_max_delay', 10.0)
 
-                    response = await client.post(
-                        url,
-                        headers=headers,
-                        data=data,
-                        files=processed_files,
-                    )
-                elif json:
-                    headers = self._get_headers("application/json")
-                    logger.info(f"-> payload: {str(json)[:300]}")
-                    response = await client.post(
-                        url,
-                        headers=headers,
-                        json=json,
-                    )
-                else:
-                    headers = self._get_headers("application/json")
-                    response = await client.post(
-                        url,
-                        headers=headers,
-                        json=data,
-                    )
+        for attempt in range(1, max_attempts + 1):
+            try:
+                timeout_config = httpx.Timeout(connect=30.0, read=timeout, write=30.0, pool=30.0)
+                async with httpx.AsyncClient(timeout=timeout_config, follow_redirects=True) as client:
+                    logger.info(f"-> files={files is not None}, json={json is not None}, data={data is not None}")
+                    if files:
+                        headers = self._get_headers("multipart/form-data")
+                        processed_files = {}
+                        for field_name, file_data in files.items():
+                            if isinstance(file_data, tuple):
+                                processed_files[field_name] = file_data
+                            elif isinstance(file_data, bytes):
+                                processed_files[field_name] = (field_name, io.BytesIO(file_data), "image/png")
+                            else:
+                                if hasattr(file_data, "seek"):
+                                    file_data.seek(0)
+                                processed_files[field_name] = (field_name, file_data, "image/png")
 
-                if response.status_code >= 400:
-                    logger.error(
-                        f"Relay error response HTTP {response.status_code}, body head: {response.text[:500]}"
+                        response = await client.post(
+                            url,
+                            headers=headers,
+                            data=data,
+                            files=processed_files,
+                        )
+                    elif json:
+                        headers = self._get_headers("application/json")
+                        logger.info(f"-> payload: {str(json)[:300]}")
+                        response = await client.post(
+                            url,
+                            headers=headers,
+                            json=json,
+                        )
+                    else:
+                        headers = self._get_headers("application/json")
+                        response = await client.post(
+                            url,
+                            headers=headers,
+                            json=data,
+                        )
+
+                    # 检查HTTP状态码
+                    if response.status_code >= 400:
+                        # 可重试的状态码：429, 502, 503, 504
+                        retryable_statuses = {429, 502, 503, 504}
+                        if response.status_code in retryable_statuses and attempt < max_attempts:
+                            delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+                            logger.warning(
+                                f"Relay返回HTTP {response.status_code}，"
+                                f"{delay}秒后重试 (尝试 {attempt}/{max_attempts})"
+                            )
+                            await asyncio.sleep(delay)
+                            continue
+
+                        logger.error(
+                            f"Relay error response HTTP {response.status_code}, body head: {response.text[:500]}"
+                        )
+                        _raise_relay_error(response, url)
+
+                    raw = response.text
+                    if not raw or not raw.strip():
+                        raise ValueError(f"Relay returned an empty response (HTTP {response.status_code})")
+                    try:
+                        return response.json()
+                    except Exception:
+                        logger.error(f"Relay response is not JSON: {raw[:500]}")
+                        raise ValueError(f"Relay returned a non-JSON response: {raw[:200]}")
+
+            except httpx.TimeoutException as exc:
+                # 超时错误可重试
+                if attempt < max_attempts:
+                    delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+                    logger.warning(
+                        f"Relay请求超时，{delay}秒后重试 (尝试 {attempt}/{max_attempts}): {str(exc)[:200]}"
                     )
-                    _raise_relay_error(response, url)
-                raw = response.text
-                if not raw or not raw.strip():
-                    raise ValueError(f"Relay returned an empty response (HTTP {response.status_code})")
-                try:
-                    return response.json()
-                except Exception:
-                    logger.error(f"Relay response is not JSON: {raw[:500]}")
-                    raise ValueError(f"Relay returned a non-JSON response: {raw[:200]}")
-        except httpx.HTTPError as exc:
-            logger.error(f"Relay request failed: {url}, error: {exc}")
-            raise ValueError(f"Relay request failed: {exc}")
+                    await asyncio.sleep(delay)
+                    continue
+                logger.error(f"Relay request timed out: {url}, error: {exc}")
+                raise ValueError(f"Relay request timed out: {exc}")
+
+            except (httpx.ConnectError, httpx.NetworkError) as exc:
+                # 网络错误可重试
+                if attempt < max_attempts:
+                    delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+                    logger.warning(
+                        f"Relay网络错误，{delay}秒后重试 (尝试 {attempt}/{max_attempts}): {str(exc)[:200]}"
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                logger.error(f"Relay request failed: {url}, error: {exc}")
+                raise ValueError(f"Relay request failed: {exc}")
+
+            except httpx.HTTPError as exc:
+                # 其他HTTP错误不重试
+                logger.error(f"Relay request failed: {url}, error: {exc}")
+                raise ValueError(f"Relay request failed: {exc}")
 
     async def get(
         self,
         endpoint: str,
         params: Optional[Dict[str, Any]] = None,
         timeout: float = 30.0,
+        max_retries: int = 2,
     ) -> Dict[str, Any]:
+        """
+        GET请求（带重试）
+
+        Args:
+            endpoint: API端点
+            params: 查询参数
+            timeout: 超时时间（秒）
+            max_retries: 最大重试次数（默认2次）
+        """
         url = f"{self.base_url}{endpoint}"
         headers = self._get_headers()
 
-        try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.get(
-                    url,
-                    headers=headers,
-                    params=params,
-                )
-                if response.status_code >= 400:
-                    logger.error(
-                        f"Relay error response HTTP {response.status_code}, body head: {response.text[:500]}"
+        max_attempts = max_retries + 1
+        base_delay = getattr(settings, 'retry_base_delay', 1.0)
+        max_delay = getattr(settings, 'retry_max_delay', 10.0)
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.get(
+                        url,
+                        headers=headers,
+                        params=params,
                     )
-                    _raise_relay_error(response, url)
-                raw = response.text
-                if not raw or not raw.strip():
-                    raise ValueError(f"Relay returned an empty response (HTTP {response.status_code})")
-                try:
-                    return response.json()
-                except Exception:
-                    logger.error(f"Relay response is not JSON: {raw[:500]}")
-                    raise ValueError(f"Relay returned a non-JSON response: {raw[:200]}")
-        except httpx.HTTPError as exc:
-            logger.error(f"Relay request failed: {url}, error: {exc}")
-            raise ValueError(f"Relay request failed: {exc}")
+
+                    # 检查HTTP状态码
+                    if response.status_code >= 400:
+                        # 可重试的状态码：429, 502, 503, 504
+                        retryable_statuses = {429, 502, 503, 504}
+                        if response.status_code in retryable_statuses and attempt < max_attempts:
+                            delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+                            logger.warning(
+                                f"Relay返回HTTP {response.status_code}，"
+                                f"{delay}秒后重试 (尝试 {attempt}/{max_attempts})"
+                            )
+                            await asyncio.sleep(delay)
+                            continue
+
+                        logger.error(
+                            f"Relay error response HTTP {response.status_code}, body head: {response.text[:500]}"
+                        )
+                        _raise_relay_error(response, url)
+
+                    raw = response.text
+                    if not raw or not raw.strip():
+                        raise ValueError(f"Relay returned an empty response (HTTP {response.status_code})")
+                    try:
+                        return response.json()
+                    except Exception:
+                        logger.error(f"Relay response is not JSON: {raw[:500]}")
+                        raise ValueError(f"Relay returned a non-JSON response: {raw[:200]}")
+
+            except httpx.TimeoutException as exc:
+                # 超时错误可重试
+                if attempt < max_attempts:
+                    delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+                    logger.warning(
+                        f"Relay请求超时，{delay}秒后重试 (尝试 {attempt}/{max_attempts}): {str(exc)[:200]}"
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                logger.error(f"Relay request timed out: {url}, error: {exc}")
+                raise ValueError(f"Relay request timed out: {exc}")
+
+            except (httpx.ConnectError, httpx.NetworkError) as exc:
+                # 网络错误可重试
+                if attempt < max_attempts:
+                    delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+                    logger.warning(
+                        f"Relay网络错误，{delay}秒后重试 (尝试 {attempt}/{max_attempts}): {str(exc)[:200]}"
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                logger.error(f"Relay request failed: {url}, error: {exc}")
+                raise ValueError(f"Relay request failed: {exc}")
+
+            except httpx.HTTPError as exc:
+                # 其他HTTP错误不重试
+                logger.error(f"Relay request failed: {url}, error: {exc}")
+                raise ValueError(f"Relay request failed: {exc}")
 
     async def download_image(self, image_url: str) -> bytes:
         if image_url.startswith("data:image/"):

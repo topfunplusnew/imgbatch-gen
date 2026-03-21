@@ -18,4 +18,11 @@ class BaseModel(Base):
 
     def to_dict(self):
         """转换为字典"""
-        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+        result = {}
+        for c in self.__table__.columns:
+            value = getattr(self, c.name)
+            # 转换datetime为ISO格式字符串
+            if isinstance(value, datetime):
+                value = value.isoformat()
+            result[c.name] = value
+        return result
