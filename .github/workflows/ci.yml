@@ -74,6 +74,41 @@ jobs:
       - name: Validate docker compose file
         run: docker compose -f docker-compose.yml config
 
+      - name: Validate postgres schema initialization
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose up -d postgres postgres-init
+          for i in $(seq 1 30); do
+            postgres_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' img-batch-agent-postgres 2>/dev/null || true)"
+            echo "Postgres status attempt $i: ${postgres_status:-missing}"
+            if [ "$postgres_status" = "healthy" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ "${postgres_status:-}" != "healthy" ]; then
+            docker compose logs --tail=200 postgres postgres-init
+            exit 1
+          fi
+
+          for i in $(seq 1 30); do
+            init_status="$(docker inspect --format '{{.State.Status}}' img-batch-agent-postgres-init 2>/dev/null || true)"
+            init_exit_code="$(docker inspect --format '{{.State.ExitCode}}' img-batch-agent-postgres-init 2>/dev/null || true)"
+            echo "Postgres init attempt $i: status=${init_status:-missing} exit=${init_exit_code:-n/a}"
+            if [ "$init_status" = "exited" ] && [ "$init_exit_code" = "0" ]; then
+              exit 0
+            fi
+            if [ "$init_status" = "exited" ] && [ "${init_exit_code:-1}" != "0" ]; then
+              docker compose logs --tail=200 postgres postgres-init
+              exit 1
+            fi
+            sleep 2
+          done
+
+          docker compose logs --tail=200 postgres postgres-init
+          exit 1
+
       - name: Build backend image
         run: docker build -t img-batch-agent-backend .
 
@@ -85,3 +120,7 @@ jobs:
             -v "$PWD/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
             -v "$PWD/web/dist:/usr/share/nginx/html:ro" \
             nginx:1.27-alpine nginx -t
+
+      - name: Cleanup compose services
+        if: always()
+        run: docker compose down -v

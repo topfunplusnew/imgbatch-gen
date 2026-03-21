@@ -1,6 +1,84 @@
 name: img-batch-agent
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: img-batch-agent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-agent_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/00-init-schema.sql:/docker-entrypoint-initdb.d/00-init-schema.sql:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  postgres-init:
+    image: postgres:16-alpine
+    container_name: img-batch-agent-postgres-init
+    restart: "no"
+    entrypoint:
+      - /bin/sh
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-agent_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+    volumes:
+      - ./sql/00-init-schema.sql:/sql/00-init-schema.sql:ro
+    command:
+      - -c
+      - |
+        set -eu
+        log() {
+          printf '[postgres-init] %s\n' "$$*"
+        }
+
+        log "Starting PostgreSQL schema initialization"
+        log "Target: $$POSTGRES_HOST:$$POSTGRES_PORT/$$POSTGRES_DB"
+        log "User: $$POSTGRES_USER"
+        log "SQL file: /sql/00-init-schema.sql"
+
+        ready_attempt=0
+        while true; do
+          ready_output="$$(pg_isready -h "$$POSTGRES_HOST" -p "$$POSTGRES_PORT" -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" 2>&1)" && break
+          ready_attempt=$$((ready_attempt + 1))
+          log "Readiness check attempt $$ready_attempt failed"
+          printf '%s\n' "$$ready_output"
+          if [ "$$ready_attempt" -ge 30 ]; then
+            log "PostgreSQL readiness failed after $$ready_attempt attempts"
+            exit 1
+          fi
+          sleep 2
+        done
+        log "PostgreSQL is ready"
+        printf '%s\n' "$$ready_output"
+
+        log "Applying schema"
+        psql \
+          -v ON_ERROR_STOP=1 \
+          -h "$$POSTGRES_HOST" \
+          -p "$$POSTGRES_PORT" \
+          -U "$$POSTGRES_USER" \
+          -d "$$POSTGRES_DB" \
+          -f /sql/00-init-schema.sql
+
+        log "PostgreSQL schema initialization completed"
+
   minio:
     image: minio/minio:RELEASE.2025-02-28T09-55-16Z
     container_name: img-batch-agent-minio
@@ -135,6 +213,10 @@ services:
     container_name: img-batch-agent-backend
     restart: unless-stopped
     depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
       minio-init:
         condition: service_completed_successfully
     environment:
@@ -145,7 +227,12 @@ services:
       STORAGE_TYPE: ${STORAGE_TYPE:-minio}
       STORAGE_PATH: ${STORAGE_PATH:-/app/storage}
       STORAGE_URL_PREFIX: ${STORAGE_URL_PREFIX:-/storage}
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@postgres:5432/agent_db}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-agent_db}}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DATABASE: ${POSTGRES_DB:-agent_db}
       DEFAULT_IMAGE_PROVIDER: ${DEFAULT_IMAGE_PROVIDER:-openai}
       DEFAULT_LLM_PROVIDER: ${DEFAULT_LLM_PROVIDER:-relay}
       DEFAULT_EMBEDDING_PROVIDER: ${DEFAULT_EMBEDDING_PROVIDER:-relay}
@@ -201,4 +288,5 @@ services:
       start_period: 10s
 
 volumes:
+  postgres_data:
   minio_data:
