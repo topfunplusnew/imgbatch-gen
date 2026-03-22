@@ -105,8 +105,8 @@ async def lifespan(app: FastAPI):
         await scheduler.start()
         app.state.scheduler = scheduler
 
-        # 创建清理服务实例
-        cleanup_service = RetentionCleanupService()
+        # 创建清理服务实例，传入db_manager以复用连接池
+        cleanup_service = RetentionCleanupService(db_manager=db_manager)
         app.state.cleanup_service = cleanup_service
 
         # 安排定期清理任务

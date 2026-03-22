@@ -19,8 +19,8 @@ async def storage_health():
         if settings.storage_type == "minio":
             # MinIO健康检查：尝试连接并测试存储桶
             try:
-                # 简单检查存储是否可用
-                await storage.list_images()
+                # 简单检查存储是否可用（list_images是同步方法，不需要await）
+                storage.list_images()
                 return {
                     "status": "healthy",
                     "storage_type": "minio",
