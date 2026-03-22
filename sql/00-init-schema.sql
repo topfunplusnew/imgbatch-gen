@@ -1,4 +1,9 @@
-create table user_requests
+-- 幂等的数据库初始化脚本
+-- 可以安全地多次执行而不会报错
+
+-- ==================== user_requests ====================
+
+create table if not exists user_requests
 (
     user_id       varchar(100),
     user_ip       varchar(50),
@@ -27,16 +32,24 @@ comment on column user_requests.status is '状态: pending, processing, complete
 
 comment on column user_requests.error_message is '错误信息';
 
-alter table user_requests
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'user_requests' and tableowner = 'postgres'
+    ) then
+        alter table user_requests owner to postgres;
+    end if;
+end $$;
 
-create index ix_user_requests_user_id
+create index if not exists ix_user_requests_user_id
     on user_requests (user_id);
 
-create index ix_user_requests_request_type
+create index if not exists ix_user_requests_request_type
     on user_requests (request_type);
 
-create table conversation_sessions
+-- ==================== conversation_sessions ====================
+
+create table if not exists conversation_sessions
 (
     session_id    varchar(100) not null,
     client_id     varchar(100),
@@ -75,16 +88,24 @@ comment on column conversation_sessions.created_at is '创建时间';
 
 comment on column conversation_sessions.updated_at is '更新时间';
 
-alter table conversation_sessions
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'conversation_sessions' and tableowner = 'postgres'
+    ) then
+        alter table conversation_sessions owner to postgres;
+    end if;
+end $$;
 
-create unique index ix_conversation_sessions_session_id
+create index if not exists ix_conversation_sessions_session_id
     on conversation_sessions (session_id);
 
-create index ix_conversation_sessions_client_id
+create index if not exists ix_conversation_sessions_client_id
     on conversation_sessions (client_id);
 
-create table stored_credentials
+-- ==================== stored_credentials ====================
+
+create table if not exists stored_credentials
 (
     provider          varchar(50) not null,
     base_url          varchar(500),
@@ -117,22 +138,30 @@ comment on column stored_credentials.expires_at is '过期时间';
 
 comment on column stored_credentials.last_used_at is '最近使用时间';
 
-alter table stored_credentials
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'stored_credentials' and tableowner = 'postgres'
+    ) then
+        alter table stored_credentials owner to postgres;
+    end if;
+end $$;
 
-create index ix_stored_credentials_user_id
+create index if not exists ix_stored_credentials_user_id
     on stored_credentials (user_id);
 
-create index ix_stored_credentials_provider
+create index if not exists ix_stored_credentials_provider
     on stored_credentials (provider);
 
-create index ix_stored_credentials_status
+create index if not exists ix_stored_credentials_status
     on stored_credentials (status);
 
-create index ix_stored_credentials_session_id
+create index if not exists ix_stored_credentials_session_id
     on stored_credentials (session_id);
 
-create table uploaded_files
+-- ==================== uploaded_files ====================
+
+create table if not exists uploaded_files
 (
     original_filename varchar(255),
     stored_filename   varchar(255)
@@ -177,16 +206,24 @@ comment on column uploaded_files.is_public is '是否公开访问';
 
 comment on column uploaded_files.status is '文件状态: active, deleted, archived';
 
-alter table uploaded_files
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'uploaded_files' and tableowner = 'postgres'
+    ) then
+        alter table uploaded_files owner to postgres;
+    end if;
+end $$;
 
-create index ix_uploaded_files_message_id
+create index if not exists ix_uploaded_files_message_id
     on uploaded_files (message_id);
 
-create index ix_uploaded_files_conversation_id
+create index if not exists ix_uploaded_files_conversation_id
     on uploaded_files (conversation_id);
 
-create table users
+-- ==================== users ====================
+
+create table if not exists users
 (
     username              varchar(50)  not null,
     phone                 varchar(20)
@@ -217,13 +254,21 @@ comment on column users.last_login_at is '最后登录时间';
 
 comment on column users.last_login_ip is '最后登录IP';
 
-alter table users
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'users' and tableowner = 'postgres'
+    ) then
+        alter table users owner to postgres;
+    end if;
+end $$;
 
-create unique index ix_users_username
+create index if not exists ix_users_username
     on users (username);
 
-create table billing_plans
+-- ==================== billing_plans ====================
+
+create table if not exists billing_plans
 (
     plan_id          varchar(50)  not null
         unique,
@@ -271,10 +316,18 @@ comment on column billing_plans.sort_order is '排序序号';
 
 comment on column billing_plans.badge_text is '徽章文字(如''热门'')';
 
-alter table billing_plans
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'billing_plans' and tableowner = 'postgres'
+    ) then
+        alter table billing_plans owner to postgres;
+    end if;
+end $$;
 
-create table image_generation_records
+-- ==================== image_generation_records ====================
+
+create table if not exists image_generation_records
 (
     user_request_id   varchar(36) not null
         references user_requests,
@@ -344,10 +397,18 @@ comment on column image_generation_records.total_tokens is '总Token数';
 
 comment on column image_generation_records.call_mode is '调用模式: serial, parallel, batch';
 
-alter table image_generation_records
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'image_generation_records' and tableowner = 'postgres'
+    ) then
+        alter table image_generation_records owner to postgres;
+    end if;
+end $$;
 
-create table chat_messages
+-- ==================== chat_messages ====================
+
+create table if not exists chat_messages
 (
     user_request_id   varchar(36)
         references user_requests,
@@ -365,7 +426,7 @@ create table chat_messages
     top_p             double precision,
     images            text,
     files             text,
-    id                varchar(36)  not null
+    id                varchar(36) not null
         primary key,
     created_at        timestamp    not null,
     updated_at        timestamp    not null
@@ -399,10 +460,18 @@ comment on column chat_messages.images is '图片URL列表(JSON)';
 
 comment on column chat_messages.files is '文件信息列表(JSON)';
 
-alter table chat_messages
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'chat_messages' and tableowner = 'postgres'
+    ) then
+        alter table chat_messages owner to postgres;
+    end if;
+end $$;
 
-create table system_logs
+-- ==================== system_logs ====================
+
+create table if not exists system_logs
 (
     level             varchar(20),
     module            varchar(100),
@@ -441,19 +510,27 @@ comment on column system_logs.exception_message is '异常消息';
 
 comment on column system_logs.traceback is '异常堆栈';
 
-alter table system_logs
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'system_logs' and tableowner = 'postgres'
+    ) then
+        alter table system_logs owner to postgres;
+    end if;
+end $$;
 
-create index ix_system_logs_level
+create index if not exists ix_system_logs_level
     on system_logs (level);
 
-create index ix_system_logs_user_id
+create index if not exists ix_system_logs_user_id
     on system_logs (user_id);
 
-create index ix_system_logs_module
+create index if not exists ix_system_logs_module
     on system_logs (module);
 
-create table user_auth
+-- ==================== user_auth ====================
+
+create table if not exists user_auth
 (
     user_id            varchar(100) not null
         references users,
@@ -489,13 +566,21 @@ comment on column user_auth.oauth_openid is 'OAuth OpenID';
 
 comment on column user_auth.oauth_unionid is 'OAuth UnionID(微信)';
 
-alter table user_auth
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'user_auth' and tableowner = 'postgres'
+    ) then
+        alter table user_auth owner to postgres;
+    end if;
+end $$;
 
-create index ix_user_auth_type_identifier
+create index if not exists ix_user_auth_type_identifier
     on user_auth (auth_type, auth_identifier);
 
-create table login_logs
+-- ==================== login_logs ====================
+
+create table if not exists login_logs
 (
     user_id        varchar(100)
         references users,
@@ -528,10 +613,18 @@ comment on column login_logs.fail_reason is '失败原因';
 
 comment on column login_logs.logout_at is '登出时间';
 
-alter table login_logs
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'login_logs' and tableowner = 'postgres'
+    ) then
+        alter table login_logs owner to postgres;
+    end if;
+end $$;
 
-create table accounts
+-- ==================== accounts ====================
+
+create table if not exists accounts
 (
     user_id                  varchar(100) not null
         unique
@@ -594,10 +687,18 @@ comment on column accounts.inviter_id is '邀请人ID';
 
 comment on column accounts.total_invite_count is '累计邀请人数';
 
-alter table accounts
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'accounts' and tableowner = 'postgres'
+    ) then
+        alter table accounts owner to postgres;
+    end if;
+end $$;
 
-create table transactions
+-- ==================== transactions ====================
+
+create table if not exists transactions
 (
     user_id            varchar(100) not null
         references users,
@@ -639,13 +740,21 @@ comment on column transactions.status is '状态: pending, success, failed, canc
 
 comment on column transactions.extra_data is '额外信息(JSON)';
 
-alter table transactions
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'transactions' and tableowner = 'postgres'
+    ) then
+        alter table transactions owner to postgres;
+    end if;
+end $$;
 
-create index ix_transactions_user_id
+create index if not exists ix_transactions_user_id
     on transactions (user_id);
 
-create table consumption_records
+-- ==================== consumption_records ====================
+
+create table if not exists consumption_records
 (
     user_id      varchar(100) not null
         references users,
@@ -692,13 +801,21 @@ comment on column consumption_records.error_reason is '失败原因';
 
 comment on column consumption_records.created_at is '创建时间';
 
-alter table consumption_records
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'consumption_records' and tableowner = 'postgres'
+    ) then
+        alter table consumption_records owner to postgres;
+    end if;
+end $$;
 
-create index ix_consumption_records_user_id
+create index if not exists ix_consumption_records_user_id
     on consumption_records (user_id);
 
-create table payment_orders
+-- ==================== payment_orders ====================
+
+create table if not exists payment_orders
 (
     order_id        varchar(100) not null
         unique,
@@ -771,13 +888,21 @@ comment on column payment_orders.client_ip is '客户端IP';
 
 comment on column payment_orders.user_agent is '用户代理';
 
-alter table payment_orders
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'payment_orders' and tableowner = 'postgres'
+    ) then
+        alter table payment_orders owner to postgres;
+    end if;
+end $$;
 
-create index ix_payment_orders_user_id
+create index if not exists ix_payment_orders_user_id
     on payment_orders (user_id);
 
-create table payment_refunds
+-- ==================== payment_refunds ====================
+
+create table if not exists payment_refunds
 (
     payment_order_id      varchar(100) not null
         references payment_orders (order_id),
@@ -810,10 +935,18 @@ comment on column payment_refunds.refund_time is '退款完成时间';
 
 comment on column payment_refunds.created_at is '创建时间';
 
-alter table payment_refunds
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'payment_refunds' and tableowner = 'postgres'
+    ) then
+        alter table payment_refunds owner to postgres;
+    end if;
+end $$;
 
-create table download_records
+-- ==================== download_records ====================
+
+create table if not exists download_records
 (
     user_id               varchar(100) not null
         references users,
@@ -849,13 +982,21 @@ comment on column download_records.user_agent is '用户代理';
 
 comment on column download_records.created_at is '下载时间';
 
-alter table download_records
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'download_records' and tableowner = 'postgres'
+    ) then
+        alter table download_records owner to postgres;
+    end if;
+end $$;
 
-create index ix_download_records_user_id
+create index if not exists ix_download_records_user_id
     on download_records (user_id);
 
-create table system_configs
+-- ==================== system_configs ====================
+
+create table if not exists system_configs
 (
     config_key   varchar(100) not null,
     config_value text,
@@ -889,13 +1030,21 @@ comment on column system_configs.updated_at is '更新时间';
 
 comment on column system_configs.updated_by is '更新者用户ID';
 
-alter table system_configs
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'system_configs' and tableowner = 'postgres'
+    ) then
+        alter table system_configs owner to postgres;
+    end if;
+end $$;
 
-create unique index ix_system_configs_config_key
+create index if not exists ix_system_configs_config_key
     on system_configs (config_key);
 
-create table withdrawals
+-- ==================== withdrawals ====================
+
+create table if not exists withdrawals
 (
     id                 serial
         primary key,
@@ -918,16 +1067,24 @@ create table withdrawals
     updated_at         timestamp   default CURRENT_TIMESTAMP
 );
 
-alter table withdrawals
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'withdrawals' and tableowner = 'postgres'
+    ) then
+        alter table withdrawals owner to postgres;
+    end if;
+end $$;
 
-create index idx_withdrawals_user_id
+create index if not exists idx_withdrawals_user_id
     on withdrawals (user_id);
 
-create index idx_withdrawals_status
+create index if not exists idx_withdrawals_status
     on withdrawals (status);
 
-create table cases
+-- ==================== cases ====================
+
+create table if not exists cases
 (
     id              varchar(36)  not null
         primary key,
@@ -952,22 +1109,30 @@ create table cases
     created_by      varchar(100)
 );
 
-alter table cases
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'cases' and tableowner = 'postgres'
+    ) then
+        alter table cases owner to postgres;
+    end if;
+end $$;
 
-create index idx_cases_category
+create index if not exists idx_cases_category
     on cases (category);
 
-create index idx_cases_is_published
+create index if not exists idx_cases_is_published
     on cases (is_published);
 
-create index idx_cases_sort_order
+create index if not exists idx_cases_sort_order
     on cases (sort_order);
 
-create index idx_cases_created_at
+create index if not exists idx_cases_created_at
     on cases (created_at);
 
-create table announcements
+-- ==================== announcements ====================
+
+create table if not exists announcements
 (
     title             varchar(200) not null,
     content           text         not null,
@@ -1020,28 +1185,36 @@ comment on column announcements.created_by is '创建者ID（管理员）';
 
 comment on column announcements.updated_by is '更新者ID（管理员）';
 
-alter table announcements
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'announcements' and tableowner = 'postgres'
+    ) then
+        alter table announcements owner to postgres;
+    end if;
+end $$;
 
-create index ix_announcements_priority
+create index if not exists ix_announcements_priority
     on announcements (priority);
 
-create index ix_announcements_is_published
+create index if not exists ix_announcements_is_published
     on announcements (is_published);
 
-create index ix_announcements_priority_pinned
+create index if not exists ix_announcements_priority_pinned
     on announcements (priority, is_pinned);
 
-create index ix_announcements_published_expires
+create index if not exists ix_announcements_published_expires
     on announcements (is_published, expires_at);
 
-create index ix_announcements_is_pinned
+create index if not exists ix_announcements_is_pinned
     on announcements (is_pinned);
 
-create index ix_announcements_expires_at
+create index if not exists ix_announcements_expires_at
     on announcements (expires_at);
 
-create table user_notifications
+-- ==================== user_notifications ====================
+
+create table if not exists user_notifications
 (
     announcement_id varchar(36)  not null
         references announcements,
@@ -1077,25 +1250,33 @@ comment on column user_notifications.pushed_at is '推送时间';
 
 comment on column user_notifications.push_method is '推送方式: sse, email, sms';
 
-alter table user_notifications
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'user_notifications' and tableowner = 'postgres'
+    ) then
+        alter table user_notifications owner to postgres;
+    end if;
+end $$;
 
-create index ix_user_notifications_user_read
+create index if not exists ix_user_notifications_user_read
     on user_notifications (user_id, is_read);
 
-create index ix_user_notifications_announcement_id
+create index if not exists ix_user_notifications_announcement_id
     on user_notifications (announcement_id);
 
-create index ix_user_notifications_is_read
+create index if not exists ix_user_notifications_is_read
     on user_notifications (is_read);
 
-create index ix_user_notifications_user_id
+create index if not exists ix_user_notifications_user_id
     on user_notifications (user_id);
 
-create index ix_user_notifications_announcement_read
+create index if not exists ix_user_notifications_announcement_read
     on user_notifications (announcement_id, is_read);
 
-create table cleanup_history
+-- ==================== cleanup_history ====================
+
+create table if not exists cleanup_history
 (
     id                          varchar(36) not null
         primary key,
@@ -1119,15 +1300,20 @@ create table cleanup_history
     status                      varchar(20) default 'running'::character varying
 );
 
-alter table cleanup_history
-    owner to postgres;
+do $$
+begin
+    if not exists (
+        select 1 from pg_tables where tablename = 'cleanup_history' and tableowner = 'postgres'
+    ) then
+        alter table cleanup_history owner to postgres;
+    end if;
+end $$;
 
-create index idx_cleanup_history_started_at
+create index if not exists idx_cleanup_history_started_at
     on cleanup_history (started_at);
 
-create index idx_cleanup_history_status
+create index if not exists idx_cleanup_history_status
     on cleanup_history (status);
 
-create index idx_cleanup_history_triggered_by
+create index if not exists idx_cleanup_history_triggered_by
     on cleanup_history (triggered_by);
-
