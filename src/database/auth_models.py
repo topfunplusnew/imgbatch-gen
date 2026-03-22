@@ -18,6 +18,7 @@ class User(BaseModel):
     # 状态信息
     status = Column(String(20), default="active", comment="状态: active, suspended, deleted")
     role = Column(String(20), default="user", comment="角色: user, admin")
+    force_password_change = Column(Boolean, default=False, comment="是否强制修改密码")
 
     # 时间信息
     last_login_at = Column(DateTime, nullable=True, comment="最后登录时间")

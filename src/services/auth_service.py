@@ -240,6 +240,7 @@ class AuthService:
                 "phone": user.phone,
                 "status": user.status,
                 "role": user.role,
+                "force_password_change": getattr(user, 'force_password_change', False),
                 "created_at": user.created_at.isoformat() if user.created_at else None,
             },
         }

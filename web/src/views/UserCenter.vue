@@ -893,7 +893,8 @@
                 </svg>
                 微信支付
               </button>
-              <button
+              <!-- 支付宝支付暂时注释 -->
+              <!-- <button
                 @click="paymentMethod = 'alipay'"
                 :class="[
                   'flex-1 py-3 px-4 rounded-lg border-2 transition-all flex items-center justify-center gap-2',
@@ -906,7 +907,7 @@
                   <path d="M7.916 19.834c-3.5 0-6.348-2.35-6.348-5.25 0-2.9 2.848-5.25 6.348-5.25 3.5 0 6.348 2.35 6.348 5.25 0 2.9-2.848 5.25-6.348 5.25zM19.834 9.333h-3.5V6.833h-2.334v2.5H10.5v2.334h3.5v3.5h2.334v-3.5h3.5V9.333zM19.834 9.333"/>
                 </svg>
                 支付宝
-              </button>
+              </button> -->
             </div>
 
             <button
@@ -935,7 +936,7 @@
             </div>
           </div>
 
-          <p class="text-sm text-gray-500 mb-4">请使用{{ paymentMethod === 'wechat' ? '微信' : '支付宝' }}扫码支付</p>
+          <p class="text-sm text-gray-500 mb-4">请使用微信扫码支付</p>
 
           <div class="flex gap-3">
             <button

@@ -54,6 +54,12 @@ class UpdateProfileRequest(BaseModel):
     phone: Optional[str] = Field(None, pattern=r'^\d{11}$', description="手机号")
 
 
+class ChangePasswordRequest(BaseModel):
+    """修改密码请求"""
+    old_password: str = Field(..., min_length=6, max_length=50, description="旧密码")
+    new_password: str = Field(..., min_length=6, max_length=50, description="新密码")
+
+
 class SendVerifyCodeRequest(BaseModel):
     """发送验证码请求"""
     identifier: str = Field(..., description="邮箱或手机号")
@@ -75,6 +81,7 @@ class UserResponse(BaseModel):
     phone: Optional[str] = None
     status: str
     role: str
+    force_password_change: bool = False
     created_at: Optional[str] = None
 
 
@@ -115,6 +122,7 @@ async def register_by_username(request: Request, body: RegisterUsernameRequest):
                 phone=user.phone,
                 status=user.status,
                 role=user.role,
+                force_password_change=getattr(user, 'force_password_change', False),
                 created_at=user.created_at.isoformat() if user.created_at else None,
             ),
         )
@@ -166,6 +174,11 @@ async def refresh_token(body: RefreshTokenRequest):
 @router.get("/me", response_model=UserResponse, summary="获取当前用户信息")
 async def get_current_user_info(user: dict = Depends(RequiredAuthDependency())):
     """获取当前登录用户信息"""
+    # 确保返回force_password_change字段
+    db_manager = get_db_manager()
+    user_obj = await db_manager.get_user_by_id(user["id"])
+    if user_obj:
+        user["force_password_change"] = getattr(user_obj, 'force_password_change', False)
     return UserResponse(**user)
 
 
@@ -211,6 +224,7 @@ async def update_profile(
         phone=user_obj.phone,
         status=user_obj.status,
         role=user_obj.role,
+        force_password_change=getattr(user_obj, 'force_password_change', False),
         created_at=user_obj.created_at.isoformat() if user_obj.created_at else None,
     )
 
@@ -223,6 +237,55 @@ async def logout(user: dict = Depends(RequiredAuthDependency())):
     客户端应删除本地存储的token
     """
     return {"success": True, "message": "登出成功"}
+
+
+@router.post("/change-password", summary="修改密码")
+async def change_password(
+    request: Request,
+    body: ChangePasswordRequest,
+    user: dict = Depends(RequiredAuthDependency())
+):
+    """
+    修改当前用户密码
+
+    需要提供旧密码进行验证
+    """
+    auth_service = get_auth_service()
+    db_manager = get_db_manager()
+
+    try:
+        # 获取用户
+        user_obj = await db_manager.get_user_by_id(user["id"])
+        if not user_obj:
+            raise HTTPException(status_code=404, detail="用户不存在")
+
+        # 验证旧密码
+        if not await auth_service.verify_password(body.old_password, user_obj.password_hash):
+            raise HTTPException(status_code=400, detail="旧密码错误")
+
+        # 检查新密码是否与旧密码相同
+        if body.old_password == body.new_password:
+            raise HTTPException(status_code=400, detail="新密码不能与旧密码相同")
+
+        # 更新密码
+        password_hash = await auth_service.hash_password(body.new_password)
+        user_obj.password_hash = password_hash
+
+        # 清除强制修改密码标记（如果有）
+        if hasattr(user_obj, 'force_password_change'):
+            user_obj.force_password_change = False
+
+        await db_manager.update_user(user_obj)
+
+        logger.info(f"用户修改密码成功: user_id={user_obj.id}, username={user_obj.username}")
+
+        return {"success": True, "message": "密码修改成功，请重新登录"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"修改密码失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="修改密码失败，请稍后重试")
 
 
 @router.post("/send-code", summary="发送验证码")

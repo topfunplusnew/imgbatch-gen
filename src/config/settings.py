@@ -116,6 +116,12 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24 * 7  # 7天
     refresh_token_expire_days: int = 30
 
+    # ==================== 初始管理员配置 ====================
+    # 首次启动时自动创建的管理员账户（仅当不存在admin用户时创建）
+    default_admin_username: str = "admin"
+    default_admin_password: str = "admin123"
+    default_admin_phone: Optional[str] = None  # 可选，用于手机号登录
+
     # ==================== 短信服务配置 ====================
 
     # 默认短信服务商: tencent, aliyun, mock

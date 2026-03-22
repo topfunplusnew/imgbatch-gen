@@ -82,6 +82,17 @@ class RetentionCleanupService:
                 from ..database import get_db_manager
                 self.db_manager = get_db_manager()
 
+            # 测试数据库连接
+            try:
+                async with self.db_manager.get_session() as session:
+                    await session.execute("SELECT 1")
+            except Exception as conn_error:
+                error_msg = f"数据库连接失败: {str(conn_error)}"
+                logger.error(error_msg)
+                report.mark_failed(error_msg)
+                await self._save_cleanup_history(report)
+                return report
+
             # 第一步：查询所有过期的图片生成记录
             expired_image_records = await self._get_expired_image_records(
                 report.cutoff_date,
@@ -129,6 +140,10 @@ class RetentionCleanupService:
 
     async def _save_cleanup_history(self, report: CleanupReport):
         """保存清理历史到数据库"""
+        if self.db_manager is None:
+            logger.warning("数据库管理器未初始化，跳过保存清理历史")
+            return
+
         try:
             async with self.db_manager.get_session() as session:
                 history = CleanupHistory(
@@ -156,7 +171,12 @@ class RetentionCleanupService:
                 logger.info(f"已保存清理历史记录: {history.id}")
 
         except Exception as e:
-            logger.error(f"保存清理历史失败: {str(e)}")
+            # 区分数据库连接错误和其他错误
+            error_str = str(e)
+            if "Connection refused" in error_str or "111" in error_str:
+                logger.error(f"保存清理历史失败 - 数据库连接被拒绝: {error_str}")
+            else:
+                logger.error(f"保存清理历史失败: {error_str}")
 
     async def _get_expired_image_records(
         self,

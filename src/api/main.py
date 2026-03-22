@@ -48,6 +48,62 @@ async def lifespan(app: FastAPI):
         logger.error(f"数据库管理器初始化失败: {str(e)}")
         app.state.db_manager = None
 
+    # 初始化管理员账户（仅当不存在时）
+    try:
+        from ..database import User, Account
+        from ..services.auth_service import AuthService
+
+        async with db_manager.get_session() as session:
+            from sqlalchemy import select
+
+            # 检查是否已存在admin用户
+            stmt = select(User).where(User.username == settings.default_admin_username)
+            result = await session.execute(stmt)
+            existing_admin = result.scalar_one_or_none()
+
+            if not existing_admin:
+                logger.info(f"创建初始管理员账户: {settings.default_admin_username}")
+
+                # 创建管理员用户
+                auth_service = AuthService()
+                password_hash = await auth_service.hash_password(settings.default_admin_password)
+
+                admin_user = User(
+                    username=settings.default_admin_username,
+                    password_hash=password_hash,
+                    role="admin",
+                    status="active",
+                    force_password_change=True  # 强制首次登录后修改密码
+                )
+                session.add(admin_user)
+                await session.flush()  # 获取user ID
+
+                # 创建关联的账户记录
+                admin_account = Account(
+                    user_id=admin_user.id,
+                    balance=0,
+                    points=10000,  # 初始赠送积分
+                    subscription_plan="free",
+                    total_generated=0,
+                    total_spent=0,
+                    total_points_earned=10000,
+                    free_quota_used=0,
+                    subscription_quota_used=0,
+                    gift_points=10000,
+                    consecutive_checkin_days=0,
+                    total_invite_count=0
+                )
+                session.add(admin_account)
+                await session.commit()
+
+                logger.info(f"初始管理员账户创建成功: {settings.default_admin_username} (ID: {admin_user.id})")
+                logger.warning("⚠️  请在生产环境中修改默认管理员密码！")
+            else:
+                logger.info(f"管理员账户已存在: {existing_admin.username}")
+    except Exception as e:
+        logger.error(f"初始化管理员账户失败: {str(e)}")
+        # 不阻止应用启动，只记录错误
+
     # 初始化异步任务数据库
     try:
         from ..database.async_task_manager import get_async_task_manager
