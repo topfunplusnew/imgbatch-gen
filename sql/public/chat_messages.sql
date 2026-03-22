@@ -1,9 +1,9 @@
 create table chat_messages
 (
     user_request_id   varchar(36)
-        references user_requests,
+        references user_requests (id),
     session_id        varchar(100) not null
-        references conversation_sessions (),
+        references conversation_sessions (session_id),
     role              varchar(50),
     content           text,
     model             varchar(100),

@@ -154,12 +154,20 @@
             <div class="bg-white rounded-2xl shadow-sm p-6">
               <div class="flex items-center justify-between mb-6">
                 <h2 class="text-lg font-bold text-ink-950">个人资料</h2>
-                <button
-                  @click="showUsernameModal = true"
-                  class="text-sm text-primary hover:text-primary-strong font-medium"
-                >
-                  修改用户名
-                </button>
+                <div class="flex gap-3">
+                  <button
+                    @click="showUsernameModal = true"
+                    class="text-sm text-primary hover:text-primary-strong font-medium"
+                  >
+                    修改用户名
+                  </button>
+                  <button
+                    @click="showPasswordModal = true"
+                    class="text-sm text-primary hover:text-primary-strong font-medium"
+                  >
+                    修改密码
+                  </button>
+                </div>
               </div>
 
               <div class="space-y-4">
@@ -1090,6 +1098,78 @@
       </div>
     </div>
 
+    <!-- 密码修改弹窗 -->
+    <div v-if="showPasswordModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div class="bg-white rounded-2xl max-w-md w-full p-6">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-xl font-bold text-ink-950">修改密码</h2>
+          <button @click="showPasswordModal = false" class="text-gray-400 hover:text-gray-600">
+            <span class="material-symbols-outlined !text-2xl">close</span>
+          </button>
+        </div>
+
+        <form @submit.prevent="handleUpdatePassword" class="space-y-4">
+          <!-- Current Password -->
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">当前密码</label>
+            <input
+              v-model="passwordForm.old_password"
+              type="password"
+              required
+              minlength="6"
+              placeholder="请输入当前密码"
+              class="w-full px-4 py-2.5 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+            />
+          </div>
+
+          <!-- New Password -->
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">新密码</label>
+            <input
+              v-model="passwordForm.new_password"
+              type="password"
+              required
+              minlength="6"
+              maxlength="50"
+              placeholder="至少6位字符"
+              class="w-full px-4 py-2.5 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+            />
+          </div>
+
+          <!-- Confirm New Password -->
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5">确认新密码</label>
+            <input
+              v-model="passwordForm.confirm_password"
+              type="password"
+              required
+              minlength="6"
+              placeholder="再次输入新密码"
+              class="w-full px-4 py-2.5 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+            />
+          </div>
+
+          <!-- Buttons -->
+          <div class="flex gap-3">
+            <button
+              type="button"
+              @click="showPasswordModal = false"
+              class="flex-1 py-2.5 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 font-medium"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              :disabled="passwordUpdating"
+              class="flex-1 py-2.5 bg-gradient-to-r from-primary to-primary-deep text-white rounded-xl hover:from-primary-strong hover:to-primary-deep disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-lg"
+            >
+              {{ passwordUpdating ? '修改中...' : '确认修改' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- 生成详情弹窗 -->
     <div v-if="showGenerationDetail" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div class="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6">
@@ -1202,6 +1282,15 @@ const checkinLoading = ref(false)
 const showUsernameModal = ref(false)
 const usernameUpdating = ref(false)
 const usernameForm = ref({ username: '' })
+
+// 密码修改
+const showPasswordModal = ref(false)
+const passwordUpdating = ref(false)
+const passwordForm = ref({
+  old_password: '',
+  new_password: '',
+  confirm_password: ''
+})
 
 // 生成详情
 const showGenerationDetail = ref(false)
@@ -1578,6 +1667,55 @@ async function handleUpdateUsername() {
     notification.error(error.message || '修改用户名失败')
   } finally {
     usernameUpdating.value = false
+  }
+}
+
+// 修改密码
+async function handleUpdatePassword() {
+  // Client-side validation
+  if (passwordForm.value.new_password.length < 6) {
+    notification.error('密码长度至少6位')
+    return
+  }
+
+  if (passwordForm.value.new_password !== passwordForm.value.confirm_password) {
+    notification.error('两次输入的密码不一致')
+    return
+  }
+
+  if (passwordForm.value.old_password === passwordForm.value.new_password) {
+    notification.error('新密码不能与当前密码相同')
+    return
+  }
+
+  passwordUpdating.value = true
+  try {
+    await api.changePassword({
+      old_password: passwordForm.value.old_password,
+      new_password: passwordForm.value.new_password
+    })
+
+    notification.success('密码修改成功，请重新登录')
+    showPasswordModal.value = false
+
+    // Clear form
+    passwordForm.value = {
+      old_password: '',
+      new_password: '',
+      confirm_password: ''
+    }
+
+    // Logout and redirect to login
+    setTimeout(async () => {
+      await authStore.logout()
+      appStore.setCurrentPage('login')
+    }, 1500)
+
+  } catch (error) {
+    const errorMessage = error?.response?.data?.detail || error?.message || '修改密码失败'
+    notification.error(errorMessage)
+  } finally {
+    passwordUpdating.value = false
   }
 }
 

@@ -616,6 +616,17 @@ export const api = {
   },
 
   /**
+   * 修改密码
+   */
+  async changePassword(data: {
+    old_password: string
+    new_password: string
+  }): Promise<{ success: boolean; message: string }> {
+    const response = await apiClient.post('/api/v1/auth/change-password', data)
+    return response.data
+  },
+
+  /**
    * 登出
    */
   async logout(): Promise<{ success: boolean; message: string }> {

@@ -97,7 +97,7 @@ begin
     end if;
 end $$;
 
-create index if not exists ix_conversation_sessions_session_id
+create unique index if not exists ix_conversation_sessions_session_id
     on conversation_sessions (session_id);
 
 create index if not exists ix_conversation_sessions_client_id
@@ -411,9 +411,9 @@ end $$;
 create table if not exists chat_messages
 (
     user_request_id   varchar(36)
-        references user_requests,
+        references user_requests (id),
     session_id        varchar(100) not null
-        references conversation_sessions (),
+        references conversation_sessions (session_id),
     role              varchar(50),
     content           text,
     model             varchar(100),
