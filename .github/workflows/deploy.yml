@@ -300,7 +300,40 @@ jobs:
 
           "${compose_cmd[@]}" config >/dev/null
 
-          "${compose_cmd[@]}" up -d --build --remove-orphans minio minio-init backend
+          "${compose_cmd[@]}" up -d --build --remove-orphans postgres postgres-init minio minio-init backend
+          for i in $(seq 1 30); do
+            postgres_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' img-batch-agent-postgres 2>/dev/null || true)"
+            echo "Postgres status attempt $i: ${postgres_status:-missing}"
+            if [ "$postgres_status" = "healthy" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ "$postgres_status" != "healthy" ]; then
+            echo "Postgres did not become healthy in time"
+            "${compose_cmd[@]}" logs --tail=200 postgres postgres-init
+            exit 1
+          fi
+
+          for i in $(seq 1 30); do
+            postgres_init_status="$(docker inspect --format '{{.State.Status}}' img-batch-agent-postgres-init 2>/dev/null || true)"
+            postgres_init_exit_code="$(docker inspect --format '{{.State.ExitCode}}' img-batch-agent-postgres-init 2>/dev/null || true)"
+            echo "Postgres init attempt $i: status=${postgres_init_status:-missing} exit=${postgres_init_exit_code:-n/a}"
+            if [ "$postgres_init_status" = "exited" ] && [ "$postgres_init_exit_code" = "0" ]; then
+              break
+            fi
+            if [ "$postgres_init_status" = "exited" ] && [ "${postgres_init_exit_code:-1}" != "0" ]; then
+              echo "Postgres init failed"
+              "${compose_cmd[@]}" logs --tail=200 postgres postgres-init
+              exit 1
+            fi
+            sleep 2
+          done
+          if [ "$postgres_init_status" != "exited" ] || [ "$postgres_init_exit_code" != "0" ]; then
+            echo "Postgres init did not finish successfully in time"
+            "${compose_cmd[@]}" logs --tail=200 postgres postgres-init
+            exit 1
+          fi
           for i in $(seq 1 60); do
             backend_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' img-batch-agent-backend 2>/dev/null || true)"
             echo "Backend status attempt $i: ${backend_status:-missing}"
@@ -311,7 +344,7 @@ jobs:
           done
           if [ "$backend_status" != "healthy" ]; then
             echo "Backend did not become healthy in time"
-            "${compose_cmd[@]}" logs --tail=200 backend
+            "${compose_cmd[@]}" logs --tail=200 postgres postgres-init backend
             exit 1
           fi
 
@@ -352,7 +385,7 @@ jobs:
             exit 1
           }
           curl -fsS "http://127.0.0.1:${frontend_port}/api/v1/health/storage" >/dev/null || {
-            "${compose_cmd[@]}" logs --tail=200 backend frontend
+            "${compose_cmd[@]}" logs --tail=200 postgres postgres-init backend frontend
             rollback_frontend
             exit 1
           }
@@ -377,4 +410,4 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -p "$DEPLOY_PORT" \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd '$DEPLOY_PATH' && docker compose --env-file .env ps && echo '--- MINIO LOGS ---' && docker compose --env-file .env logs --tail=200 minio minio-init && echo '--- BACKEND LOGS ---' && docker compose --env-file .env logs --tail=200 backend && echo '--- FRONTEND LOGS ---' && docker compose --env-file .env logs --tail=200 frontend"
+            "cd '$DEPLOY_PATH' && docker compose --env-file .env ps && echo '--- POSTGRES LOGS ---' && docker compose --env-file .env logs --tail=200 postgres postgres-init && echo '--- MINIO LOGS ---' && docker compose --env-file .env logs --tail=200 minio minio-init && echo '--- BACKEND LOGS ---' && docker compose --env-file .env logs --tail=200 backend && echo '--- FRONTEND LOGS ---' && docker compose --env-file .env logs --tail=200 frontend"

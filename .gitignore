@@ -78,6 +78,9 @@ docs/
 .claude/
 
 # 数据库（PostgreSQL 数据由容器管理，不忽略数据目录）
+data/*.db
+data/*.sqlite
+data/*.sqlite3
 
 github-actions-deploy
 github-actions-deploy.pub
