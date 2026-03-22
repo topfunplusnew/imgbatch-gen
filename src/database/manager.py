@@ -31,7 +31,8 @@ class DatabaseManager:
                 PostgreSQL格式: postgresql+asyncpg://user:password@host:port/database
             echo: 是否输出SQL日志
             """
-        self.database_url = database_url or "postgresql+asyncpg://postgres:1234@localhost:5432/agent_db"
+        # Default to the configured DSN so local runs and Docker Compose use the same source of truth.
+        self.database_url = database_url or settings.database_url
         self.echo = echo
 
         # PostgreSQL 连接池配置
