@@ -68,6 +68,8 @@ class CheckinService:
             "success": True,
             "reward_points": self.daily_reward,
             "consecutive_days": account.consecutive_checkin_days,
+            "gift_points": account.gift_points or 0,
+            "gift_points_expiry": account.gift_points_expiry.isoformat() if account.gift_points_expiry else None,
         }
 
     async def get_checkin_status(self, user_id: str) -> Dict[str, Any]:

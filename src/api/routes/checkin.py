@@ -21,7 +21,7 @@ class CheckinResponse(BaseModel):
     reward_points: int
     consecutive_days: int
     gift_points: int
-    gift_points_expiry: str
+    gift_points_expiry: Optional[str] = None
 
 
 class CheckinStatusResponse(BaseModel):
@@ -49,11 +49,13 @@ async def daily_checkin(user: dict = Depends(RequiredAuthDependency())):
 
     try:
         result = await checkin_service.daily_checkin(user["id"])
+        logger.info(f"签到结果: {result}")
         return CheckinResponse(**result)
     except ValueError as e:
+        logger.warning(f"签到失败(ValueError): {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"签到失败: {str(e)}")
+        logger.error(f"签到失败(Exception): {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="签到失败，请稍后重试")
 
 

@@ -84,3 +84,5 @@ data/*.sqlite3
 
 github-actions-deploy
 github-actions-deploy.pub
+nano-banana-clone.html
+sql/test_cases_data.sql

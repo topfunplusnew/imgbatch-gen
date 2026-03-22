@@ -3,26 +3,11 @@
     <!-- Logo Section -->
     <nav v-if="!hideLogo" class="px-3 xs:px-4 md:px-4 pt-4 pb-3 space-y-1 shrink-0">
       <!-- App Logo and Settings Toggle Button -->
-      <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-2">
-          <div class="w-8 h-8 bg-gradient-to-br from-primary to-primary-deep rounded-lg flex items-center justify-center">
-            <span class="material-symbols-outlined !text-lg text-white">auto_awesome</span>
-          </div>
-          <span class="text-sm font-bold text-ink-950 hidden md:block">AI 生图助手</span>
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-8 h-8 bg-gradient-to-br from-primary to-primary-deep rounded-lg flex items-center justify-center">
+          <span class="material-symbols-outlined !text-lg text-white">auto_awesome</span>
         </div>
-        <!-- Settings Toggle Button -->
-        <button
-          @click="toggleSettingsDrawer"
-          :class="[
-            'hidden md:flex items-center justify-center w-8 h-8 rounded-lg transition-colors',
-            showSettingsDrawer
-              ? 'bg-primary text-white shadow-sm'
-              : 'bg-gray-100 text-ink-700 hover:bg-gray-200'
-          ]"
-          title="生成参数"
-        >
-          <span class="material-symbols-outlined !text-xl">tune</span>
-        </button>
+        <span class="text-sm font-bold text-ink-950 hidden md:block">AI 生图助手</span>
       </div>
 
       <!-- Main Navigation Menu -->
