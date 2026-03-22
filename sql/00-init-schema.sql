@@ -1,587 +1,1133 @@
--- Auto-generated PostgreSQL initialization schema for img-batch-agent
--- Generated from SQLAlchemy models; safe to re-run.
-
--- TABLE: announcements
-
-CREATE TABLE IF NOT EXISTS announcements (
-	title VARCHAR(200) NOT NULL, 
-	content TEXT NOT NULL, 
-	priority VARCHAR(20), 
-	announcement_type VARCHAR(50), 
-	is_pinned BOOLEAN, 
-	is_published BOOLEAN, 
-	published_at TIMESTAMP WITHOUT TIME ZONE, 
-	expires_at TIMESTAMP WITHOUT TIME ZONE, 
-	cover_image_url VARCHAR(500), 
-	cover_image_path VARCHAR(500), 
-	target_audience VARCHAR(50), 
-	view_count INTEGER, 
-	click_count INTEGER, 
-	created_by VARCHAR(100), 
-	updated_by VARCHAR(100), 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id)
+create table user_requests
+(
+    user_id       varchar(100),
+    user_ip       varchar(50),
+    user_agent    varchar(500),
+    request_type  varchar(50),
+    request_data  json,
+    status        varchar(50),
+    error_message text,
+    id            varchar(36) not null
+        primary key,
+    created_at    timestamp   not null,
+    updated_at    timestamp   not null
 );
 
-CREATE INDEX IF NOT EXISTS ix_announcements_expires_at ON announcements (expires_at);
-CREATE INDEX IF NOT EXISTS ix_announcements_is_pinned ON announcements (is_pinned);
-CREATE INDEX IF NOT EXISTS ix_announcements_is_published ON announcements (is_published);
-CREATE INDEX IF NOT EXISTS ix_announcements_priority ON announcements (priority);
-CREATE INDEX IF NOT EXISTS ix_announcements_priority_pinned ON announcements (priority, is_pinned);
-CREATE INDEX IF NOT EXISTS ix_announcements_published_expires ON announcements (is_published, expires_at);
+comment on column user_requests.user_id is '用户ID';
 
--- TABLE: async_tasks
+comment on column user_requests.user_ip is '用户IP';
 
-CREATE TABLE IF NOT EXISTS async_tasks (
-	id VARCHAR(36) NOT NULL, 
-	platform_task_id VARCHAR(200), 
-	task_type VARCHAR(50), 
-	platform VARCHAR(50), 
-	model VARCHAR(100), 
-	prompt TEXT, 
-	params JSON, 
-	status VARCHAR(50), 
-	progress FLOAT, 
-	result_urls JSON, 
-	error TEXT, 
-	submit_time TIMESTAMP WITHOUT TIME ZONE, 
-	start_time TIMESTAMP WITHOUT TIME ZONE, 
-	end_time TIMESTAMP WITHOUT TIME ZONE, 
-	task_metadata JSON, 
-	user_id VARCHAR(100), 
-	created_at TIMESTAMP WITHOUT TIME ZONE, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE, 
-	PRIMARY KEY (id)
+comment on column user_requests.user_agent is '用户代理';
+
+comment on column user_requests.request_type is '请求类型: image_generation, chat, etc';
+
+comment on column user_requests.request_data is '请求参数';
+
+comment on column user_requests.status is '状态: pending, processing, completed, failed';
+
+comment on column user_requests.error_message is '错误信息';
+
+alter table user_requests
+    owner to postgres;
+
+create index ix_user_requests_user_id
+    on user_requests (user_id);
+
+create index ix_user_requests_request_type
+    on user_requests (request_type);
+
+create table conversation_sessions
+(
+    session_id    varchar(100) not null,
+    client_id     varchar(100),
+    title         varchar(200),
+    model         varchar(100),
+    provider      varchar(100),
+    status        varchar(20),
+    message_count integer,
+    image_count   integer,
+    file_count    integer,
+    created_at    timestamp,
+    updated_at    timestamp,
+    id            varchar(36)  not null
+        primary key
 );
 
-CREATE INDEX IF NOT EXISTS ix_async_tasks_platform ON async_tasks (platform);
-CREATE INDEX IF NOT EXISTS ix_async_tasks_platform_task_id ON async_tasks (platform_task_id);
-CREATE INDEX IF NOT EXISTS ix_async_tasks_status ON async_tasks (status);
-CREATE INDEX IF NOT EXISTS ix_async_tasks_user_id ON async_tasks (user_id);
+comment on column conversation_sessions.session_id is '会话ID';
 
--- TABLE: billing_plans
+comment on column conversation_sessions.client_id is '客户端Cookie ID，用于区分不同客户端';
 
-CREATE TABLE IF NOT EXISTS billing_plans (
-	plan_id VARCHAR(50) NOT NULL, 
-	name VARCHAR(100) NOT NULL, 
-	description TEXT, 
-	price INTEGER NOT NULL, 
-	original_price INTEGER, 
-	duration_days INTEGER, 
-	points_included INTEGER, 
-	generation_quota INTEGER, 
-	daily_quota INTEGER, 
-	features JSON, 
-	is_active BOOLEAN, 
-	sort_order INTEGER, 
-	badge_text VARCHAR(50), 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id), 
-	UNIQUE (plan_id)
+comment on column conversation_sessions.title is '对话标题';
+
+comment on column conversation_sessions.model is '使用的模型';
+
+comment on column conversation_sessions.provider is 'Provider名称';
+
+comment on column conversation_sessions.status is '状态: active, completed, deleted';
+
+comment on column conversation_sessions.message_count is '消息数量';
+
+comment on column conversation_sessions.image_count is '图片数量';
+
+comment on column conversation_sessions.file_count is '文件数量';
+
+comment on column conversation_sessions.created_at is '创建时间';
+
+comment on column conversation_sessions.updated_at is '更新时间';
+
+alter table conversation_sessions
+    owner to postgres;
+
+create unique index ix_conversation_sessions_session_id
+    on conversation_sessions (session_id);
+
+create index ix_conversation_sessions_client_id
+    on conversation_sessions (client_id);
+
+create table stored_credentials
+(
+    provider          varchar(50) not null,
+    base_url          varchar(500),
+    user_id           varchar(100),
+    session_id        varchar(100),
+    encrypted_api_key text        not null,
+    key_hint          varchar(32),
+    status            varchar(20),
+    expires_at        timestamp,
+    last_used_at      timestamp,
+    id                varchar(36) not null
+        primary key,
+    created_at        timestamp   not null,
+    updated_at        timestamp   not null
 );
 
--- TABLE: cases
+comment on column stored_credentials.base_url is '凭据对应的Base URL';
 
-CREATE TABLE IF NOT EXISTS cases (
-	title VARCHAR(200) NOT NULL, 
-	description TEXT, 
-	category VARCHAR(50) NOT NULL, 
-	tags JSON, 
-	thumbnail_url VARCHAR(500), 
-	image_url VARCHAR(500), 
-	image_path VARCHAR(500), 
-	prompt TEXT NOT NULL, 
-	negative_prompt TEXT, 
-	parameters JSON, 
-	provider VARCHAR(100), 
-	model VARCHAR(100), 
-	is_published BOOLEAN, 
-	sort_order INTEGER, 
-	view_count INTEGER, 
-	use_count INTEGER, 
-	created_by VARCHAR(100), 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id)
+comment on column stored_credentials.user_id is '关联用户ID';
+
+comment on column stored_credentials.session_id is '关联会话ID';
+
+comment on column stored_credentials.encrypted_api_key is '加密后的API Key';
+
+comment on column stored_credentials.key_hint is '脱敏后的Key提示';
+
+comment on column stored_credentials.status is 'active/expired/revoked';
+
+comment on column stored_credentials.expires_at is '过期时间';
+
+comment on column stored_credentials.last_used_at is '最近使用时间';
+
+alter table stored_credentials
+    owner to postgres;
+
+create index ix_stored_credentials_user_id
+    on stored_credentials (user_id);
+
+create index ix_stored_credentials_provider
+    on stored_credentials (provider);
+
+create index ix_stored_credentials_status
+    on stored_credentials (status);
+
+create index ix_stored_credentials_session_id
+    on stored_credentials (session_id);
+
+create table uploaded_files
+(
+    original_filename varchar(255),
+    stored_filename   varchar(255)
+        unique,
+    file_path         varchar(500),
+    file_url          varchar(500),
+    file_size         integer,
+    file_type         varchar(100),
+    file_extension    varchar(20),
+    category          varchar(50),
+    conversation_id   varchar(100),
+    message_id        integer,
+    is_public         boolean,
+    status            varchar(50),
+    id                varchar(36) not null
+        primary key,
+    created_at        timestamp   not null,
+    updated_at        timestamp   not null
 );
 
-CREATE INDEX IF NOT EXISTS ix_cases_category ON cases (category);
-CREATE INDEX IF NOT EXISTS ix_cases_is_published ON cases (is_published);
-CREATE INDEX IF NOT EXISTS ix_cases_sort_order ON cases (sort_order);
+comment on column uploaded_files.original_filename is '原始文件名';
 
--- TABLE: cleanup_history
+comment on column uploaded_files.stored_filename is '存储的文件名';
 
-CREATE TABLE IF NOT EXISTS cleanup_history (
-	retention_days INTEGER, 
-	cutoff_date TIMESTAMP WITHOUT TIME ZONE, 
-	dry_run BOOLEAN, 
-	total_image_records_deleted INTEGER, 
-	total_chat_records_deleted INTEGER, 
-	total_user_requests_deleted INTEGER, 
-	total_image_files_deleted INTEGER, 
-	total_storage_freed_bytes BIGINT, 
-	error_count INTEGER, 
-	errors JSON, 
-	failed_image_deletions JSON, 
-	triggered_by VARCHAR(100), 
-	started_at TIMESTAMP WITHOUT TIME ZONE, 
-	completed_at TIMESTAMP WITHOUT TIME ZONE, 
-	duration_seconds FLOAT, 
-	status VARCHAR(20), 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id)
+comment on column uploaded_files.file_path is '文件存储路径';
+
+comment on column uploaded_files.file_url is '文件访问URL';
+
+comment on column uploaded_files.file_size is '文件大小（字节）';
+
+comment on column uploaded_files.file_type is '文件MIME类型';
+
+comment on column uploaded_files.file_extension is '文件扩展名';
+
+comment on column uploaded_files.category is '文件分类: image, document, other';
+
+comment on column uploaded_files.conversation_id is '关联的对话ID';
+
+comment on column uploaded_files.message_id is '关联的消息ID';
+
+comment on column uploaded_files.is_public is '是否公开访问';
+
+comment on column uploaded_files.status is '文件状态: active, deleted, archived';
+
+alter table uploaded_files
+    owner to postgres;
+
+create index ix_uploaded_files_message_id
+    on uploaded_files (message_id);
+
+create index ix_uploaded_files_conversation_id
+    on uploaded_files (conversation_id);
+
+create table users
+(
+    username              varchar(50)  not null,
+    phone                 varchar(20)
+        unique,
+    password_hash         varchar(255) not null,
+    status                varchar(20),
+    role                  varchar(20),
+    last_login_at         timestamp,
+    last_login_ip         varchar(50),
+    id                    varchar(36)  not null
+        primary key,
+    created_at            timestamp    not null,
+    updated_at            timestamp    not null,
+    force_password_change boolean default false
 );
 
--- TABLE: conversation_sessions
+comment on column users.username is '用户名';
 
-CREATE TABLE IF NOT EXISTS conversation_sessions (
-	session_id VARCHAR(100) NOT NULL, 
-	client_id VARCHAR(100), 
-	title VARCHAR(200), 
-	model VARCHAR(100), 
-	provider VARCHAR(100), 
-	status VARCHAR(20), 
-	message_count INTEGER, 
-	image_count INTEGER, 
-	file_count INTEGER, 
-	created_at TIMESTAMP WITHOUT TIME ZONE, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE, 
-	id VARCHAR(36) NOT NULL, 
-	PRIMARY KEY (id)
+comment on column users.phone is '手机号(可选)';
+
+comment on column users.password_hash is '密码哈希';
+
+comment on column users.status is '状态: active, suspended, deleted';
+
+comment on column users.role is '角色: user, admin';
+
+comment on column users.last_login_at is '最后登录时间';
+
+comment on column users.last_login_ip is '最后登录IP';
+
+alter table users
+    owner to postgres;
+
+create unique index ix_users_username
+    on users (username);
+
+create table billing_plans
+(
+    plan_id          varchar(50)  not null
+        unique,
+    name             varchar(100) not null,
+    description      text,
+    price            integer      not null,
+    original_price   integer,
+    duration_days    integer,
+    points_included  integer,
+    generation_quota integer,
+    daily_quota      integer,
+    features         json,
+    is_active        boolean,
+    sort_order       integer,
+    badge_text       varchar(50),
+    id               varchar(36)  not null
+        primary key,
+    created_at       timestamp    not null,
+    updated_at       timestamp    not null
 );
 
-CREATE INDEX IF NOT EXISTS ix_conversation_sessions_client_id ON conversation_sessions (client_id);
-CREATE UNIQUE INDEX IF NOT EXISTS ix_conversation_sessions_session_id ON conversation_sessions (session_id);
+comment on column billing_plans.plan_id is '套餐ID';
 
--- TABLE: stored_credentials
+comment on column billing_plans.name is '套餐名称';
 
-CREATE TABLE IF NOT EXISTS stored_credentials (
-	provider VARCHAR(50) NOT NULL, 
-	base_url VARCHAR(500), 
-	user_id VARCHAR(100), 
-	session_id VARCHAR(100), 
-	encrypted_api_key TEXT NOT NULL, 
-	key_hint VARCHAR(32), 
-	status VARCHAR(20), 
-	expires_at TIMESTAMP WITHOUT TIME ZONE, 
-	last_used_at TIMESTAMP WITHOUT TIME ZONE, 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id)
+comment on column billing_plans.description is '套餐描述';
+
+comment on column billing_plans.price is '价格(分)';
+
+comment on column billing_plans.original_price is '原价(分)，用于显示折扣';
+
+comment on column billing_plans.duration_days is '有效天数(NULL表示永久)';
+
+comment on column billing_plans.points_included is '包含积分';
+
+comment on column billing_plans.generation_quota is '生成次数额度(0表示无限制)';
+
+comment on column billing_plans.daily_quota is '每日生成次数额度(0表示无限制)';
+
+comment on column billing_plans.features is '特权列表(JSON数组)';
+
+comment on column billing_plans.is_active is '是否启用';
+
+comment on column billing_plans.sort_order is '排序序号';
+
+comment on column billing_plans.badge_text is '徽章文字(如''热门'')';
+
+alter table billing_plans
+    owner to postgres;
+
+create table image_generation_records
+(
+    user_request_id   varchar(36) not null
+        references user_requests,
+    provider          varchar(100),
+    model             varchar(100),
+    prompt            text,
+    negative_prompt   text,
+    width             integer,
+    height            integer,
+    n                 integer,
+    style             varchar(50),
+    quality           varchar(50),
+    extra_params      json,
+    status            varchar(50),
+    image_urls        json,
+    image_paths       json,
+    processing_time   double precision,
+    start_time        timestamp,
+    end_time          timestamp,
+    prompt_tokens     integer,
+    completion_tokens integer,
+    total_tokens      integer,
+    call_mode         varchar(50),
+    id                varchar(36) not null
+        primary key,
+    created_at        timestamp   not null,
+    updated_at        timestamp   not null
 );
 
-CREATE INDEX IF NOT EXISTS ix_stored_credentials_provider ON stored_credentials (provider);
-CREATE INDEX IF NOT EXISTS ix_stored_credentials_session_id ON stored_credentials (session_id);
-CREATE INDEX IF NOT EXISTS ix_stored_credentials_status ON stored_credentials (status);
-CREATE INDEX IF NOT EXISTS ix_stored_credentials_user_id ON stored_credentials (user_id);
+comment on column image_generation_records.provider is 'Provider名称';
 
--- TABLE: system_configs
+comment on column image_generation_records.model is '模型名称';
 
-CREATE TABLE IF NOT EXISTS system_configs (
-	config_key VARCHAR(100) NOT NULL, 
-	config_value TEXT, 
-	config_type VARCHAR(50), 
-	category VARCHAR(50), 
-	description TEXT, 
-	is_encrypted BOOLEAN, 
-	is_public BOOLEAN, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE, 
-	updated_by VARCHAR(100), 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id)
+comment on column image_generation_records.prompt is '提示词';
+
+comment on column image_generation_records.negative_prompt is '负面提示词';
+
+comment on column image_generation_records.width is '图片宽度';
+
+comment on column image_generation_records.height is '图片高度';
+
+comment on column image_generation_records.n is '生成数量';
+
+comment on column image_generation_records.style is '风格';
+
+comment on column image_generation_records.quality is '质量';
+
+comment on column image_generation_records.extra_params is '额外参数';
+
+comment on column image_generation_records.status is '生成状态';
+
+comment on column image_generation_records.image_urls is '生成的图片URL列表';
+
+comment on column image_generation_records.image_paths is '本地图片路径列表';
+
+comment on column image_generation_records.processing_time is '处理耗时（秒）';
+
+comment on column image_generation_records.start_time is '开始时间';
+
+comment on column image_generation_records.end_time is '结束时间';
+
+comment on column image_generation_records.prompt_tokens is '提示词Token数';
+
+comment on column image_generation_records.completion_tokens is '完成Token数';
+
+comment on column image_generation_records.total_tokens is '总Token数';
+
+comment on column image_generation_records.call_mode is '调用模式: serial, parallel, batch';
+
+alter table image_generation_records
+    owner to postgres;
+
+create table chat_messages
+(
+    user_request_id   varchar(36)
+        references user_requests,
+    session_id        varchar(100) not null
+        references conversation_sessions (),
+    role              varchar(50),
+    content           text,
+    model             varchar(100),
+    provider          varchar(100),
+    prompt_tokens     integer,
+    completion_tokens integer,
+    total_tokens      integer,
+    temperature       double precision,
+    max_tokens        integer,
+    top_p             double precision,
+    images            text,
+    files             text,
+    id                varchar(36)  not null
+        primary key,
+    created_at        timestamp    not null,
+    updated_at        timestamp    not null
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS ix_system_configs_config_key ON system_configs (config_key);
+comment on column chat_messages.user_request_id is '关联的用户请求ID';
 
--- TABLE: uploaded_files
+comment on column chat_messages.session_id is '会话ID';
 
-CREATE TABLE IF NOT EXISTS uploaded_files (
-	original_filename VARCHAR(255), 
-	stored_filename VARCHAR(255), 
-	file_path VARCHAR(500), 
-	file_url VARCHAR(500), 
-	file_size INTEGER, 
-	file_type VARCHAR(100), 
-	file_extension VARCHAR(20), 
-	category VARCHAR(50), 
-	conversation_id VARCHAR(100), 
-	message_id INTEGER, 
-	is_public BOOLEAN, 
-	status VARCHAR(50), 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id), 
-	UNIQUE (stored_filename)
+comment on column chat_messages.role is '角色: system, user, assistant';
+
+comment on column chat_messages.content is '对话内容';
+
+comment on column chat_messages.model is '使用的模型';
+
+comment on column chat_messages.provider is 'Provider名称';
+
+comment on column chat_messages.prompt_tokens is '提示词Token数';
+
+comment on column chat_messages.completion_tokens is '完成Token数';
+
+comment on column chat_messages.total_tokens is '总Token数';
+
+comment on column chat_messages.temperature is '温度参数';
+
+comment on column chat_messages.max_tokens is '最大Token数';
+
+comment on column chat_messages.top_p is 'top_p参数';
+
+comment on column chat_messages.images is '图片URL列表(JSON)';
+
+comment on column chat_messages.files is '文件信息列表(JSON)';
+
+alter table chat_messages
+    owner to postgres;
+
+create table system_logs
+(
+    level             varchar(20),
+    module            varchar(100),
+    function          varchar(100),
+    message           text,
+    details           json,
+    user_id           varchar(100),
+    request_id        varchar(36)
+        references user_requests,
+    exception_type    varchar(100),
+    exception_message text,
+    traceback         text,
+    id                varchar(36) not null
+        primary key,
+    created_at        timestamp   not null,
+    updated_at        timestamp   not null
 );
 
-CREATE INDEX IF NOT EXISTS ix_uploaded_files_conversation_id ON uploaded_files (conversation_id);
-CREATE INDEX IF NOT EXISTS ix_uploaded_files_message_id ON uploaded_files (message_id);
+comment on column system_logs.level is '日志级别: DEBUG, INFO, WARNING, ERROR, CRITICAL';
 
--- TABLE: user_requests
+comment on column system_logs.module is '模块名称';
 
-CREATE TABLE IF NOT EXISTS user_requests (
-	user_id VARCHAR(100), 
-	user_ip VARCHAR(50), 
-	user_agent VARCHAR(500), 
-	request_type VARCHAR(50), 
-	request_data JSON, 
-	status VARCHAR(50), 
-	error_message TEXT, 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id)
+comment on column system_logs.function is '函数名称';
+
+comment on column system_logs.message is '日志消息';
+
+comment on column system_logs.details is '详细信息';
+
+comment on column system_logs.user_id is '关联的用户ID';
+
+comment on column system_logs.request_id is '关联的请求ID';
+
+comment on column system_logs.exception_type is '异常类型';
+
+comment on column system_logs.exception_message is '异常消息';
+
+comment on column system_logs.traceback is '异常堆栈';
+
+alter table system_logs
+    owner to postgres;
+
+create index ix_system_logs_level
+    on system_logs (level);
+
+create index ix_system_logs_user_id
+    on system_logs (user_id);
+
+create index ix_system_logs_module
+    on system_logs (module);
+
+create table user_auth
+(
+    user_id            varchar(100) not null
+        references users,
+    auth_type          varchar(20)  not null,
+    auth_identifier    varchar(255) not null,
+    verified           boolean,
+    verify_code        varchar(10),
+    verify_code_expiry timestamp,
+    oauth_provider     varchar(50),
+    oauth_openid       varchar(255),
+    oauth_unionid      varchar(255),
+    id                 varchar(36)  not null
+        primary key,
+    created_at         timestamp    not null,
+    updated_at         timestamp    not null
 );
 
-CREATE INDEX IF NOT EXISTS ix_user_requests_request_type ON user_requests (request_type);
-CREATE INDEX IF NOT EXISTS ix_user_requests_user_id ON user_requests (user_id);
+comment on column user_auth.user_id is '用户ID';
 
--- TABLE: users
+comment on column user_auth.auth_type is '认证类型: email, phone, oauth';
 
-CREATE TABLE IF NOT EXISTS users (
-	username VARCHAR(50) NOT NULL, 
-	phone VARCHAR(20), 
-	password_hash VARCHAR(255) NOT NULL, 
-	status VARCHAR(20), 
-	role VARCHAR(20), 
-	last_login_at TIMESTAMP WITHOUT TIME ZONE, 
-	last_login_ip VARCHAR(50), 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id), 
-	UNIQUE (phone)
+comment on column user_auth.auth_identifier is '认证标识(邮箱/手机号/openid)';
+
+comment on column user_auth.verified is '是否已验证';
+
+comment on column user_auth.verify_code is '验证码';
+
+comment on column user_auth.verify_code_expiry is '验证码过期时间';
+
+comment on column user_auth.oauth_provider is 'OAuth提供商: wechat, github';
+
+comment on column user_auth.oauth_openid is 'OAuth OpenID';
+
+comment on column user_auth.oauth_unionid is 'OAuth UnionID(微信)';
+
+alter table user_auth
+    owner to postgres;
+
+create index ix_user_auth_type_identifier
+    on user_auth (auth_type, auth_identifier);
+
+create table login_logs
+(
+    user_id        varchar(100)
+        references users,
+    login_type     varchar(20),
+    login_ip       varchar(50),
+    login_location varchar(100),
+    user_agent     varchar(500),
+    status         varchar(20),
+    fail_reason    varchar(255),
+    logout_at      timestamp,
+    id             varchar(36) not null
+        primary key,
+    created_at     timestamp   not null,
+    updated_at     timestamp   not null
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username);
+comment on column login_logs.user_id is '用户ID(游客为NULL)';
 
--- TABLE: accounts
+comment on column login_logs.login_type is '登录类型: email, phone, oauth';
 
-CREATE TABLE IF NOT EXISTS accounts (
-	user_id VARCHAR(100) NOT NULL, 
-	balance INTEGER, 
-	points INTEGER, 
-	subscription_plan VARCHAR(50), 
-	subscription_expires_at TIMESTAMP WITHOUT TIME ZONE, 
-	total_generated INTEGER, 
-	total_spent INTEGER, 
-	total_points_earned INTEGER, 
-	free_quota_used INTEGER, 
-	subscription_quota_used INTEGER, 
-	gift_points INTEGER, 
-	gift_points_expiry TIMESTAMP WITHOUT TIME ZONE, 
-	last_checkin_date DATE, 
-	consecutive_checkin_days INTEGER, 
-	invite_code VARCHAR(20), 
-	inviter_id VARCHAR(100), 
-	total_invite_count INTEGER, 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id), 
-	UNIQUE (user_id), 
-	FOREIGN KEY(user_id) REFERENCES users (id), 
-	UNIQUE (invite_code), 
-	FOREIGN KEY(inviter_id) REFERENCES users (id)
+comment on column login_logs.login_ip is '登录IP';
+
+comment on column login_logs.login_location is '登录地点(可选)';
+
+comment on column login_logs.user_agent is '用户代理';
+
+comment on column login_logs.status is '状态: success, failed';
+
+comment on column login_logs.fail_reason is '失败原因';
+
+comment on column login_logs.logout_at is '登出时间';
+
+alter table login_logs
+    owner to postgres;
+
+create table accounts
+(
+    user_id                  varchar(100) not null
+        unique
+        references users,
+    balance                  integer,
+    points                   integer,
+    subscription_plan        varchar(50),
+    subscription_expires_at  timestamp,
+    total_generated          integer,
+    total_spent              integer,
+    total_points_earned      integer,
+    free_quota_used          integer,
+    subscription_quota_used  integer,
+    gift_points              integer,
+    gift_points_expiry       timestamp,
+    last_checkin_date        date,
+    consecutive_checkin_days integer,
+    invite_code              varchar(20)
+        unique,
+    inviter_id               varchar(100)
+        references users,
+    total_invite_count       integer,
+    id                       varchar(36)  not null
+        primary key,
+    created_at               timestamp    not null,
+    updated_at               timestamp    not null
 );
 
--- TABLE: chat_messages
+comment on column accounts.user_id is '用户ID';
 
-CREATE TABLE IF NOT EXISTS chat_messages (
-	user_request_id VARCHAR(36), 
-	session_id VARCHAR(100) NOT NULL, 
-	role VARCHAR(50), 
-	content TEXT, 
-	model VARCHAR(100), 
-	provider VARCHAR(100), 
-	prompt_tokens INTEGER, 
-	completion_tokens INTEGER, 
-	total_tokens INTEGER, 
-	temperature FLOAT, 
-	max_tokens INTEGER, 
-	top_p FLOAT, 
-	images TEXT, 
-	files TEXT, 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id), 
-	FOREIGN KEY(user_request_id) REFERENCES user_requests (id), 
-	FOREIGN KEY(session_id) REFERENCES conversation_sessions (session_id)
+comment on column accounts.balance is '余额(分)';
+
+comment on column accounts.points is '积分';
+
+comment on column accounts.subscription_plan is '订阅套餐ID';
+
+comment on column accounts.subscription_expires_at is '订阅到期时间';
+
+comment on column accounts.total_generated is '总生成次数';
+
+comment on column accounts.total_spent is '总消费(分)';
+
+comment on column accounts.total_points_earned is '总获得积分';
+
+comment on column accounts.free_quota_used is '已使用免费额度';
+
+comment on column accounts.subscription_quota_used is '已使用订阅额度';
+
+comment on column accounts.gift_points is '赠送积分（每日清零）';
+
+comment on column accounts.gift_points_expiry is '赠送积分过期时间';
+
+comment on column accounts.last_checkin_date is '最后签到日期';
+
+comment on column accounts.consecutive_checkin_days is '连续签到天数';
+
+comment on column accounts.invite_code is '我的邀请码';
+
+comment on column accounts.inviter_id is '邀请人ID';
+
+comment on column accounts.total_invite_count is '累计邀请人数';
+
+alter table accounts
+    owner to postgres;
+
+create table transactions
+(
+    user_id            varchar(100) not null
+        references users,
+    transaction_type   varchar(50)  not null,
+    amount             integer,
+    points_change      integer,
+    balance_after      integer,
+    points_after       integer,
+    related_order_id   varchar(100),
+    related_request_id varchar(100),
+    description        varchar(255),
+    status             varchar(20),
+    extra_data         json,
+    id                 varchar(36)  not null
+        primary key,
+    created_at         timestamp    not null,
+    updated_at         timestamp    not null
 );
 
--- TABLE: consumption_records
+comment on column transactions.user_id is '用户ID';
 
-CREATE TABLE IF NOT EXISTS consumption_records (
-	user_id VARCHAR(100) NOT NULL, 
-	request_id VARCHAR(100), 
-	model_name VARCHAR(100), 
-	provider VARCHAR(50), 
-	cost_type VARCHAR(20) NOT NULL, 
-	points_used INTEGER, 
-	amount INTEGER, 
-	prompt TEXT, 
-	image_count INTEGER, 
-	image_urls JSON, 
-	status VARCHAR(20), 
-	error_reason TEXT, 
-	created_at TIMESTAMP WITHOUT TIME ZONE, 
-	id VARCHAR(36) NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id), 
-	FOREIGN KEY(user_id) REFERENCES users (id)
+comment on column transactions.transaction_type is '交易类型: recharge, consumption, refund, subscription, gift, system_adjust';
+
+comment on column transactions.amount is '金额变化(分，正为增加，负为减少)';
+
+comment on column transactions.points_change is '积分变化(正为增加，负为减少)';
+
+comment on column transactions.balance_after is '交易后余额';
+
+comment on column transactions.points_after is '交易后积分';
+
+comment on column transactions.related_order_id is '关联订单ID';
+
+comment on column transactions.related_request_id is '关联请求ID';
+
+comment on column transactions.description is '交易描述';
+
+comment on column transactions.status is '状态: pending, success, failed, cancelled';
+
+comment on column transactions.extra_data is '额外信息(JSON)';
+
+alter table transactions
+    owner to postgres;
+
+create index ix_transactions_user_id
+    on transactions (user_id);
+
+create table consumption_records
+(
+    user_id      varchar(100) not null
+        references users,
+    request_id   varchar(100),
+    model_name   varchar(100),
+    provider     varchar(50),
+    cost_type    varchar(20)  not null,
+    points_used  integer,
+    amount       integer,
+    prompt       text,
+    image_count  integer,
+    image_urls   json,
+    status       varchar(20),
+    error_reason text,
+    created_at   timestamp,
+    id           varchar(36)  not null
+        primary key,
+    updated_at   timestamp    not null
 );
 
-CREATE INDEX IF NOT EXISTS ix_consumption_records_user_id ON consumption_records (user_id);
+comment on column consumption_records.user_id is '用户ID';
 
--- TABLE: image_generation_records
+comment on column consumption_records.request_id is '关联的生成请求ID';
 
-CREATE TABLE IF NOT EXISTS image_generation_records (
-	user_request_id VARCHAR(36) NOT NULL, 
-	provider VARCHAR(100), 
-	model VARCHAR(100), 
-	prompt TEXT, 
-	negative_prompt TEXT, 
-	width INTEGER, 
-	height INTEGER, 
-	n INTEGER, 
-	style VARCHAR(50), 
-	quality VARCHAR(50), 
-	extra_params JSON, 
-	status VARCHAR(50), 
-	image_urls JSON, 
-	image_paths JSON, 
-	processing_time FLOAT, 
-	start_time TIMESTAMP WITHOUT TIME ZONE, 
-	end_time TIMESTAMP WITHOUT TIME ZONE, 
-	prompt_tokens INTEGER, 
-	completion_tokens INTEGER, 
-	total_tokens INTEGER, 
-	call_mode VARCHAR(50), 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id), 
-	FOREIGN KEY(user_request_id) REFERENCES user_requests (id)
+comment on column consumption_records.model_name is '使用的模型名称';
+
+comment on column consumption_records.provider is 'Provider名称';
+
+comment on column consumption_records.cost_type is '计费类型: free, subscription, points, balance';
+
+comment on column consumption_records.points_used is '消耗积分';
+
+comment on column consumption_records.amount is '消耗金额(分)';
+
+comment on column consumption_records.prompt is '提示词';
+
+comment on column consumption_records.image_count is '生成图片数量';
+
+comment on column consumption_records.image_urls is '生成的图片URL列表';
+
+comment on column consumption_records.status is '状态: success, failed';
+
+comment on column consumption_records.error_reason is '失败原因';
+
+comment on column consumption_records.created_at is '创建时间';
+
+alter table consumption_records
+    owner to postgres;
+
+create index ix_consumption_records_user_id
+    on consumption_records (user_id);
+
+create table payment_orders
+(
+    order_id        varchar(100) not null
+        unique,
+    user_id         varchar(100) not null
+        references users,
+    order_type      varchar(20)  not null,
+    amount          integer      not null,
+    plan_id         varchar(50),
+    payment_method  varchar(20)  not null,
+    payment_channel varchar(50),
+    status          varchar(20),
+    transaction_id  varchar(100),
+    prepay_id       varchar(100),
+    qr_code_url     text,
+    pay_url         text,
+    notify_time     timestamp,
+    notify_data     json,
+    expire_time     timestamp,
+    paid_at         timestamp,
+    subject         varchar(255),
+    body            text,
+    attach          json,
+    client_ip       varchar(50),
+    user_agent      varchar(500),
+    id              varchar(36)  not null
+        primary key,
+    created_at      timestamp    not null,
+    updated_at      timestamp    not null
 );
 
--- TABLE: login_logs
+comment on column payment_orders.order_id is '订单号';
 
-CREATE TABLE IF NOT EXISTS login_logs (
-	user_id VARCHAR(100), 
-	login_type VARCHAR(20), 
-	login_ip VARCHAR(50), 
-	login_location VARCHAR(100), 
-	user_agent VARCHAR(500), 
-	status VARCHAR(20), 
-	fail_reason VARCHAR(255), 
-	logout_at TIMESTAMP WITHOUT TIME ZONE, 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id), 
-	FOREIGN KEY(user_id) REFERENCES users (id)
+comment on column payment_orders.user_id is '用户ID';
+
+comment on column payment_orders.order_type is '订单类型: recharge, subscription';
+
+comment on column payment_orders.amount is '订单金额(分)';
+
+comment on column payment_orders.plan_id is '关联的套餐ID';
+
+comment on column payment_orders.payment_method is '支付方式: wechat, alipay';
+
+comment on column payment_orders.payment_channel is '支付渠道: native, h5, jsapi';
+
+comment on column payment_orders.status is '状态: pending, paid, failed, cancelled, refunded, timeout';
+
+comment on column payment_orders.transaction_id is '第三方交易ID';
+
+comment on column payment_orders.prepay_id is '预支付ID';
+
+comment on column payment_orders.qr_code_url is '支付二维码URL';
+
+comment on column payment_orders.pay_url is '支付跳转URL(H5支付用)';
+
+comment on column payment_orders.notify_time is '支付回调时间';
+
+comment on column payment_orders.notify_data is '回调原始数据';
+
+comment on column payment_orders.expire_time is '订单过期时间';
+
+comment on column payment_orders.paid_at is '支付完成时间';
+
+comment on column payment_orders.subject is '订单标题';
+
+comment on column payment_orders.body is '订单描述';
+
+comment on column payment_orders.attach is '附加数据(JSON)';
+
+comment on column payment_orders.client_ip is '客户端IP';
+
+comment on column payment_orders.user_agent is '用户代理';
+
+alter table payment_orders
+    owner to postgres;
+
+create index ix_payment_orders_user_id
+    on payment_orders (user_id);
+
+create table payment_refunds
+(
+    payment_order_id      varchar(100) not null
+        references payment_orders (order_id),
+    refund_id             varchar(100) not null
+        unique,
+    refund_amount         integer      not null,
+    refund_reason         varchar(255),
+    status                varchar(20),
+    refund_transaction_id varchar(100),
+    refund_time           timestamp,
+    created_at            timestamp,
+    id                    varchar(36)  not null
+        primary key,
+    updated_at            timestamp    not null
 );
 
--- TABLE: payment_orders
+comment on column payment_refunds.payment_order_id is '原支付订单ID';
 
-CREATE TABLE IF NOT EXISTS payment_orders (
-	order_id VARCHAR(100) NOT NULL, 
-	user_id VARCHAR(100) NOT NULL, 
-	order_type VARCHAR(20) NOT NULL, 
-	amount INTEGER NOT NULL, 
-	plan_id VARCHAR(50), 
-	payment_method VARCHAR(20) NOT NULL, 
-	payment_channel VARCHAR(50), 
-	status VARCHAR(20), 
-	transaction_id VARCHAR(100), 
-	prepay_id VARCHAR(100), 
-	qr_code_url TEXT, 
-	pay_url TEXT, 
-	notify_time TIMESTAMP WITHOUT TIME ZONE, 
-	notify_data JSON, 
-	expire_time TIMESTAMP WITHOUT TIME ZONE, 
-	paid_at TIMESTAMP WITHOUT TIME ZONE, 
-	subject VARCHAR(255), 
-	body TEXT, 
-	attach JSON, 
-	client_ip VARCHAR(50), 
-	user_agent VARCHAR(500), 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id), 
-	UNIQUE (order_id), 
-	FOREIGN KEY(user_id) REFERENCES users (id)
+comment on column payment_refunds.refund_id is '退款单号';
+
+comment on column payment_refunds.refund_amount is '退款金额(分)';
+
+comment on column payment_refunds.refund_reason is '退款原因';
+
+comment on column payment_refunds.status is '状态: pending, success, failed, cancelled';
+
+comment on column payment_refunds.refund_transaction_id is '第三方退款交易ID';
+
+comment on column payment_refunds.refund_time is '退款完成时间';
+
+comment on column payment_refunds.created_at is '创建时间';
+
+alter table payment_refunds
+    owner to postgres;
+
+create table download_records
+(
+    user_id               varchar(100) not null
+        references users,
+    image_url             text,
+    file_name             varchar(255),
+    file_size             integer,
+    request_id            varchar(100),
+    consumption_record_id varchar(100)
+        references consumption_records,
+    download_ip           varchar(50),
+    user_agent            varchar(500),
+    created_at            timestamp,
+    id                    varchar(36)  not null
+        primary key,
+    updated_at            timestamp    not null
 );
 
-CREATE INDEX IF NOT EXISTS ix_payment_orders_user_id ON payment_orders (user_id);
+comment on column download_records.user_id is '用户ID';
 
--- TABLE: system_logs
+comment on column download_records.image_url is '图片URL';
 
-CREATE TABLE IF NOT EXISTS system_logs (
-	level VARCHAR(20), 
-	module VARCHAR(100), 
-	function VARCHAR(100), 
-	message TEXT, 
-	details JSON, 
-	user_id VARCHAR(100), 
-	request_id VARCHAR(36), 
-	exception_type VARCHAR(100), 
-	exception_message TEXT, 
-	traceback TEXT, 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id), 
-	FOREIGN KEY(request_id) REFERENCES user_requests (id)
+comment on column download_records.file_name is '下载文件名';
+
+comment on column download_records.file_size is '文件大小(字节)';
+
+comment on column download_records.request_id is '关联请求ID';
+
+comment on column download_records.consumption_record_id is '关联消费记录ID';
+
+comment on column download_records.download_ip is '下载IP';
+
+comment on column download_records.user_agent is '用户代理';
+
+comment on column download_records.created_at is '下载时间';
+
+alter table download_records
+    owner to postgres;
+
+create index ix_download_records_user_id
+    on download_records (user_id);
+
+create table system_configs
+(
+    config_key   varchar(100) not null,
+    config_value text,
+    config_type  varchar(50),
+    category     varchar(50),
+    description  text,
+    is_encrypted boolean,
+    is_public    boolean,
+    updated_at   timestamp,
+    updated_by   varchar(100),
+    id           varchar(36)  not null
+        primary key,
+    created_at   timestamp    not null
 );
 
-CREATE INDEX IF NOT EXISTS ix_system_logs_level ON system_logs (level);
-CREATE INDEX IF NOT EXISTS ix_system_logs_module ON system_logs (module);
-CREATE INDEX IF NOT EXISTS ix_system_logs_user_id ON system_logs (user_id);
+comment on column system_configs.config_key is '配置键';
 
--- TABLE: transactions
+comment on column system_configs.config_value is '配置值（JSON字符串）';
 
-CREATE TABLE IF NOT EXISTS transactions (
-	user_id VARCHAR(100) NOT NULL, 
-	transaction_type VARCHAR(50) NOT NULL, 
-	amount INTEGER, 
-	points_change INTEGER, 
-	balance_after INTEGER, 
-	points_after INTEGER, 
-	related_order_id VARCHAR(100), 
-	related_request_id VARCHAR(100), 
-	description VARCHAR(255), 
-	status VARCHAR(20), 
-	extra_data JSON, 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id), 
-	FOREIGN KEY(user_id) REFERENCES users (id)
+comment on column system_configs.config_type is '配置类型: string, number, boolean, json';
+
+comment on column system_configs.category is '配置分类: api, storage, general, etc';
+
+comment on column system_configs.description is '配置说明';
+
+comment on column system_configs.is_encrypted is '是否加密存储';
+
+comment on column system_configs.is_public is '是否公开（前端可读取）';
+
+comment on column system_configs.updated_at is '更新时间';
+
+comment on column system_configs.updated_by is '更新者用户ID';
+
+alter table system_configs
+    owner to postgres;
+
+create unique index ix_system_configs_config_key
+    on system_configs (config_key);
+
+create table withdrawals
+(
+    id                 serial
+        primary key,
+    withdrawal_id      varchar(100) not null
+        unique,
+    user_id            varchar(100) not null
+        references users,
+    amount             integer      not null,
+    withdrawal_method  varchar(20)  not null,
+    withdrawal_account varchar(200),
+    withdrawal_name    varchar(100),
+    status             varchar(20) default 'pending'::character varying,
+    admin_id           varchar(100),
+    review_note        varchar(500),
+    reviewed_at        timestamp,
+    payment_proof      varchar(500),
+    completed_at       timestamp,
+    user_note          varchar(500),
+    created_at         timestamp   default CURRENT_TIMESTAMP,
+    updated_at         timestamp   default CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS ix_transactions_user_id ON transactions (user_id);
+alter table withdrawals
+    owner to postgres;
 
--- TABLE: user_auth
+create index idx_withdrawals_user_id
+    on withdrawals (user_id);
 
-CREATE TABLE IF NOT EXISTS user_auth (
-	user_id VARCHAR(100) NOT NULL, 
-	auth_type VARCHAR(20) NOT NULL, 
-	auth_identifier VARCHAR(255) NOT NULL, 
-	verified BOOLEAN, 
-	verify_code VARCHAR(10), 
-	verify_code_expiry TIMESTAMP WITHOUT TIME ZONE, 
-	oauth_provider VARCHAR(50), 
-	oauth_openid VARCHAR(255), 
-	oauth_unionid VARCHAR(255), 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id), 
-	FOREIGN KEY(user_id) REFERENCES users (id)
+create index idx_withdrawals_status
+    on withdrawals (status);
+
+create table cases
+(
+    id              varchar(36)  not null
+        primary key,
+    created_at      timestamp default CURRENT_TIMESTAMP,
+    updated_at      timestamp default CURRENT_TIMESTAMP,
+    title           varchar(200) not null,
+    description     text,
+    category        varchar(50)  not null,
+    tags            json,
+    thumbnail_url   varchar(500),
+    image_url       varchar(500),
+    image_path      varchar(500),
+    prompt          text         not null,
+    negative_prompt text,
+    parameters      json,
+    provider        varchar(100),
+    model           varchar(100),
+    is_published    boolean   default true,
+    sort_order      integer   default 0,
+    view_count      integer   default 0,
+    use_count       integer   default 0,
+    created_by      varchar(100)
 );
 
-CREATE INDEX IF NOT EXISTS ix_user_auth_type_identifier ON user_auth (auth_type, auth_identifier);
+alter table cases
+    owner to postgres;
 
--- TABLE: user_notifications
+create index idx_cases_category
+    on cases (category);
 
-CREATE TABLE IF NOT EXISTS user_notifications (
-	announcement_id VARCHAR(36) NOT NULL, 
-	user_id VARCHAR(100) NOT NULL, 
-	is_read BOOLEAN, 
-	read_at TIMESTAMP WITHOUT TIME ZONE, 
-	is_clicked BOOLEAN, 
-	clicked_at TIMESTAMP WITHOUT TIME ZONE, 
-	is_pushed BOOLEAN, 
-	pushed_at TIMESTAMP WITHOUT TIME ZONE, 
-	push_method VARCHAR(20), 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id), 
-	CONSTRAINT unique_user_announcement UNIQUE (announcement_id, user_id), 
-	FOREIGN KEY(announcement_id) REFERENCES announcements (id)
+create index idx_cases_is_published
+    on cases (is_published);
+
+create index idx_cases_sort_order
+    on cases (sort_order);
+
+create index idx_cases_created_at
+    on cases (created_at);
+
+create table announcements
+(
+    title             varchar(200) not null,
+    content           text         not null,
+    priority          varchar(20),
+    announcement_type varchar(50),
+    is_pinned         boolean,
+    is_published      boolean,
+    published_at      timestamp,
+    expires_at        timestamp,
+    cover_image_url   varchar(500),
+    cover_image_path  varchar(500),
+    target_audience   varchar(50),
+    view_count        integer,
+    click_count       integer,
+    created_by        varchar(100),
+    updated_by        varchar(100),
+    id                varchar(36)  not null
+        primary key,
+    created_at        timestamp    not null,
+    updated_at        timestamp    not null
 );
 
-CREATE INDEX IF NOT EXISTS ix_user_notifications_announcement_id ON user_notifications (announcement_id);
-CREATE INDEX IF NOT EXISTS ix_user_notifications_announcement_read ON user_notifications (announcement_id, is_read);
-CREATE INDEX IF NOT EXISTS ix_user_notifications_is_read ON user_notifications (is_read);
-CREATE INDEX IF NOT EXISTS ix_user_notifications_user_id ON user_notifications (user_id);
-CREATE INDEX IF NOT EXISTS ix_user_notifications_user_read ON user_notifications (user_id, is_read);
+comment on column announcements.title is '公告标题';
 
--- TABLE: withdrawals
+comment on column announcements.content is '公告内容（富文本HTML）';
 
-CREATE TABLE IF NOT EXISTS withdrawals (
-	withdrawal_id VARCHAR(100) NOT NULL, 
-	user_id VARCHAR(100) NOT NULL, 
-	amount INTEGER NOT NULL, 
-	withdrawal_method VARCHAR(20) NOT NULL, 
-	withdrawal_account VARCHAR(200), 
-	withdrawal_name VARCHAR(100), 
-	status VARCHAR(20), 
-	admin_id VARCHAR(100), 
-	review_note VARCHAR(500), 
-	reviewed_at TIMESTAMP WITHOUT TIME ZONE, 
-	payment_proof VARCHAR(500), 
-	completed_at TIMESTAMP WITHOUT TIME ZONE, 
-	user_note VARCHAR(500), 
-	id VARCHAR(36) NOT NULL, 
-	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id), 
-	UNIQUE (withdrawal_id), 
-	FOREIGN KEY(user_id) REFERENCES users (id)
+comment on column announcements.priority is '优先级: low, normal, high, urgent';
+
+comment on column announcements.announcement_type is '公告类型: system, maintenance, feature, promotion';
+
+comment on column announcements.is_pinned is '是否置顶';
+
+comment on column announcements.is_published is '是否发布';
+
+comment on column announcements.published_at is '发布时间';
+
+comment on column announcements.expires_at is '过期时间（可选）';
+
+comment on column announcements.cover_image_url is '封面图片URL';
+
+comment on column announcements.cover_image_path is '封面图片存储路径';
+
+comment on column announcements.target_audience is '目标受众: all, users_only, admins_only';
+
+comment on column announcements.view_count is '浏览次数';
+
+comment on column announcements.click_count is '点击次数';
+
+comment on column announcements.created_by is '创建者ID（管理员）';
+
+comment on column announcements.updated_by is '更新者ID（管理员）';
+
+alter table announcements
+    owner to postgres;
+
+create index ix_announcements_priority
+    on announcements (priority);
+
+create index ix_announcements_is_published
+    on announcements (is_published);
+
+create index ix_announcements_priority_pinned
+    on announcements (priority, is_pinned);
+
+create index ix_announcements_published_expires
+    on announcements (is_published, expires_at);
+
+create index ix_announcements_is_pinned
+    on announcements (is_pinned);
+
+create index ix_announcements_expires_at
+    on announcements (expires_at);
+
+create table user_notifications
+(
+    announcement_id varchar(36)  not null
+        references announcements,
+    user_id         varchar(100) not null,
+    is_read         boolean,
+    read_at         timestamp,
+    is_clicked      boolean,
+    clicked_at      timestamp,
+    is_pushed       boolean,
+    pushed_at       timestamp,
+    push_method     varchar(20),
+    id              varchar(36)  not null
+        primary key,
+    created_at      timestamp    not null,
+    updated_at      timestamp    not null,
+    constraint unique_user_announcement
+        unique (announcement_id, user_id)
 );
 
-CREATE INDEX IF NOT EXISTS ix_withdrawals_user_id ON withdrawals (user_id);
+comment on column user_notifications.user_id is '用户ID';
 
--- TABLE: download_records
+comment on column user_notifications.is_read is '是否已读';
 
-CREATE TABLE IF NOT EXISTS download_records (
-	user_id VARCHAR(100) NOT NULL, 
-	image_url TEXT, 
-	file_name VARCHAR(255), 
-	file_size INTEGER, 
-	request_id VARCHAR(100), 
-	consumption_record_id VARCHAR(100), 
-	download_ip VARCHAR(50), 
-	user_agent VARCHAR(500), 
-	created_at TIMESTAMP WITHOUT TIME ZONE, 
-	id VARCHAR(36) NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id), 
-	FOREIGN KEY(user_id) REFERENCES users (id), 
-	FOREIGN KEY(consumption_record_id) REFERENCES consumption_records (id)
+comment on column user_notifications.read_at is '读取时间';
+
+comment on column user_notifications.is_clicked is '是否点击查看详情';
+
+comment on column user_notifications.clicked_at is '点击时间';
+
+comment on column user_notifications.is_pushed is '是否已推送';
+
+comment on column user_notifications.pushed_at is '推送时间';
+
+comment on column user_notifications.push_method is '推送方式: sse, email, sms';
+
+alter table user_notifications
+    owner to postgres;
+
+create index ix_user_notifications_user_read
+    on user_notifications (user_id, is_read);
+
+create index ix_user_notifications_announcement_id
+    on user_notifications (announcement_id);
+
+create index ix_user_notifications_is_read
+    on user_notifications (is_read);
+
+create index ix_user_notifications_user_id
+    on user_notifications (user_id);
+
+create index ix_user_notifications_announcement_read
+    on user_notifications (announcement_id, is_read);
+
+create table cleanup_history
+(
+    id                          varchar(36) not null
+        primary key,
+    created_at                  timestamp   default CURRENT_TIMESTAMP,
+    updated_at                  timestamp   default CURRENT_TIMESTAMP,
+    retention_days              integer,
+    cutoff_date                 timestamp,
+    dry_run                     boolean     default false,
+    total_image_records_deleted integer     default 0,
+    total_chat_records_deleted  integer     default 0,
+    total_user_requests_deleted integer     default 0,
+    total_image_files_deleted   integer     default 0,
+    total_storage_freed_bytes   bigint      default 0,
+    error_count                 integer     default 0,
+    errors                      json,
+    failed_image_deletions      json,
+    triggered_by                varchar(100),
+    started_at                  timestamp,
+    completed_at                timestamp,
+    duration_seconds            double precision,
+    status                      varchar(20) default 'running'::character varying
 );
 
-CREATE INDEX IF NOT EXISTS ix_download_records_user_id ON download_records (user_id);
+alter table cleanup_history
+    owner to postgres;
 
--- TABLE: payment_refunds
+create index idx_cleanup_history_started_at
+    on cleanup_history (started_at);
 
-CREATE TABLE IF NOT EXISTS payment_refunds (
-	payment_order_id VARCHAR(100) NOT NULL, 
-	refund_id VARCHAR(100) NOT NULL, 
-	refund_amount INTEGER NOT NULL, 
-	refund_reason VARCHAR(255), 
-	status VARCHAR(20), 
-	refund_transaction_id VARCHAR(100), 
-	refund_time TIMESTAMP WITHOUT TIME ZONE, 
-	created_at TIMESTAMP WITHOUT TIME ZONE, 
-	id VARCHAR(36) NOT NULL, 
-	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	PRIMARY KEY (id), 
-	FOREIGN KEY(payment_order_id) REFERENCES payment_orders (order_id), 
-	UNIQUE (refund_id)
-);
+create index idx_cleanup_history_status
+    on cleanup_history (status);
+
+create index idx_cleanup_history_triggered_by
+    on cleanup_history (triggered_by);
+

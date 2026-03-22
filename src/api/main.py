@@ -89,7 +89,7 @@ async def lifespan(app: FastAPI):
                     total_points_earned=10000,
                     free_quota_used=0,
                     subscription_quota_used=0,
-                    gift_points=10000,
+                    gift_points=100,
                     consecutive_checkin_days=0,
                     total_invite_count=0
                 )

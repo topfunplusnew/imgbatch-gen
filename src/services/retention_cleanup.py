@@ -85,7 +85,8 @@ class RetentionCleanupService:
             # 测试数据库连接
             try:
                 async with self.db_manager.get_session() as session:
-                    await session.execute("SELECT 1")
+                    from sqlalchemy import text
+                    await session.execute(text("SELECT 1"))
             except Exception as conn_error:
                 error_msg = f"数据库连接失败: {str(conn_error)}"
                 logger.error(error_msg)
