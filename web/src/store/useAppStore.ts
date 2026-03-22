@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 
 export type PageType = 'agent' | 'login' | 'user-center' | 'admin'
 export type UserCenterTab = 'account' | 'balance' | 'orders' | 'generations' | 'contact' | 'notifications'
+export type ViewType = 'chat' | 'landing'
 
 export interface Case {
   id: string
@@ -34,6 +35,9 @@ export const useAppStore = defineStore('app', {
     showTemplateDrawer: false,
     showProfileModal: false,
     userCenterTab: 'account' as UserCenterTab, // 新增：用户中心当前标签页
+    // View state for navigation
+    currentView: 'landing' as ViewType,  // 'chat' | 'landing'
+    selectedMenuItem: 'generate' as string,  // Current selected menu item
   }),
   actions: {
     setCurrentPage(page: PageType, tab?: UserCenterTab) {
@@ -74,14 +78,43 @@ export const useAppStore = defineStore('app', {
     },
     toggleTemplateDrawer() {
       this.showTemplateDrawer = !this.showTemplateDrawer
-      // 关闭其他面板
+      // Only clear other panels when opening the drawer
+      // Don't clear selectedCase as it may be used to show details
       if (this.showTemplateDrawer) {
-        this.selectedCase = null
         this.selectedCreation = null
       }
     },
     closeTemplateDrawer() {
       this.showTemplateDrawer = false
+    },
+    // View state management
+    setCurrentView(view: ViewType) {
+      this.currentView = view
+      // Update menu item based on view
+      if (view === 'landing') {
+        this.selectedMenuItem = 'landing'
+      } else if (view === 'chat') {
+        this.selectedMenuItem = 'generate'
+      }
+    },
+    setSelectedMenuItem(item: string) {
+      this.selectedMenuItem = item
+      // Switch view based on menu item
+      if (item === 'landing') {
+        this.currentView = 'landing'
+      } else if (item === 'generate') {
+        this.currentView = 'chat'
+      }
+      // Handle action-based menu items
+      if (item === 'templates') {
+        this.toggleTemplateDrawer()
+      } else if (item === 'history') {
+        // Will be handled by the component that opens history drawer
+      } else if (item === 'creations') {
+        this.toggleCreationRecords()
+      } else if (item === 'settings') {
+        this.showProfileModal = true
+      }
     },
   },
 })

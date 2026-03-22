@@ -1252,7 +1252,9 @@ export const useGeneratorStore = defineStore('generator', {
                         model_name: model.model_name,
                         display_name: model.display_name || model.model_name,
                         provider: model.provider || 'unknown',
-                        model_type: model.model_type || 'image'
+                        model_type: model.model_type || 'image',
+                        tags: typeof model.tags === 'string' ? model.tags.split(',').map(t => t.trim()) : (model.tags || []),
+                        is_async: model.is_async || false
                     }))
                     console.log('Available models loaded:', this.availableModels.length)
                 }

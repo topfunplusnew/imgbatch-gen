@@ -1,6 +1,16 @@
 <template>
   <header class="h-12 xs:h-14 md:h-16 lg:h-16 border-b border-border-dark flex items-center justify-between px-3 xs:px-4 md:px-6 lg:px-8 bg-white/80 backdrop-blur-xl sticky top-0 z-10">
     <div class="flex items-center gap-2 md:gap-4 min-w-0">
+      <!-- Back to Home button (shown in chat view) -->
+      <button
+        v-if="appStore.currentView === 'chat'"
+        @click="appStore.setCurrentView('landing')"
+        class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border-dark bg-white/90 hover:bg-primary/5 text-ink-700 transition-colors min-h-[44px] min-w-[44px]"
+        title="返回首页">
+        <span class="material-symbols-outlined !text-lg">home</span>
+        <span class="hidden sm:inline">返回首页</span>
+      </button>
+
       <div class="hidden xs:flex items-center gap-2 min-w-0">
         <span class="text-sm font-medium text-slate-500 shrink-0">当前会话:</span>
         <span class="text-sm font-semibold truncate">{{ generatorStore.currentSessionTitle }}</span>

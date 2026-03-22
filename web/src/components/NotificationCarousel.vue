@@ -245,6 +245,12 @@ onUnmounted(() => {
   stopAutoplay()
 })
 
+// 暴露方法给父组件
+defineExpose({
+  pauseAutoplay,
+  resumeAutoplay
+})
+
 // 去除HTML标签
 function stripHtml(html: string): string {
   const div = document.createElement('div')

@@ -70,10 +70,6 @@ class DatabaseManager:
             merged["_runtime_metadata"] = runtime_metadata
         return merged
 
-    def get_session(self) -> AsyncSession:
-        """获取数据库会话"""
-        return self.async_session_factory()
-
     @asynccontextmanager
     async def get_session(self) -> AsyncSession:
         """异步获取数据库会话（上下文管理器）"""

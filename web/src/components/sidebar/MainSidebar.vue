@@ -1,18 +1,42 @@
 <template>
-  <aside class="w-12 xs:w-16 sm:w-20 md:w-56 lg:w-56 xl:w-64 flex flex-col border-r border-border-dark bg-white/90 backdrop-blur-xl shrink-0 h-screen transition-all duration-300">
+  <aside class="w-12 xs:w-16 sm:w-20 md:w-56 lg:w-56 xl:w-64 flex flex-col border-r border-border-dark bg-white/90 backdrop-blur-xl shrink-0 h-screen transition-all duration-300 relative">
+    <!-- Logo Section -->
     <nav v-if="!hideLogo" class="px-3 xs:px-4 md:px-4 pt-4 pb-3 space-y-1 shrink-0">
+      <!-- App Logo and Settings Toggle Button -->
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-gradient-to-br from-primary to-primary-deep rounded-lg flex items-center justify-center">
+            <span class="material-symbols-outlined !text-lg text-white">auto_awesome</span>
+          </div>
+          <span class="text-sm font-bold text-ink-950 hidden md:block">AI 生图助手</span>
+        </div>
+        <!-- Settings Toggle Button -->
+        <button
+          @click="toggleSettingsDrawer"
+          :class="[
+            'hidden md:flex items-center justify-center w-8 h-8 rounded-lg transition-colors',
+            showSettingsDrawer
+              ? 'bg-primary text-white shadow-sm'
+              : 'bg-gray-100 text-ink-700 hover:bg-gray-200'
+          ]"
+          title="生成参数"
+        >
+          <span class="material-symbols-outlined !text-xl">tune</span>
+        </button>
+      </div>
+
+      <!-- Main Navigation Menu -->
       <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-3">主菜单</div>
 
       <button
-        :class="{
-          'bg-white text-primary-strong border border-primary/25 shadow-sm font-medium': activeItem === 'agent',
-          'text-ink-700 hover:bg-primary/5': activeItem !== 'agent'
-        }"
-        @click="setActive('agent')"
+        v-for="item in menuItems"
+        :key="item.value || item.action"
+        :class="getMenuItemClass(item)"
+        @click="handleMenuClick(item)"
         class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-left"
       >
-        <span class="material-symbols-outlined">smart_toy</span>
-        <span>首页</span>
+        <span class="material-symbols-outlined">{{ item.icon }}</span>
+        <span class="hidden md:inline">{{ item.text }}</span>
       </button>
     </nav>
 
@@ -58,21 +82,7 @@
           <p class="text-sm text-gray-500">暂无模板</p>
         </div>
       </div>
-
-      <!-- 固定在底部的全部模板按钮 -->
-      <div class="shrink-0 px-2 py-2 border-t border-border-dark">
-        <button
-          @click="appStore.toggleTemplateDrawer()"
-          class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-strong rounded-lg transition-colors shadow-sm min-h-[44px]"
-        >
-          <span class="material-symbols-outlined !text-lg">view_module</span>
-          全部模板
-        </button>
-      </div>
     </div>
-
-    <!-- 我的创作区域 -->
-    <MyCreation />
 
     <!-- 桌面端用户信息区域 -->
     <div class="hidden lg:block shrink-0 border-t border-border-dark bg-gray-50/50">
@@ -88,19 +98,212 @@
       </div>
     </div>
   </aside>
+
+  <!-- Settings Drawer (从侧边栏右边缘滑出) - 使用Teleport传送到body -->
+  <Teleport to="body">
+    <Transition name="settings-drawer">
+      <div
+        v-if="showSettingsDrawer"
+        class="fixed top-0 h-full w-[85vw] md:w-80 lg:w-96 xl:w-[24rem] bg-white/95 backdrop-blur-xl border-r border-border-dark shadow-2xl z-[60] flex flex-col settings-drawer-panel">
+        <!-- Drawer Header -->
+        <div class="flex items-center justify-between px-4 py-3 border-b border-border-dark shrink-0">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-bold text-ink-950 uppercase tracking-wider">生成参数</span>
+            <button
+              @click="showHelp = true"
+              class="text-ink-500 hover:text-ink-950 flex items-center justify-center">
+              <span class="material-symbols-outlined !text-lg">help</span>
+            </button>
+          </div>
+          <button
+            @click="toggleSettingsDrawer"
+            class="text-ink-500 hover:text-ink-950 flex items-center justify-center p-1 rounded-lg hover:bg-gray-100 transition-colors">
+            <span class="material-symbols-outlined !text-xl">close</span>
+          </button>
+        </div>
+
+        <!-- Drawer Content -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-5 custom-scrollbar">
+          <!-- 当前模型 -->
+          <div class="space-y-2">
+            <label class="text-xs font-bold text-slate-500 uppercase">当前模型</label>
+            <div class="bg-white border border-border-dark rounded-xl p-3 shadow-sm">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined !text-xl text-primary">auto_awesome</span>
+                <div class="flex-1 min-w-0">
+                  <div class="text-sm font-semibold truncate">{{ currentModelDisplay }}</div>
+                  <div v-if="generatorStore.selectedModelInfo" class="text-[10px] text-slate-500 mt-0.5 line-clamp-2">
+                    {{ generatorStore.selectedModelInfo.description }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 图像质量 -->
+          <div class="space-y-2">
+            <label class="text-xs font-bold text-slate-500 uppercase">图像质量</label>
+            <div class="grid grid-cols-3 gap-2">
+              <button
+                v-for="quality in qualityOptions"
+                :key="quality.value"
+                @click="generatorStore.setQuality(quality.value)"
+                :class="[
+                  'py-2 text-xs font-bold rounded-lg transition-colors',
+                  generatorStore.quality === quality.value
+                    ? 'bg-primary-strong text-white shadow-sm'
+                    : 'bg-white text-ink-700 border border-border-dark hover:bg-primary/5'
+                ]">
+                {{ quality.label }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 图像尺寸 -->
+          <div class="space-y-2">
+            <div class="flex justify-between items-center">
+              <label class="text-xs font-bold text-slate-500 uppercase">图像尺寸</label>
+              <span class="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full font-bold">
+                {{ generatorStore.width }}×{{ generatorStore.height }}
+              </span>
+            </div>
+
+            <!-- 比例选择网格 -->
+            <div class="grid grid-cols-3 gap-2">
+              <button
+                v-for="ratio in ratioOptions"
+                :key="ratio.value"
+                @click="selectRatio(ratio)"
+                :class="[
+                  'flex flex-col items-center justify-center gap-1 py-2 px-2 rounded-xl transition-colors',
+                  selectedRatio === ratio.value
+                    ? 'bg-primary-strong text-white shadow-sm'
+                    : 'bg-white text-ink-700 border border-border-dark hover:bg-primary/5'
+                ]">
+                <!-- 比例预览框 -->
+                <div class="flex items-center justify-center w-6 h-6">
+                  <div
+                    :style="getRatioBoxStyle(ratio)"
+                    :class="[
+                      'rounded-sm border-2',
+                      selectedRatio === ratio.value ? 'border-ink-950' : 'border-slate-500'
+                    ]">
+                  </div>
+                </div>
+                <span class="text-[10px] font-bold leading-tight">{{ ratio.label }}</span>
+              </button>
+            </div>
+
+            <!-- 自定义尺寸（展开） -->
+            <div v-if="showCustomSize" class="grid grid-cols-2 gap-2 mt-2">
+              <div class="relative flex items-center">
+                <input type="number" v-model.number="generatorStore.width"
+                  class="w-full bg-white border border-border-dark rounded-xl text-sm py-2 px-3 focus:ring-1 focus:ring-primary focus:ring-offset-0">
+                <span class="absolute right-2 text-[10px] text-slate-500 pointer-events-none">W</span>
+              </div>
+              <div class="relative flex items-center">
+                <input type="number" v-model.number="generatorStore.height"
+                  class="w-full bg-white border border-border-dark rounded-xl text-sm py-2 px-3 focus:ring-1 focus:ring-primary focus:ring-offset-0">
+                <span class="absolute right-2 text-[10px] text-slate-500 pointer-events-none">H</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 批量数量 -->
+          <div class="space-y-2">
+            <label class="text-xs font-bold text-slate-500 uppercase">批量生成数量</label>
+            <input
+              type="number"
+              v-model.number="generatorStore.batchSize"
+              min="1"
+              max="50"
+              placeholder="输入数量"
+              class="w-full bg-white border border-border-dark rounded-xl text-sm py-2.5 px-4 focus:ring-1 focus:ring-primary">
+          </div>
+
+          <!-- 负面提示词 -->
+          <div class="space-y-2">
+            <label class="text-xs font-bold text-slate-500 uppercase">负面提示词</label>
+            <textarea
+              v-model="generatorStore.negativePrompt"
+              placeholder="描述你不希望出现在图像中的内容..."
+              class="w-full bg-white border border-border-dark rounded-xl text-sm py-3 px-4 focus:ring-1 focus:ring-primary resize-none h-24 custom-scrollbar">
+            </textarea>
+          </div>
+
+          <!-- 随机种子 -->
+          <div class="space-y-2">
+            <div class="flex justify-between items-center">
+              <label class="text-xs font-bold text-slate-500 uppercase">随机种子</label>
+              <button
+                v-if="generatorStore.seed"
+                @click="generatorStore.setSeed('')"
+                class="text-xs text-ink-500 hover:text-red-400">
+                清除
+              </button>
+            </div>
+            <div class="flex gap-2">
+              <input
+                type="text"
+                v-model="generatorStore.seed"
+                placeholder="留空为随机"
+                class="flex-1 bg-white border border-border-dark rounded-xl text-sm py-2.5 px-4 focus:ring-1 focus:ring-primary">
+              <button
+                @click="generateRandomSeed"
+                class="px-4 bg-white border border-border-dark rounded-xl hover:bg-primary/5 transition-colors">
+                <span class="material-symbols-outlined !text-xl">shuffle</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- 帮助弹窗 -->
+  <div
+    v-if="showHelp"
+    @click="showHelp = false"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/10 p-4 xs:p-6 backdrop-blur-sm">
+    <div
+      @click.stop
+      class="bg-white border border-border-dark rounded-2xl p-4 xs:p-6 max-w-md w-full mx-4 space-y-4 shadow-xl">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-semibold">参数说明</h3>
+        <button @click="showHelp = false" class="text-ink-500 hover:text-ink-950">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="space-y-3 text-sm text-ink-700">
+        <div>
+          <strong class="text-ink-950">图像质量：</strong>标准（快速）、高清（更好质量）、超清（最佳质量）
+        </div>
+        <div>
+          <strong class="text-ink-950">批量数量：</strong>一次性生成多张图像，数量1-50张
+        </div>
+        <div>
+          <strong class="text-ink-950">负面提示词：</strong>描述你不希望出现在图像中的内容
+        </div>
+        <div>
+          <strong class="text-ink-950">随机种子：</strong>设置固定值可以重复生成相同图像
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useCaseStore } from '@/store/useCaseStore'
+import { useGeneratorStore } from '@/store/useGeneratorStore'
 import CaseCard from '../cases/CaseCard.vue'
 import { useAppStore } from '@/store/useAppStore'
 import { useAuthStore } from '@/store/useAuthStore'
-import MyCreation from '../creation/MyCreation.vue'
 import UserMenuDropdown from '../layout/UserMenuDropdown.vue'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const generatorStore = useGeneratorStore()
 
 defineProps({
   hideLogo: { type: Boolean, default: false }
@@ -110,7 +313,174 @@ const caseStore = useCaseStore()
 const caseListRef = ref(null)
 const searchInput = ref('')
 
-const activeItem = computed(() => appStore.currentPage)
+// Settings drawer state
+const showSettingsDrawer = ref(false)
+const showHelp = ref(false)
+
+// Toggle settings drawer
+const toggleSettingsDrawer = () => {
+  showSettingsDrawer.value = !showSettingsDrawer.value
+}
+
+// Close settings drawer (called by parent)
+const closeSettingsDrawer = () => {
+  showSettingsDrawer.value = false
+}
+
+// Expose closeSettingsDrawer to parent
+defineExpose({
+  closeSettingsDrawer,
+  showSettingsDrawer
+})
+
+// Navigation menu items
+const menuItems = [
+  { icon: 'smart_toy', text: '首页', value: 'landing' },
+  { icon: 'auto_awesome', text: 'AI图片生成', value: 'generate', active: true },
+  { icon: 'view_module', text: '模板库', action: 'templates' },
+  { icon: 'history', text: '历史记录', action: 'history' },
+]
+
+// Get menu item class
+const getMenuItemClass = (item) => {
+  let isActive = false
+
+  if (item.value) {
+    // For value-based items (landing, generate)
+    isActive = appStore.selectedMenuItem === item.value
+  } else if (item.action) {
+    // For action-based items (templates, history)
+    isActive = appStore.selectedMenuItem === item.action
+  }
+
+  return isActive
+    ? 'bg-primary/10 text-primary font-medium'
+    : 'text-ink-700 hover:bg-primary/5'
+}
+
+// Restore menu selection based on current view
+const restoreMenuSelection = () => {
+  if (appStore.currentView === 'landing') {
+    appStore.selectedMenuItem = 'landing'
+  } else if (appStore.currentView === 'chat') {
+    appStore.selectedMenuItem = 'generate'
+  }
+}
+
+// Watch drawer states to restore menu selection when drawers close
+watch(() => appStore.showTemplateDrawer, (newVal, oldVal) => {
+  // When drawer closes (true -> false)
+  if (oldVal === true && newVal === false) {
+    restoreMenuSelection()
+  }
+})
+
+watch(() => appStore.showCreationRecords, (newVal, oldVal) => {
+  // When drawer closes (true -> false)
+  if (oldVal === true && newVal === false) {
+    restoreMenuSelection()
+  }
+})
+
+// Handle menu item clicks
+const handleMenuClick = (item) => {
+  if (item.action) {
+    // Handle action-based items (open drawers/modals)
+    // Note: setSelectedMenuItem will handle the drawer toggling internally
+    appStore.setSelectedMenuItem(item.action)
+
+    // Special handling for history drawer (emit event to parent)
+    if (item.action === 'history') {
+      emit('openHistory')
+    }
+    // templates, creations, settings are handled by setSelectedMenuItem
+  } else {
+    // Handle view-based items
+    appStore.setSelectedMenuItem(item.value)
+  }
+}
+
+// Emit event for history drawer (parent component will handle)
+const emit = defineEmits(['openHistory', 'settingsDrawerChange'])
+
+// Watch settings drawer state and emit to parent
+watch(showSettingsDrawer, (newValue) => {
+  emit('settingsDrawerChange', newValue)
+})
+
+// Settings-related data and methods
+const ratioOptions = [
+  { value: 'auto',  label: 'Auto',  desc: '自动',   w: 1024, h: 1024 },
+  { value: '1:1',   label: '1:1',   desc: '方形',   w: 1024, h: 1024 },
+  { value: '3:4',   label: '3:4',   desc: '竖版',   w: 768,  h: 1024 },
+  { value: '4:3',   label: '4:3',   desc: '横版',   w: 1024, h: 768  },
+  { value: '9:16',  label: '9:16',  desc: '竖版',   w: 576,  h: 1024 },
+  { value: '16:9',  label: '16:9',  desc: '横版',   w: 1024, h: 576  },
+  { value: '2:3',   label: '2:3',   desc: '竖版',   w: 683,  h: 1024 },
+  { value: '3:2',   label: '3:2',   desc: '横版',   w: 1024, h: 683  },
+  { value: '4:5',   label: '4:5',   desc: '竖版',   w: 819,  h: 1024 },
+  { value: '5:4',   label: '5:4',   desc: '横版',   w: 1024, h: 819  },
+  { value: '21:9',  label: '21:9',  desc: '影院',   w: 1024, h: 439  },
+  { value: 'custom',label: '自定义', desc: '更多',   w: null, h: null },
+]
+
+const selectedRatio = ref('1:1')
+const showCustomSize = ref(false)
+
+const selectRatio = (ratio) => {
+  if (ratio.value === 'custom') {
+    showCustomSize.value = !showCustomSize.value
+    return
+  }
+  selectedRatio.value = ratio.value
+  showCustomSize.value = false
+
+  // 根据当前质量设置调整尺寸
+  const maxDimMap = { '720p': 1280, '2k': 2048, '4k': 3840 }
+  const maxDim = maxDimMap[generatorStore.quality] || 1024
+
+  // 计算当前比例
+  const ratioValue = ratio.w / ratio.h
+
+  // 根据比例和最大边长计算最终尺寸
+  if (ratioValue >= 1) {
+    // 横向或方形图片
+    generatorStore.width = maxDim
+    generatorStore.height = Math.round(maxDim / ratioValue)
+  } else {
+    // 竖向图片
+    generatorStore.height = maxDim
+    generatorStore.width = Math.round(maxDim * ratioValue)
+  }
+}
+
+const getRatioBoxStyle = (ratio) => {
+  if (!ratio.w || !ratio.h) return { width: '20px', height: '20px' }
+  const maxDim = 24
+  const r = ratio.w / ratio.h
+  if (r >= 1) {
+    return { width: `${maxDim}px`, height: `${Math.round(maxDim / r)}px` }
+  } else {
+    return { width: `${Math.round(maxDim * r)}px`, height: `${maxDim}px` }
+  }
+}
+
+// 质量选项
+const qualityOptions = [
+  { value: '720p', label: '720P' },
+  { value: '2k', label: '2K' },
+  { value: '4k', label: '4K' },
+]
+
+// 当前模型显示
+const currentModelDisplay = computed(() => {
+  return generatorStore.selectedModelInfo?.model_name || generatorStore.model || '未选择模型'
+})
+
+// 生成随机种子
+const generateRandomSeed = () => {
+  generatorStore.setSeed(Math.floor(Math.random() * 999999999).toString())
+}
 
 // 获取案例列表
 const cases = computed(() => caseStore.cases)
@@ -133,10 +503,6 @@ const displayCases = computed(() => {
 
   return result
 })
-
-const setActive = (item) => {
-  appStore.setCurrentPage(item)
-}
 
 const handleSearch = () => {
   // 使用防抖来减少筛选
@@ -201,5 +567,100 @@ onUnmounted(() => {
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: rgba(0, 0, 0, 0.3);
+}
+
+/* Settings Drawer Animation - 从侧边栏右边缘向右滑出 */
+.settings-drawer-enter-active,
+.settings-drawer-leave-active {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+}
+
+.settings-drawer-enter-from,
+.settings-drawer-leave-to {
+  transform: translateX(-100%);
+  opacity: 0;
+}
+
+.settings-drawer-enter-to,
+.settings-drawer-leave-from {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+/* Settings drawer positioning - 从侧边栏右边缘开始 */
+/* 默认移动端 */
+.settings-drawer-panel {
+  left: 0 !important;
+}
+
+/* 小屏幕及以上 (sm: >= 640px, sidebar w-20 = 5rem) */
+@media (min-width: 640px) {
+  .settings-drawer-panel {
+    left: 5rem !important;
+  }
+}
+
+/* 中等屏幕及以上 (md: >= 768px, sidebar w-56 = 14rem) */
+@media (min-width: 768px) {
+  .settings-drawer-panel {
+    left: 14rem !important;
+  }
+}
+
+/* 大屏幕及以上 (lg: >= 1024px, sidebar w-56 = 14rem) */
+@media (min-width: 1024px) {
+  .settings-drawer-panel {
+    left: 14rem !important;
+  }
+}
+
+/* 超大屏幕及以上 (xl: >= 1280px, sidebar w-64 = 16rem) */
+@media (min-width: 1280px) {
+  .settings-drawer-panel {
+    left: 16rem !important;
+  }
+}
+
+/* 2XL屏幕 (2xl: >= 1536px, sidebar w-64 = 16rem) */
+@media (min-width: 1536px) {
+  .settings-drawer-panel {
+    left: 16rem !important;
+  }
+}
+
+/* Small tablet and up (sidebar: w-20 = 5rem) */
+@media (min-width: 768px) {
+  .settings-drawer-panel {
+    /* 从侧边栏右边缘开始 */
+    left: 5rem;
+  }
+}
+
+/* Medium screens (sidebar: w-56 = 14rem) */
+@media (min-width: 1024px) {
+  .settings-drawer-panel {
+    left: 14rem;
+  }
+}
+
+/* Large screens (sidebar: w-56 = 14rem) */
+@media (min-width: 1280px) {
+  .settings-drawer-panel {
+    left: 14rem;
+  }
+}
+
+/* Extra large screens (sidebar: w-64 = 16rem) */
+@media (min-width: 1536px) {
+  .settings-drawer-panel {
+    left: 16rem;
+  }
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 </style>

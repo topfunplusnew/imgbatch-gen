@@ -1,43 +1,9 @@
 <template>
   <div class="h-full flex flex-col bg-white">
     <!-- 标题栏 -->
-    <div class="flex items-center justify-between px-6 py-4 border-b border-border-dark bg-white/90 backdrop-blur-xl shrink-0">
-      <div class="flex items-center gap-3">
-        <span class="material-symbols-outlined !text-2xl text-primary">photo_library</span>
-        <h2 class="text-lg font-bold text-ink-950">我的创作</h2>
-        <span v-if="totalRecords > 0" class="text-sm text-ink-500">共 {{ totalRecords }} 条记录</span>
-      </div>
-      <button
-        @click="closeRecords"
-        class="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-        title="关闭"
-      >
-        <span class="material-symbols-outlined !text-xl text-ink-500">close</span>
-      </button>
-    </div>
-
-    <!-- 筛选栏 -->
-    <div class="px-6 py-3 border-b border-border-dark bg-white/90 shrink-0">
-      <div class="flex items-center gap-4">
-        <!-- 状态筛选 -->
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-ink-600">状态:</span>
-          <button
-            v-for="status in statusFilters"
-            :key="status.value"
-            @click="selectedStatus = status.value"
-            :class="[
-              'px-3 py-1 rounded-lg text-xs font-medium transition-colors',
-              selectedStatus === status.value
-                ? 'bg-primary text-white'
-                : 'bg-white text-ink-700 hover:bg-gray-50 border border-border-dark'
-            ]"
-          >
-            {{ status.label }}
-          </button>
-        </div>
-      </div>
-    </div>
+<!--    <div class="flex items-center justify-between p-4 border-b border-border-dark shrink-0">-->
+<!--      <span class="font-bold text-sm uppercase tracking-wider">我的创作</span>-->
+<!--    </div>-->
 
     <!-- 记录列表 -->
     <div class="flex-1 overflow-y-auto custom-scrollbar p-6">
@@ -141,7 +107,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { api } from '@/services/api'
 import { useAppStore } from '@/store/useAppStore'
 
@@ -153,15 +119,6 @@ const hasMore = ref(true)
 const totalRecords = ref(0)
 const offset = ref(0)
 const limit = 20
-
-const selectedStatus = ref('completed')
-
-const statusFilters = [
-  { label: '全部', value: null },
-  { label: '已完成', value: 'completed' },
-  { label: '处理中', value: 'processing' },
-  { label: '失败', value: 'failed' }
-]
 
 const handleImageError = (event) => {
   event.target.src = '/placeholder-case.png'
@@ -175,8 +132,7 @@ const loadRecords = async (reset = false) => {
   try {
     const data = await api.getUnifiedGenerationHistory(
       limit,
-      reset ? 0 : offset.value,
-      selectedStatus.value || undefined
+      reset ? 0 : offset.value
     )
 
     if (reset) {
@@ -191,7 +147,7 @@ const loadRecords = async (reset = false) => {
 
     // 获取总数
     try {
-      const countData = await api.getUnifiedGenerationHistoryCount(selectedStatus.value || undefined)
+      const countData = await api.getUnifiedGenerationHistoryCount()
       totalRecords.value = countData.count
     } catch (error) {
       console.error('获取总数失败:', error)
@@ -211,10 +167,6 @@ const viewDetail = (record) => {
   appStore.setSelectedCreation(record)
 }
 
-const closeRecords = () => {
-  appStore.closeCreationRecords()
-}
-
 const formatDate = (dateString) => {
   if (!dateString) return '未知时间'
   const date = new Date(dateString)
@@ -230,11 +182,6 @@ const formatDate = (dateString) => {
   if (days < 7) return `${days}天前`
   return date.toLocaleDateString('zh-CN')
 }
-
-// 监听状态筛选变化
-watch(() => selectedStatus.value, () => {
-  loadRecords(true)
-})
 
 // 监听显示状态，打开时重新加载
 watch(() => appStore.showCreationRecords, (newVal) => {

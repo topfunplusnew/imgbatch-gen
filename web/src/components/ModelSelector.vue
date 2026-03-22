@@ -6,10 +6,13 @@
           <h3 class="text-lg font-semibold text-ink-950">选择模型</h3>
           <p class="mt-1 text-xs text-ink-500">
             <span v-if="hasImageAttachment" class="font-medium text-primary-deep">
-              已上传图片，仅展示支持识图的模型
+              已上传图片，仅展示支持识图的模型（{{ filteredModels.length }} 个）
+            </span>
+            <span v-else-if="activeTypeTab !== 'all'">
+              {{ typeTabs.find(t => t.value === activeTypeTab)?.label || '当前分类' }}：{{ filteredModels.length }} 个模型
             </span>
             <span v-else>
-              共 {{ models.length }} 个模型，当前显示 {{ filteredModels.length }} 个
+              共 {{ models.length }} 个模型
             </span>
           </p>
         </div>
@@ -44,12 +47,15 @@
             :class="[
               'rounded-lg px-4 py-2 text-xs font-semibold transition-all',
               activeTypeTab === tab.value
-                ? 'border border-primary/25 bg-white text-ink-950 shadow-sm'
+                ? 'border border-primary/25 bg-white text-ink-950 shadow-sm ring-2 ring-primary/10'
                 : 'text-ink-500 hover:bg-white hover:text-ink-950'
             ]"
             type="button"
           >
             {{ tab.label }}
+            <span v-if="activeTypeTab === tab.value && filteredModels.length > 0" class="ml-1 text-primary">
+              ({{ filteredModels.length }})
+            </span>
           </button>
         </div>
 
@@ -260,26 +266,34 @@ const popularTags = computed(() => {
 const filteredModels = computed(() => {
   let result = [...models.value]
 
+  // 第一步：根据分类标签筛选（严格互斥筛选，选中某个分类后只显示该分类的模型）
+  if (activeTypeTab.value === 'image') {
+    // 只显示图像模型，严格过滤掉所有非图像模型
+    result = result.filter((model) => model.model_type === '图像')
+  } else if (activeTypeTab.value === 'chat') {
+    // 只显示聊天模型（文本模型），严格过滤掉所有非文本模型
+    result = result.filter((model) => model.model_type === '文本')
+  } else if (activeTypeTab.value === 'async') {
+    // 只显示异步模型，严格过滤掉所有非异步模型
+    result = result.filter((model) => model.is_async || model.tags?.includes('异步'))
+  }
+  // activeTypeTab.value === 'all' 时显示所有模型，不进行分类筛选
+
+  // 第二步：如果有图片附件，进一步筛选支持识图的模型
   if (hasImageAttachment.value) {
     result = result.filter((model) => {
       return model.tags && model.tags.includes('识图')
     })
   }
 
-  if (activeTypeTab.value === 'image') {
-    result = result.filter((model) => model.model_type === '图像')
-  } else if (activeTypeTab.value === 'chat') {
-    result = result.filter((model) => model.model_type === '文本')
-  } else if (activeTypeTab.value === 'async') {
-    result = result.filter((model) => model.is_async || model.tags?.includes('异步'))
-  }
-
+  // 第三步：根据选中的标签筛选
   if (selectedTags.value.size > 0) {
     result = result.filter((model) => {
       return model.tags && model.tags.some((tag) => selectedTags.value.has(tag))
     })
   }
 
+  // 第四步：根据搜索关键词筛选
   if (searchQuery.value.trim()) {
     const query = searchQuery.value.toLowerCase()
     result = result.filter((model) => {
@@ -291,6 +305,19 @@ const filteredModels = computed(() => {
         model.tags?.some((tag) => tag.toLowerCase().includes(query))
       )
     })
+  }
+
+  // 最终验证：确保结果中不包含其他分类的模型（开发调试用）
+  if (activeTypeTab.value === 'image') {
+    const hasNonImage = result.some(m => m.model_type !== '图像')
+    if (hasNonImage) {
+      console.warn('[ModelSelector] 警告：图像分类中包含非图像模型', result.filter(m => m.model_type !== '图像'))
+    }
+  } else if (activeTypeTab.value === 'chat') {
+    const hasNonChat = result.some(m => m.model_type !== '文本')
+    if (hasNonChat) {
+      console.warn('[ModelSelector] 警告：聊天分类中包含非聊天模型', result.filter(m => m.model_type !== '文本'))
+    }
   }
 
   return result

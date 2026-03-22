@@ -80,7 +80,7 @@ class RetentionCleanupService:
             # 如果没有传入db_manager，使用全局实例
             if self.db_manager is None:
                 from ..database import get_db_manager
-                self.db_manager = await get_db_manager()
+                self.db_manager = get_db_manager()
 
             # 第一步：查询所有过期的图片生成记录
             expired_image_records = await self._get_expired_image_records(
