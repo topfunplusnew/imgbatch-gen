@@ -12,8 +12,6 @@ class ProviderType(str, Enum):
     STABLE_DIFFUSION = "stable_diffusion"
     BAIDU = "baidu"
     ALIYUN = "aliyun"
-    OLLAMA = "ollama"
-    LOCAL = "local"
 
 
 class ProviderConfig:
@@ -29,16 +27,7 @@ class ProviderConfig:
             "embedding_model": settings.openai_embedding_model,
             "image_model": settings.openai_image_model,
         }
-    
-    @staticmethod
-    def get_ollama_config() -> Dict[str, Any]:
-        """获取Ollama配置"""
-        return {
-            "base_url": settings.ollama_base_url,
-            "model": settings.ollama_model,
-            "embedding_model": settings.ollama_embedding_model,
-        }
-    
+
     @staticmethod
     def get_stable_diffusion_config() -> Dict[str, Any]:
         """获取Stable Diffusion配置"""
@@ -63,24 +52,15 @@ class ProviderConfig:
             "api_key": settings.aliyun_api_key,
             "image_model": settings.aliyun_image_model,
         }
-    
-    @staticmethod
-    def get_local_embedding_config() -> Dict[str, Any]:
-        """获取本地Embedding配置"""
-        return {
-            "model": settings.local_embedding_model,
-        }
-    
+
     @staticmethod
     def get_provider_config(provider: str) -> Optional[Dict[str, Any]]:
         """根据Provider名称获取配置"""
         config_map = {
             ProviderType.OPENAI: ProviderConfig.get_openai_config,
-            ProviderType.OLLAMA: ProviderConfig.get_ollama_config,
             ProviderType.STABLE_DIFFUSION: ProviderConfig.get_stable_diffusion_config,
             ProviderType.BAIDU: ProviderConfig.get_baidu_config,
             ProviderType.ALIYUN: ProviderConfig.get_aliyun_config,
-            ProviderType.LOCAL: ProviderConfig.get_local_embedding_config,
         }
         
         provider_enum = ProviderType(provider.lower())
