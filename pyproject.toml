@@ -37,11 +37,12 @@ dependencies = [
     "argon2-cffi>=23.0.0",
     "python-jose[cryptography]>=3.3.0",
     "email-validator>=2.0.0",
+    "wechatpayv3>=1.2.0",
 ]
 
 [project.scripts]
-agent-py = "run_app:main"
-start = "run_app:main"
+agent-py = "src.api.main:run"
+start = "src.api.main:run"
 
 [project.optional-dependencies]
 dev = [
