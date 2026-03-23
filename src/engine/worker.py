@@ -64,10 +64,9 @@ class Worker:
                     task = await self._enhance_params(task)
                     task.progress = 0.2
 
-                # 3. 获取Provider并生成图片
-                provider = get_provider(
-                    task.params.provider or settings.default_image_provider,
-                    api_key=task.params.api_key
+                # 3. 获取Provider并生成图片（使用管理员统一配置）
+                provider = await get_provider(
+                    task.params.provider or settings.default_image_provider
                 )
 
                 # 生成图片（provider内部已有重试机制）

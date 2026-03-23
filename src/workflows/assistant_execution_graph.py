@@ -14,6 +14,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from ..config.settings import settings
+from ..utils.config_helper import get_relay_config, normalize_openai_base_url
 from .multimodal_attachment_graph import (
     AttachmentDescriptor,
     build_attachment_route,
@@ -239,17 +240,27 @@ def _derive_batch_count(user_instruction: str, requested_count: Optional[int]) -
     return 1
 
 
-def _build_model(api_key: Optional[str] = None, model: Optional[str] = None) -> "ChatOpenAI":
+async def _build_model(api_key: Optional[str] = None, model: Optional[str] = None) -> "ChatOpenAI":
+    """
+    构建 LangChain ChatOpenAI 模型实例。
+    如果未传入 api_key，使用管理员统一配置（从 SystemConfig 表读取）。
+    """
     if not LANGCHAIN_ASSISTANT_AVAILABLE or ChatOpenAI is None:
         raise RuntimeError("LangChain/LangGraph is not installed.")
 
-    base_url = settings.openai_base_url or settings.relay_base_url or None
-    if base_url and not base_url.rstrip("/").endswith("/v1"):
-        base_url = base_url.rstrip("/") + "/v1"
-
     key = (api_key or "").strip()
     if not key:
-        raise RuntimeError("Missing API key for assistant execution workflow.")
+        # 使用管理员统一配置
+        base_url, key = await get_relay_config()
+        if not key:
+            raise RuntimeError("系统未配置 API Key，请联系管理员")
+        base_url = normalize_openai_base_url(base_url)
+    else:
+        base_url = normalize_openai_base_url(settings.openai_base_url or settings.relay_base_url)
+
+    # 脱敏日志：只显示 key 的前4位和后4位
+    masked_key = f"{key[:4]}...{key[-4:]}" if len(key) > 8 else "***"
+    logger.info(f"LangChain ChatOpenAI client: base_url={base_url}, api_key={masked_key}, model={model or _get_default_planner_model()}")
 
     return ChatOpenAI(
         model=model or _get_default_planner_model(),
@@ -359,7 +370,7 @@ async def _extract_visual_excerpt(
         return ""
 
     try:
-        llm = _build_model(api_key=api_key, model=_get_default_ocr_model())
+        llm = await _build_model(api_key=api_key, model=_get_default_ocr_model())
         content: List[Dict[str, Any]] = [{"type": "text", "text": instruction}]
         for image_url in image_urls:
             content.append({"type": "image_url", "image_url": {"url": image_url}})
@@ -827,7 +838,7 @@ async def _classify_text_request(
         )
 
     try:
-        llm = _build_model(
+        llm = await _build_model(
             api_key=api_key,
             model=_get_default_planner_model(),
         )
@@ -991,7 +1002,7 @@ async def _build_image_prompt_from_attachments(
         and _has_llm_credentials(api_key)
     ):
         try:
-            llm = _build_model(api_key=api_key, model=_get_default_planner_model())
+            llm = await _build_model(api_key=api_key, model=_get_default_planner_model())
             content: List[Dict[str, Any]] = []
             attachment_lines = [
                 f"- {attachment.name}: {attachment.text_excerpt}"

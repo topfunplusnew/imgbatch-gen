@@ -13,7 +13,8 @@ from ...database import get_db_manager
 from ...models.task import ImageTask
 from ...database.models import ConversationSession, ChatConversation, UploadedFile
 from ...engine import TaskManager
-from .chat import _require_api_key
+from ...config.settings import settings
+from .chat import _extract_api_key, _get_openai_client
 
 
 router = APIRouter(prefix="/api/v1", tags=["history"])
@@ -67,6 +68,7 @@ class SaveMessageRequest(BaseModel):
     timestamp: Optional[str] = Field(None, description="时间戳")
     images: Optional[List[str]] = Field(None, description="图片URL列表")
     files: Optional[List[dict]] = Field(None, description="文件信息列表")
+    user_request_id: Optional[str] = Field(None, description="关联的用户请求ID")
 
 
 # ==================== 路由 ====================
@@ -131,7 +133,8 @@ async def save_message(request: SaveMessageRequest):
             model=request.model or "unknown",
             provider=request.provider or "unknown",
             images=json.dumps(request.images) if request.images else None,
-            files=json.dumps(request.files) if request.files else None
+            files=json.dumps(request.files) if request.files else None,
+            user_request_id=request.user_request_id
         )
 
         logger.info(f"保存消息: {request.role} - {request.content[:30]}...")
@@ -433,12 +436,9 @@ async def summarize_conversation(session_id: str, http_request: Request):
             f"{msg.role}: {msg.content}" for msg in messages if msg.content
         )
 
-        # 调用 OpenAI 生成总结
-        from ...config.settings import settings
-        client = AsyncOpenAI(
-            api_key=_require_api_key(http_request),
-            base_url=settings.openai_base_url or settings.relay_base_url
-        )
+        # 使用 OpenAI 生成总结（API Key 可选，使用管理员统一配置）
+        api_key = _extract_api_key(http_request)
+        client = await _get_openai_client(api_key)
 
         response = await client.chat.completions.create(
             model=settings.openai_model or "gpt-4o-mini",

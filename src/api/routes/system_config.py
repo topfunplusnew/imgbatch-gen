@@ -8,6 +8,7 @@ from loguru import logger
 from ...database import get_db_manager, SystemConfig
 from ..auth import RequiredAuthDependency
 from ...services.auth_service import get_auth_service
+from ...utils.credential_crypto import encrypt_api_key, decrypt_api_key, mask_api_key
 
 
 router = APIRouter(prefix="/api/v1/admin/system-config", tags=["系统配置"])
@@ -62,7 +63,7 @@ PREDEFINED_CONFIGS = {
     "relay.api_key": {
         "config_type": "string",
         "category": "api",
-        "description": "中转站API Key",
+        "description": "中转站API Key（加密存储）",
         "is_encrypted": True,
         "is_public": False,
     },
@@ -70,6 +71,20 @@ PREDEFINED_CONFIGS = {
         "config_type": "string",
         "category": "api",
         "description": "中转站Base URL",
+        "is_encrypted": False,
+        "is_public": False,
+    },
+    "openai.api_key": {
+        "config_type": "string",
+        "category": "api",
+        "description": "OpenAI API Key（可选，用于直接调用OpenAI）",
+        "is_encrypted": True,
+        "is_public": False,
+    },
+    "openai.base_url": {
+        "config_type": "string",
+        "category": "api",
+        "description": "OpenAI Base URL（可选）",
         "is_encrypted": False,
         "is_public": False,
     },
@@ -129,7 +144,8 @@ async def get_all_configs(user: dict = Depends(RequiredAuthDependency())):
     获取所有系统配置项
 
     - 需要管理员权限
-    - 返回所有配置项（包括敏感信息）
+    - 返回所有配置项
+    - 加密字段返回占位符（••••••••），表示已配置但不显示明文
     """
     # 验证管理员权限
     if not await verify_admin(user["id"]):
@@ -152,17 +168,26 @@ async def get_all_configs(user: dict = Depends(RequiredAuthDependency())):
                 result = await session.execute(stmt)
                 configs = result.scalars().all()
 
-            return [
-                ConfigItemResponse(
-                    config_key=c.config_key,
-                    config_value=c.config_value or "",
-                    config_type=c.config_type,
-                    category=c.category,
-                    description=c.description,
-                    updated_at=c.updated_at.isoformat() if c.updated_at else None,
+            results = []
+            for c in configs:
+                # 对于加密字段，如果有值则显示占位符
+                config_value = c.config_value or ""
+                predefined = PREDEFINED_CONFIGS.get(c.config_key, {})
+                if predefined.get("is_encrypted") and config_value:
+                    config_value = "••••••••"  # 显示占位符表示已配置
+
+                results.append(
+                    ConfigItemResponse(
+                        config_key=c.config_key,
+                        config_value=config_value,
+                        config_type=c.config_type,
+                        category=c.category,
+                        description=c.description,
+                        updated_at=c.updated_at.isoformat() if c.updated_at else None,
+                    )
                 )
-                for c in configs
-            ]
+
+            return results
     except Exception as e:
         logger.error(f"获取配置列表失败: {str(e)}")
         raise HTTPException(status_code=500, detail="获取配置列表失败")
@@ -199,9 +224,15 @@ async def get_config(config_key: str, user: dict = Depends(RequiredAuthDependenc
                 else:
                     raise HTTPException(status_code=404, detail="配置项不存在")
 
+            # 对于加密字段，如果有值则显示占位符
+            config_value = config.config_value or ""
+            predefined = PREDEFINED_CONFIGS.get(config_key, {})
+            if predefined.get("is_encrypted") and config_value:
+                config_value = "••••••••"
+
             return ConfigItemResponse(
                 config_key=config.config_key,
-                config_value=config.config_value or "",
+                config_value=config_value,
                 config_type=config.config_type,
                 category=config.category,
                 description=config.description,
@@ -224,6 +255,7 @@ async def update_config(
 
     - 需要管理员权限
     - 会记录更新者信息
+    - 对于标记为 is_encrypted 的配置，自动加密存储
     """
     # 验证管理员权限
     if not await verify_admin(user["id"]):
@@ -239,13 +271,22 @@ async def update_config(
             result = await session.execute(stmt)
             config = result.scalar_one_or_none()
 
+            # 获取预定义配置信息
+            predefined = PREDEFINED_CONFIGS.get(body.config_key, {})
+            is_encrypted = predefined.get("is_encrypted", False)
+
+            # 对加密字段进行加密
+            config_value = body.config_value
+            if is_encrypted and config_value:
+                config_value = encrypt_api_key(config_value)
+                logger.info(f"配置 {body.config_key} 已加密存储")
+
             if not config:
                 # 如果配置不存在，创建新配置
                 if body.config_key in PREDEFINED_CONFIGS:
-                    predefined = PREDEFINED_CONFIGS[body.config_key]
                     config = SystemConfig(
                         config_key=body.config_key,
-                        config_value=body.config_value,
+                        config_value=config_value,
                         description=body.description or predefined.get("description"),
                         updated_by=user["id"],
                         **{k: v for k, v in predefined.items() if k not in ["description"]}
@@ -255,7 +296,7 @@ async def update_config(
                     raise HTTPException(status_code=404, detail="配置项不存在")
             else:
                 # 更新现有配置
-                config.config_value = body.config_value
+                config.config_value = config_value
                 if body.description:
                     config.description = body.description
                 config.updated_by = user["id"]
@@ -282,6 +323,7 @@ async def batch_update_config(
 
     - 需要管理员权限
     - 会记录更新者信息
+    - 对于标记为 is_encrypted 的配置，自动加密存储
     """
     # 验证管理员权限
     if not await verify_admin(user["id"]):
@@ -298,17 +340,25 @@ async def batch_update_config(
                 result = await session.execute(stmt)
                 config = result.scalar_one_or_none()
 
+                # 获取预定义配置信息，判断是否需要加密
+                predefined = PREDEFINED_CONFIGS.get(config_key, {})
+                is_encrypted = predefined.get("is_encrypted", False)
+
+                # 对加密字段进行加密
+                final_value = config_value
+                if is_encrypted and config_value:
+                    final_value = encrypt_api_key(config_value)
+
                 if config:
                     # 更新现有配置
-                    config.config_value = config_value
+                    config.config_value = final_value
                     config.updated_by = user["id"]
                 else:
                     # 创建新配置
                     if config_key in PREDEFINED_CONFIGS:
-                        predefined = PREDEFINED_CONFIGS[config_key]
                         config = SystemConfig(
                             config_key=config_key,
-                            config_value=config_value,
+                            config_value=final_value,
                             updated_by=user["id"],
                             **predefined
                         )

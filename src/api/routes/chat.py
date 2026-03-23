@@ -22,27 +22,30 @@ from ...models.chat import (
 )
 from ...utils.session_context import session_manager
 from ...database import get_db_manager
+from ...utils.config_helper import get_relay_config, normalize_openai_base_url
 
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
 
 
-def _normalize_openai_base_url(base_url: str | None) -> str | None:
-    if not base_url:
-        return None
-    normalized = base_url.rstrip("/")
-    if not normalized.endswith("/v1"):
-        normalized += "/v1"
-    return normalized
-
-
-def _get_openai_client(api_key: str | None = None) -> AsyncOpenAI:
-    """使用前端请求中的 API Key 构建 OpenAI 兼容客户端。"""
+async def _get_openai_client(api_key: str | None = None) -> AsyncOpenAI:
+    """
+    构建 OpenAI 兼容客户端。
+    如果未传入 api_key，使用管理员统一配置（从 SystemConfig 表读取）。
+    """
     key = (api_key or "").strip()
     if not key:
-        raise ValueError("API Key 未配置，请在前端页面设置 API Key")
-    base_url = _normalize_openai_base_url(settings.openai_base_url or settings.relay_base_url or None)
-    logger.info(f"OpenAI client base_url={base_url}")
+        # 使用管理员统一配置
+        base_url, key = await get_relay_config()
+        if not key:
+            raise ValueError("系统未配置 API Key，请联系管理员")
+        base_url = normalize_openai_base_url(base_url)
+    else:
+        base_url = normalize_openai_base_url(settings.openai_base_url or settings.relay_base_url)
+
+    # 脱敏日志：只显示 key 的前4位和后4位
+    masked_key = f"{key[:4]}...{key[-4:]}" if len(key) > 8 else "***"
+    logger.info(f"OpenAI client base_url={base_url}, api_key={masked_key}")
     return AsyncOpenAI(
         api_key=key,
         base_url=base_url,
@@ -50,21 +53,11 @@ def _get_openai_client(api_key: str | None = None) -> AsyncOpenAI:
 
 
 def _extract_api_key(http_request: Request) -> str | None:
-    """从 HTTP Authorization header 提取 Bearer token"""
+    """从 HTTP Authorization header 提取 Bearer token（可选）"""
     auth = http_request.headers.get("Authorization") or http_request.headers.get("authorization")
     if auth and auth.startswith("Bearer "):
         return auth[7:].strip() or None
     return None
-
-
-def _require_api_key(http_request: Request) -> str:
-    api_key = _extract_api_key(http_request)
-    if not api_key:
-        raise HTTPException(
-            status_code=401,
-            detail="Missing Authorization Bearer API Key. Please configure API Key in frontend.",
-        )
-    return api_key
 
 
 def _get_model_endpoint_type(model_name: str, app_state) -> str:
@@ -294,6 +287,7 @@ async def chat_completions(http_request: Request):
     """
     聊天补全接口，与 OpenAI /v1/chat/completions 语义一致。
     根据模型的 supported_endpoint_types 自动选择 chat completions 或 responses API。
+    API Key 可选，如果未提供则使用管理员统一配置。
     """
     try:
         body = await http_request.json()
@@ -305,10 +299,11 @@ async def chat_completions(http_request: Request):
     if not req.model or not req.messages:
         raise HTTPException(status_code=400, detail="model 与 messages 为必填")
 
-    request_api_key = _require_api_key(http_request)
+    # API Key 可选，未提供则使用管理员统一配置
+    request_api_key = _extract_api_key(http_request)
 
     try:
-        client = _get_openai_client(request_api_key)
+        client = await _get_openai_client(request_api_key)
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
 
@@ -324,10 +319,14 @@ async def chat_completions(http_request: Request):
         messages_to_send = await _process_files_to_messages(req.files, messages_to_send)
 
     if req.enable_context and req.session_id:
+        # 获取用于上下文管理的 API key
+        context_api_key = request_api_key
+        if not context_api_key:
+            _, context_api_key = await get_relay_config()
         messages_to_send = await session_manager.get_context_messages(
             session_id=req.session_id,
             new_messages=messages_to_send,
-            api_key=request_api_key,
+            api_key=context_api_key,
             base_url=settings.openai_base_url or settings.relay_base_url,
             summary_model=req.model
         )

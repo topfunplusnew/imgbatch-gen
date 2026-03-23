@@ -25,7 +25,7 @@ from ...providers import (
 )
 from ...database import get_db_manager
 from ...workflows import build_pdf_prompt
-from .chat import _require_api_key, _get_openai_client
+from .chat import _extract_api_key
 
 
 def _debug_log(
@@ -478,7 +478,8 @@ async def unified_generate(
         prepared_params: List[ImageParams] = []
         prepared_user_inputs: List[str] = []
         consumed_inline_prompt = False
-        api_key = _require_api_key(http_request)
+        # API Key 可选，如果未提供则使用管理员统一配置
+        api_key = _extract_api_key(http_request)
 
         # 处理image字段（参考图片）
         if image_file and hasattr(image_file, 'filename') and image_file.filename:
@@ -927,10 +928,11 @@ async def _handle_operation(
 ) -> Any:
     """
     根据 operation_type 和 provider 路由到不同的 Provider 方法
-    
+
     - generate: 已在上层处理，这里只处理非标准生图操作
     """
-    provider = get_provider(provider=provider_name, model_name=model_name)
+    # 使用管理员统一配置（不传入 api_key）
+    provider = await get_provider(provider=provider_name, model_name=model_name)
     op = operation_type.lower()
     p = provider_name.lower()
     

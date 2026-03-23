@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Request, Depends, UploadFile, File
-from ...api.routes.chat import _require_api_key, _get_openai_client
+from ...api.routes.chat import _extract_api_key, _get_openai_client
 from fastapi.responses import StreamingResponse
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -201,7 +201,7 @@ async def process_reference_image(files: List[str], user_prompt: str, db_manager
 
         # 使用 gpt-4o 分析图片（只发送当前请求，不包含历史）
         from .chat import _get_openai_client
-        client = _get_openai_client(api_key)
+        client = await _get_openai_client(api_key)
 
         prompt = f"分析这张图片，根据需求生成图像生成提示词：{user_prompt}\n\n要求：\n1. 详细描述图片的主要元素、风格、色彩\n2. 结合用户需求生成完整的图像生成提示词\n3. 只输出提示词，不要其他内容"
 
@@ -340,7 +340,7 @@ async def process_files_to_messages(files: List[str], messages: List[ChatMessage
                 try:
                     import fitz
                     from .chat import _get_openai_client
-                    client = _get_openai_client(api_key)
+                    client = await _get_openai_client(api_key)
 
                     pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
                     pdf_text = []
@@ -459,7 +459,7 @@ class IntentRecognizer:
             from .chat import _get_openai_client
             from ...config.settings import settings
 
-            client = _get_openai_client(api_key)
+            client = await _get_openai_client(api_key)
             response = await client.chat.completions.create(
                 model=settings.openai_model or "gpt-4o-mini",
                 messages=[
@@ -611,7 +611,8 @@ async def assistant_chat(
     """
 
     try:
-        api_key = _require_api_key(http_request)
+        # API Key 可选，如果未提供则使用管理员统一配置
+        api_key = _extract_api_key(http_request)
         db_manager = get_db_manager()
 
         user_messages = [m for m in request.messages if m.role == "user"]
@@ -1045,7 +1046,7 @@ async def handle_single_generate(message: ChatMessage, intent: Intent, task_mana
 
         # 使用 LLM 分析提示词，提取参数
         try:
-            client = _get_openai_client(api_key)
+            client = await _get_openai_client(api_key)
             analysis_prompt = f"""分析以下图像生成提示词，提取尺寸和质量参数。
 
 提示词: {prompt_text}
@@ -1351,6 +1352,12 @@ async def _run_chat_completion(client, messages: List[Dict[str, Any]], model: st
     if safe_model and safe_model != model:
         attempts.append((safe_model, None))
 
+    # 打印 client 的 base_url 和 api_key（脱敏）
+    client_base_url = getattr(client, 'base_url', 'unknown')
+    client_api_key = getattr(client, 'api_key', '')
+    masked_key = f"{client_api_key[:4]}...{client_api_key[-4:]}" if client_api_key and len(client_api_key) > 8 else "***"
+    logger.info(f"_run_chat_completion client: base_url={client_base_url}, api_key={masked_key}")
+
     last_error: Optional[Exception] = None
     for index, (attempt_model, attempt_max_tokens) in enumerate(attempts):
         try:
@@ -1407,7 +1414,7 @@ async def handle_chat_query(message: ChatMessage, history: List[ChatMessage], mo
     try:
         from .chat import _get_openai_client
 
-        client = _get_openai_client(api_key)
+        client = await _get_openai_client(api_key)
         effective_model = model or _default_chat_execution_model()
         messages = []
         for m in history:
@@ -1465,7 +1472,7 @@ async def handle_chat_stream(model: str, history: List[ChatMessage], api_key: st
 
     async def event_generator():
         try:
-            client = _get_openai_client(api_key)
+            client = await _get_openai_client(api_key)
             effective_model = model or _default_chat_execution_model()
             messages = [{"role": m.role, "content": m.content} for m in history if m.content and str(m.content).strip()]
 
@@ -1605,7 +1612,8 @@ async def save_assistant_response(db_manager, session_id: str, message: ChatMess
             role=message.role,
             content=message.content,
             model=message.metadata.get("model") if message.metadata else "unknown",
-            provider=message.metadata.get("provider") if message.metadata else "unknown"
+            provider=message.metadata.get("provider") if message.metadata else "unknown",
+            user_request_id=user_request_id
         )
 
         logger.info(f"保存AI回复到会话: {session_id}")

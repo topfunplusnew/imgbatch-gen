@@ -14,7 +14,7 @@ from ..config.model_registry import get_model_registry
 from ..engine import TaskManager
 from ..database import get_db_manager
 from .middleware import setup_cors, logging_middleware
-from .routes import generate, batch, status, models, unified, chat, assistant, health, history, files, async_tasks, auth, account, payment, checkin, download, referral, admin, system_config, withdrawal, case_management, notifications, maintenance
+from .routes import generate, batch, status, models, unified, chat, assistant, health, history, files, async_tasks, auth, account, payment, checkin, download, referral, admin, system_config, withdrawal, case_management, notifications, maintenance, user_config
 
 
 # 配置日志
@@ -270,6 +270,7 @@ app.include_router(history.router)  # 新增：对话历史管理接口
 app.include_router(files.router)  # 新增：文件管理接口
 app.include_router(async_tasks.router)  # 新增：异步任务接口
 app.include_router(health.router)  # 健康检查路由
+app.include_router(user_config.router)  # 用户配置路由
 
 # 静态文件服务（用于访问生成的图片）
 # 仅在使用本地存储时挂载静态文件路由

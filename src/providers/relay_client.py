@@ -42,13 +42,36 @@ class RelayClient:
     def __init__(self, base_url: Optional[str] = None, api_key: Optional[str] = None):
         self.base_url = (base_url or settings.relay_base_url or "").rstrip("/")
         self.api_key = (api_key or "").strip()
+        self._config_loaded = False
+
+        # 不再强制要求 base_url 和 api_key，允许后续通过 ensure_config() 加载
+        if self.base_url and not self.base_url.startswith(("http://", "https://")):
+            raise ValueError(f"Relay base URL must start with http:// or https://: {self.base_url!r}")
+
+    async def ensure_config(self) -> None:
+        """
+        确保配置已加载（从管理员统一配置获取）
+        如果实例化时未提供 api_key，则从 SystemConfig 表读取
+        """
+        if self._config_loaded:
+            return
+
+        if not self.api_key or not self.base_url:
+            from ..utils.config_helper import get_relay_config
+            base_url, api_key = await get_relay_config()
+            if base_url:
+                self.base_url = base_url.rstrip("/")
+            if api_key:
+                self.api_key = api_key
+
+        self._config_loaded = True
 
         if not self.base_url:
             raise ValueError("Relay base URL is not configured.")
         if not self.base_url.startswith(("http://", "https://")):
             raise ValueError(f"Relay base URL must start with http:// or https://: {self.base_url!r}")
         if not self.api_key:
-            raise ValueError("Relay API key is missing.")
+            raise ValueError("系统未配置 API Key，请联系管理员")
 
     def _get_headers(self, content_type: str = "application/json") -> Dict[str, str]:
         headers = {
@@ -78,6 +101,9 @@ class RelayClient:
             timeout: 超时时间（秒）
             max_retries: 最大重试次数（默认2次）
         """
+        # 确保配置已加载
+        await self.ensure_config()
+
         url = f"{self.base_url}{endpoint}"
         logger.info(f"-> POST {url} timeout={timeout}")
 
@@ -197,6 +223,9 @@ class RelayClient:
             timeout: 超时时间（秒）
             max_retries: 最大重试次数（默认2次）
         """
+        # 确保配置已加载
+        await self.ensure_config()
+
         url = f"{self.base_url}{endpoint}"
         headers = self._get_headers()
 

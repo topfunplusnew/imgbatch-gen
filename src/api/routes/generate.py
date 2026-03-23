@@ -103,9 +103,9 @@ async def generate_image(
         if not provider_name:
             provider_name = settings.default_image_provider
             logger.debug(f"未指定 Provider，使用默认值: {provider_name}")
-        
-        # 2. 构建参数
-        request_api_key = _require_api_key(http_request)
+
+        # 2. 构建参数（API Key 可选，未提供则使用管理员统一配置）
+        request_api_key = _extract_api_key(http_request)
 
         params = ImageParams(
             prompt=request.prompt,

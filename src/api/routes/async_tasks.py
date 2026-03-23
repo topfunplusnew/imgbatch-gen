@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from ...config.settings import settings
 from ...database import get_db_manager
 from ...database.async_task_manager import get_async_task_manager
-from .chat import _require_api_key
+from .chat import _extract_api_key
 
 router = APIRouter(prefix="/api/async", tags=["async"])
 
@@ -52,15 +52,17 @@ async def submit_task(request: SubmitTaskRequest, http_request: Request):
         manager = get_async_task_manager()
         db_manager = get_db_manager()
 
-        api_key = _require_api_key(http_request)
+        # API Key 可选，如果未提供则使用管理员统一配置
+        api_key = _extract_api_key(http_request)
         credential_id = None
-        credential = await db_manager.store_api_credential(
-            api_key=api_key,
-            provider="relay",
-            base_url=settings.relay_base_url,
-            user_id="async-api",
-        )
-        credential_id = credential.id
+        if api_key:
+            credential = await db_manager.store_api_credential(
+                api_key=api_key,
+                provider="relay",
+                base_url=settings.relay_base_url,
+                user_id="async-api",
+            )
+            credential_id = credential.id
 
         params = {
             "width": request.width,

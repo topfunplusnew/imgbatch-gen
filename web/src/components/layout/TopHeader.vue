@@ -25,6 +25,15 @@
     </div>
 
     <div class="flex items-center gap-1.5 xs:gap-2 md:gap-4">
+      <!-- 新对话按钮 -->
+      <button
+        @click="handleNewConversation"
+        class="flex items-center gap-1.5 px-2.5 xs:px-3 py-1.5 text-xs font-medium rounded-lg border border-border-dark bg-white/90 hover:bg-primary/5 text-ink-700 transition-colors min-h-[44px]"
+        title="新对话">
+        <span class="material-symbols-outlined !text-lg">add_circle</span>
+        <span class="hidden sm:inline">新对话</span>
+      </button>
+
       <!-- 通知按钮（已登录时显示） -->
       <NotificationButton
         v-if="authStore.isAuthenticated"
@@ -225,6 +234,11 @@ function toggleNotifications() {
   if (showNotifications.value) {
     showUserMenu.value = false
   }
+}
+
+// 新对话
+async function handleNewConversation() {
+  await generatorStore.startNewConversation()
 }
 
 // 初始化通知系统

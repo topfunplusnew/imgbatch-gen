@@ -1633,6 +1633,43 @@ export const api = {
     )
     return response.data
   },
+
+  // ==================== 用户配置相关API ====================
+
+  /**
+   * 获取用户API配置
+   */
+  async getUserConfig(): Promise<{
+    api_key_hint: string | null
+    default_model: string | null
+    has_api_key: boolean
+  }> {
+    const response = await apiClient.get('/api/v1/user/config')
+    return response.data
+  },
+
+  /**
+   * 保存用户API配置
+   */
+  async saveUserConfig(data: {
+    api_key: string
+    default_model?: string
+  }): Promise<{
+    success: boolean
+    message: string
+    api_key_hint: string
+  }> {
+    const response = await apiClient.post('/api/v1/user/config', data)
+    return response.data
+  },
+
+  /**
+   * 删除用户API配置
+   */
+  async deleteUserConfig(): Promise<{ success: boolean; message: string }> {
+    const response = await apiClient.delete('/api/v1/user/config')
+    return response.data
+  },
 }
 
 // ==================== 类型定义 ====================

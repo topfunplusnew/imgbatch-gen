@@ -747,7 +747,7 @@ class DatabaseManager:
         content: str,
         model: str = "unknown",
         provider: str = "unknown",
-        user_request_id: str = "",
+        user_request_id: Optional[str] = None,
         images: str = None,
         files: str = None
     ):
