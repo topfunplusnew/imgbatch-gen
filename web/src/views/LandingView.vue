@@ -1,5 +1,15 @@
 <template>
   <main class="flex-1 flex flex-col bg-background-dark min-h-screen overflow-y-auto">
+    <div class="md:hidden sticky top-0 z-20 px-4 xs:px-6 py-3 bg-white/80 backdrop-blur-xl border-b border-border-dark flex items-center justify-between gap-3">
+      <button
+        @click="emit('toggleSidebar')"
+        class="flex items-center justify-center p-1.5 rounded-lg border border-border-dark bg-white/90 hover:bg-primary/5 text-ink-700 min-h-[44px] min-w-[44px]"
+        aria-label="Open sidebar">
+        <span class="material-symbols-outlined !text-xl">menu</span>
+      </button>
+      <div class="min-h-[44px] min-w-[44px] shrink-0"></div>
+    </div>
+
     <!-- Hero Section -->
     <div class="flex-1 flex flex-col items-center justify-center px-4 xs:px-6 md:px-8 py-12 md:py-16 text-center">
       <!-- Logo -->
@@ -209,6 +219,7 @@ import ResolutionDropdown from '@/components/landing/ResolutionDropdown.vue'
 const appStore = useAppStore()
 const generatorStore = useGeneratorStore()
 const caseStore = useCaseStore()
+const emit = defineEmits(['toggleSidebar', 'toggleSettings'])
 
 const promptInput = ref('')
 const promptInputRef = ref(null)

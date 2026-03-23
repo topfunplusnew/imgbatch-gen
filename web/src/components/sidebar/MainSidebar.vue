@@ -1,33 +1,36 @@
 <template>
-  <aside class="w-28 xs:w-32 sm:w-44 md:w-56 lg:w-56 xl:w-64 flex flex-col border-r border-border-dark bg-white/90 backdrop-blur-xl shrink-0 h-screen transition-all duration-300 relative">
-    <!-- Logo Section -->
+  <aside :class="asideClass">
     <nav v-if="!hideLogo" class="px-3 xs:px-4 md:px-4 pt-4 pb-3 space-y-1 shrink-0">
-      <!-- App Logo and Settings Toggle Button -->
-      <div class="flex items-center justify-center mb-4">
+      <div :class="['flex items-center mb-4', props.mobileDrawer ? 'justify-between' : 'justify-center']">
         <div class="w-8 h-8 bg-gradient-to-br from-primary to-primary-deep rounded-lg flex items-center justify-center shrink-0">
           <span class="material-symbols-outlined !text-lg text-white">auto_awesome</span>
         </div>
-        <span class="text-sm font-bold text-ink-950 hidden md:block ml-2">AI 生图助手</span>
+        <span :class="menuTitleClass">AI 生图助手</span>
+        <button
+          v-if="props.mobileDrawer"
+          @click="emit('requestClose')"
+          class="flex items-center justify-center p-1 rounded-lg text-ink-500 hover:text-ink-950 hover:bg-gray-100 transition-colors"
+          aria-label="Close sidebar"
+        >
+          <span class="material-symbols-outlined !text-xl">close</span>
+        </button>
       </div>
 
-      <!-- Main Navigation Menu -->
-      <div class="text-[10px] xs:text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 text-center md:text-left md:px-3">主菜单</div>
+      <div :class="menuSectionTitleClass">主菜单</div>
 
       <button
         v-for="item in menuItems"
         :key="item.value || item.action"
-        :class="getMenuItemClass(item)"
+        :class="[getMenuItemClass(item), menuItemButtonClass]"
         @click="handleMenuClick(item)"
-        class="w-full flex items-center justify-center md:justify-start gap-2 md:gap-3 px-2 md:px-3 py-2.5 rounded-xl transition-colors text-left"
       >
         <span class="material-symbols-outlined text-[20px] xs:text-[22px] md:text-[24px]">{{ item.icon }}</span>
-        <span class="hidden md:inline text-xs xs:text-sm">{{ item.text }}</span>
+        <span :class="menuItemLabelClass">{{ item.text }}</span>
       </button>
+
     </nav>
 
-    <!-- 案例模板区域 -->
     <div class="flex-1 flex flex-col min-h-0 border-t border-border-dark">
-      <!-- 搜索框 -->
       <div class="px-2 xs:px-3 py-3 shrink-0">
         <div class="relative">
           <span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-500 !text-sm">search</span>
@@ -41,7 +44,6 @@
         </div>
       </div>
 
-      <!-- 案例列表区域 -->
       <div
         ref="caseListRef"
         class="flex-1 overflow-y-auto custom-scrollbar px-2 py-2 space-y-2"
@@ -50,31 +52,28 @@
           v-for="caseItem in displayCases"
           :key="caseItem.id"
           :case-data="caseItem"
+          @requestClose="handleCaseSelected"
         />
 
-        <!-- 加载更多 -->
         <div v-if="loading && cases.length > 0" class="flex items-center justify-center py-4">
           <div class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
         </div>
 
-        <!-- 没有更多 -->
         <div v-else-if="!hasMore && cases.length > 0" class="text-center py-4">
           <p class="text-xs text-gray-500">没有更多模板了</p>
         </div>
 
-        <!-- 空状态 -->
         <div v-else-if="cases.length === 0 && !loading" class="text-center py-8">
           <p class="text-sm text-gray-500">暂无模板</p>
         </div>
       </div>
     </div>
 
-    <!-- 桌面端用户信息区域 -->
-    <div class="hidden lg:block shrink-0 border-t border-border-dark bg-gray-50/50">
-      <UserMenuDropdown v-if="authStore.isAuthenticated" />
+    <div :class="userSectionClass">
+      <UserMenuDropdown v-if="authStore.isAuthenticated" :hide-user-center="props.mobileDrawer" />
       <div v-else class="p-3">
         <button
-          @click="appStore.setCurrentPage('login')"
+          @click="handleLoginClick"
           class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-primary/5 rounded-xl border border-border-dark transition-colors shadow-sm"
         >
           <span class="material-symbols-outlined !text-xl text-primary">login</span>
@@ -85,13 +84,13 @@
   </aside>
 
   <!-- Settings Drawer (从侧边栏右边缘滑出) - 使用Teleport传送到body -->
-  <Teleport to="body">
+  <Teleport v-if="!props.mobileDrawer" to="body">
     <Transition name="settings-drawer">
       <div
         v-if="showSettingsDrawer"
-        class="fixed top-0 h-full w-[320px] xs:w-[360px] sm:w-[400px] md:w-80 lg:w-96 xl:w-[24rem] bg-white/95 backdrop-blur-xl border-r border-border-dark shadow-2xl z-[60] flex flex-col settings-drawer-panel">
+        class="fixed z-[60] flex flex-col overflow-hidden bg-white/95 backdrop-blur-xl border border-border-dark shadow-2xl settings-drawer-panel">
         <!-- Drawer Header -->
-        <div class="flex items-center justify-between px-4 py-3 border-b border-border-dark shrink-0">
+        <div class="flex items-center justify-between gap-3 px-3 xs:px-4 py-3 border-b border-border-dark shrink-0">
           <div class="flex items-center gap-2">
             <span class="text-sm font-bold text-ink-950 uppercase tracking-wider">生成参数</span>
             <button
@@ -108,7 +107,7 @@
         </div>
 
         <!-- Drawer Content -->
-        <div class="flex-1 overflow-y-auto p-4 space-y-5 custom-scrollbar">
+        <div class="flex-1 overflow-y-auto p-3 xs:p-4 sm:p-5 space-y-4 sm:space-y-5 custom-scrollbar">
           <!-- 当前模型 -->
           <div class="space-y-2">
             <label class="text-xs font-bold text-slate-500 uppercase">当前模型</label>
@@ -146,7 +145,7 @@
 
           <!-- 图像尺寸 -->
           <div class="space-y-2">
-            <div class="flex justify-between items-center">
+            <div class="flex flex-wrap items-center justify-between gap-2">
               <label class="text-xs font-bold text-slate-500 uppercase">图像尺寸</label>
               <span class="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full font-bold">
                 {{ generatorStore.width }}×{{ generatorStore.height }}
@@ -154,13 +153,13 @@
             </div>
 
             <!-- 比例选择网格 -->
-            <div class="grid grid-cols-3 gap-2">
+            <div class="grid grid-cols-2 xs:grid-cols-3 gap-2">
               <button
                 v-for="ratio in ratioOptions"
                 :key="ratio.value"
                 @click="selectRatio(ratio)"
                 :class="[
-                  'flex flex-col items-center justify-center gap-1 py-2 px-2 rounded-xl transition-colors',
+                  'flex flex-col items-center justify-center gap-1 py-2 px-2 rounded-xl transition-colors min-h-[72px]',
                   selectedRatio === ratio.value
                     ? 'bg-primary-strong text-white shadow-sm'
                     : 'bg-white text-ink-700 border border-border-dark hover:bg-primary/5'
@@ -218,7 +217,7 @@
 
           <!-- 随机种子 -->
           <div class="space-y-2">
-            <div class="flex justify-between items-center">
+            <div class="flex flex-wrap items-center justify-between gap-2">
               <label class="text-xs font-bold text-slate-500 uppercase">随机种子</label>
               <button
                 v-if="generatorStore.seed"
@@ -290,13 +289,47 @@ const appStore = useAppStore()
 const authStore = useAuthStore()
 const generatorStore = useGeneratorStore()
 
-defineProps({
-  hideLogo: { type: Boolean, default: false }
+const props = defineProps({
+  hideLogo: { type: Boolean, default: false },
+  mobileDrawer: { type: Boolean, default: false }
 })
 
 const caseStore = useCaseStore()
 const caseListRef = ref(null)
 const searchInput = ref('')
+
+const asideClass = computed(() => {
+  if (props.mobileDrawer) {
+    return 'w-full h-full flex flex-col border-r border-border-dark bg-white/95 backdrop-blur-xl relative'
+  }
+  return 'hidden md:flex w-28 xs:w-32 sm:w-44 md:w-56 lg:w-56 xl:w-64 flex-col border-r border-border-dark bg-white/90 backdrop-blur-xl shrink-0 h-screen transition-all duration-300 relative'
+})
+
+const menuTitleClass = computed(() => {
+  return props.mobileDrawer ? 'text-sm font-bold text-ink-950 ml-2 flex-1' : 'text-sm font-bold text-ink-950 hidden md:block ml-2'
+})
+
+const menuItemButtonClass = computed(() => {
+  return props.mobileDrawer
+    ? 'w-full flex items-center justify-start gap-3 px-3 py-2.5 rounded-xl transition-colors text-left'
+    : 'w-full flex items-center justify-center md:justify-start gap-2 md:gap-3 px-2 md:px-3 py-2.5 rounded-xl transition-colors text-left'
+})
+
+const menuItemLabelClass = computed(() => {
+  return props.mobileDrawer ? 'inline text-sm' : 'hidden md:inline text-xs xs:text-sm'
+})
+
+const menuSectionTitleClass = computed(() => {
+  return props.mobileDrawer
+    ? 'text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 text-left px-3'
+    : 'text-[10px] xs:text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 text-center md:text-left md:px-3'
+})
+
+const userSectionClass = computed(() => {
+  return props.mobileDrawer
+    ? 'block shrink-0 border-t border-border-dark bg-gray-50/50'
+    : 'hidden lg:block shrink-0 border-t border-border-dark bg-gray-50/50'
+})
 
 // Settings drawer state
 const showSettingsDrawer = ref(false)
@@ -369,6 +402,12 @@ watch(() => appStore.showCreationRecords, (newVal, oldVal) => {
 })
 
 // Handle menu item clicks
+const requestCloseIfMobile = () => {
+  if (props.mobileDrawer) {
+    emit('requestClose')
+  }
+}
+
 const handleMenuClick = (item) => {
   if (item.action) {
     // Handle action-based items (open drawers/modals)
@@ -384,10 +423,21 @@ const handleMenuClick = (item) => {
     // Handle view-based items
     appStore.setSelectedMenuItem(item.value)
   }
+
+  requestCloseIfMobile()
+}
+
+const handleCaseSelected = () => {
+  requestCloseIfMobile()
+}
+
+const handleLoginClick = () => {
+  appStore.setCurrentPage('login')
+  requestCloseIfMobile()
 }
 
 // Emit event for history drawer (parent component will handle)
-const emit = defineEmits(['openHistory', 'settingsDrawerChange'])
+const emit = defineEmits(['openHistory', 'settingsDrawerChange', 'requestClose'])
 
 // Watch settings drawer state and emit to parent
 watch(showSettingsDrawer, (newValue) => {
@@ -573,37 +623,54 @@ onUnmounted(() => {
   opacity: 1;
 }
 
-/* Settings drawer positioning - 从侧边栏右边缘开始 */
-/* 默认移动端 (w-28 = 7rem = 112px) */
+/* Settings drawer positioning */
 .settings-drawer-panel {
-  left: 7rem;
+  top: 0.75rem;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  left: 0.75rem;
+  width: auto;
+  max-height: calc(100vh - 1.5rem);
+  border-radius: 1rem;
 }
 
-/* xs断点 (475px, sidebar w-32 = 8rem = 128px) */
-@media (min-width: 475px) {
-  .settings-drawer-panel {
-    left: 8rem;
-  }
-}
-
-/* sm断点 (640px, sidebar w-44 = 11rem = 176px) */
-@media (min-width: 640px) {
-  .settings-drawer-panel {
-    left: 11rem;
-  }
-}
-
-/* md断点 (768px, sidebar w-56 = 14rem = 224px) */
 @media (min-width: 768px) {
   .settings-drawer-panel {
     left: 14rem;
+    right: 1rem;
+    width: min(24rem, calc(100vw - 14rem - 1rem));
   }
 }
 
-/* xl断点 (1280px, sidebar w-64 = 16rem = 256px) */
 @media (min-width: 1280px) {
   .settings-drawer-panel {
     left: 16rem;
+    right: 1.5rem;
+    width: min(24rem, calc(100vw - 16rem - 1.5rem));
+  }
+}
+
+@media (max-width: 474px) {
+  .settings-drawer-panel {
+    top: 0.5rem;
+    right: 0.5rem;
+    bottom: 0.5rem;
+    left: 0.5rem;
+    max-height: calc(100vh - 1rem);
+  }
+}
+
+@supports (height: 100dvh) {
+  .settings-drawer-panel {
+    max-height: calc(100dvh - 1.5rem);
+  }
+}
+
+@supports (height: 100dvh) {
+  @media (max-width: 474px) {
+    .settings-drawer-panel {
+      max-height: calc(100dvh - 1rem);
+    }
   }
 }
 

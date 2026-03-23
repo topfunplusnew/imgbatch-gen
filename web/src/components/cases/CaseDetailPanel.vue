@@ -9,102 +9,98 @@
   >
     <div
       v-if="caseData"
-      class="mx-auto md:mx-0 mb-4 px-4 py-4 bg-white rounded-xl shadow-lg border border-gray-200"
+      class="mx-auto mb-4 rounded-xl border border-gray-200 bg-white px-4 py-4 shadow-lg md:mx-0"
     >
-      <div class="flex items-start justify-between gap-4">
-        <!-- 左侧图片 -->
-        <div class="w-48 flex-shrink-0">
-          <div class="relative rounded-lg overflow-hidden bg-gray-100 aspect-video">
+      <div class="flex items-start justify-between gap-2 sm:gap-3 md:gap-4">
+        <div class="w-24 shrink-0 sm:w-32 md:w-40 lg:w-48">
+          <div class="relative aspect-video overflow-hidden rounded-lg bg-gray-100">
             <img
               :src="caseData.image_url || caseData.thumbnail_url || '/placeholder-case.png'"
               :alt="caseData.title"
-              class="w-full h-full object-cover"
+              class="h-full w-full object-cover"
             >
-            <div class="absolute top-2 left-2">
-              <span class="px-2 py-1 bg-primary/90 text-white text-xs font-medium rounded backdrop-blur-sm">
+            <div class="absolute left-2 top-2">
+              <span class="rounded bg-primary/90 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm">
                 {{ caseData.category }}
               </span>
             </div>
           </div>
         </div>
 
-        <!-- 右侧信息 -->
-        <div class="flex-1 min-w-0">
-          <div class="flex items-start justify-between gap-4 mb-2">
+        <div class="min-w-0 flex-1">
+          <div class="mb-2 flex items-start justify-between gap-4">
             <div class="flex-1">
-              <h2 class="text-lg font-bold text-gray-900 mb-1">{{ caseData.title }}</h2>
-              <p v-if="caseData.description" class="text-sm text-gray-600 line-clamp-2">{{ caseData.description }}</p>
+              <h2 class="mb-1 text-lg font-bold text-gray-900">{{ caseData.title }}</h2>
+              <p v-if="caseData.description" class="line-clamp-2 text-sm text-gray-600">
+                {{ caseData.description }}
+              </p>
             </div>
             <button
+              class="rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
               @click="closeDetail"
-              class="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
             >
               <span class="material-symbols-outlined">close</span>
             </button>
           </div>
-
-          <!-- 标签 -->
-          <div v-if="caseData.tags && caseData.tags.length > 0" class="flex flex-wrap gap-1.5 mb-3">
-            <span
-              v-for="tag in caseData.tags"
-              :key="tag"
-              class="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs rounded-full"
-            >
-              {{ tag }}
-            </span>
-          </div>
-
-          <!-- 统计信息 -->
-          <div class="flex items-center gap-4 text-xs text-gray-500 mb-3">
-            <span class="flex items-center gap-1">
-              <span class="material-symbols-outlined !text-sm">visibility</span>
-              {{ caseData.view_count }}
-            </span>
-            <span class="flex items-center gap-1">
-              <span class="material-symbols-outlined !text-sm">favorite</span>
-              {{ caseData.use_count }}
-            </span>
-            <span v-if="caseData.model" class="flex items-center gap-1">
-              <span class="material-symbols-outlined !text-sm">model_training</span>
-              {{ caseData.model.split(' ')[0] }}
-            </span>
-          </div>
-
-          <!-- 提示词预览 -->
-          <div class="mb-3">
-            <div class="flex items-center justify-between mb-1">
-              <h4 class="text-xs font-semibold text-gray-900">提示词</h4>
-              <button
-                @click="copyPrompt"
-                class="text-xs text-primary hover:text-primary-strong flex items-center gap-1"
-              >
-                <span class="material-symbols-outlined !text-sm">content_copy</span>
-                复制
-              </button>
-            </div>
-            <div class="p-2.5 bg-gray-50 rounded-lg max-h-20 overflow-y-auto">
-              <p class="text-xs text-gray-700 line-clamp-3">{{ caseData.prompt }}</p>
-            </div>
-          </div>
-
-          <!-- 操作按钮 -->
-          <div class="flex items-center gap-2">
-            <button
-              @click="copyPrompt"
-              class="flex-1 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg transition-colors flex items-center justify-center gap-1.5"
-            >
-              <span class="material-symbols-outlined !text-base">content_copy</span>
-              复制提示词
-            </button>
-            <button
-              @click="useTemplate"
-              class="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-primary hover:bg-primary-strong rounded-lg transition-colors flex items-center justify-center gap-1.5"
-            >
-              <span class="material-symbols-outlined !text-base">auto_awesome</span>
-              使用此模板
-            </button>
-          </div>
         </div>
+      </div>
+
+      <div v-if="caseData.tags && caseData.tags.length > 0" class="mb-3 mt-4 flex w-full flex-wrap gap-1.5">
+        <span
+          v-for="tag in caseData.tags"
+          :key="tag"
+          class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
+        >
+          {{ tag }}
+        </span>
+      </div>
+
+      <div class="mb-3 flex w-full items-center gap-4 text-xs text-gray-500">
+        <span class="flex items-center gap-1">
+          <span class="material-symbols-outlined !text-sm">visibility</span>
+          {{ caseData.view_count }}
+        </span>
+        <span class="flex items-center gap-1">
+          <span class="material-symbols-outlined !text-sm">favorite</span>
+          {{ caseData.use_count }}
+        </span>
+        <span v-if="caseData.model" class="flex items-center gap-1">
+          <span class="material-symbols-outlined !text-sm">model_training</span>
+          {{ caseData.model.split(' ')[0] }}
+        </span>
+      </div>
+
+      <div class="mb-3 w-full">
+        <div class="mb-1 flex items-center justify-between">
+          <h4 class="text-xs font-semibold text-gray-900">提示词</h4>
+          <button
+            class="flex items-center gap-1 text-xs text-primary hover:text-primary-strong"
+            @click="copyPrompt"
+          >
+            <span class="material-symbols-outlined !text-sm">content_copy</span>
+            复制
+          </button>
+        </div>
+        <div class="max-h-20 w-full overflow-y-auto rounded-lg bg-gray-50 p-2.5">
+          <p class="line-clamp-3 text-xs text-gray-700">{{ caseData.prompt }}</p>
+        </div>
+      </div>
+
+      <div class="mt-4 flex w-full items-center gap-2">
+        <button
+          class="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          @click="copyPrompt"
+        >
+          <span class="material-symbols-outlined !text-base">content_copy</span>
+          复制提示词
+        </button>
+        <button
+          class="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-strong"
+          @click="useTemplate"
+        >
+          <span class="material-symbols-outlined !text-base">auto_awesome</span>
+          使用此模板
+        </button>
       </div>
     </div>
   </Transition>
@@ -120,10 +116,7 @@ const appStore = useAppStore()
 const caseStore = useCaseStore()
 const generatorStore = useGeneratorStore()
 
-const caseData = computed(() => {
-  console.log('caseData computed:', appStore.selectedCase)
-  return appStore.selectedCase
-})
+const caseData = computed(() => appStore.selectedCase)
 
 const closeDetail = () => {
   appStore.clearSelectedCase()
@@ -131,9 +124,9 @@ const closeDetail = () => {
 
 const copyPrompt = async () => {
   if (!caseData.value) return
+
   const success = await caseStore.copyCasePrompt(caseData.value.id)
   if (success) {
-    // 显示简短的复制成功提示
     showToast('提示词已复制')
   }
 }
@@ -141,11 +134,9 @@ const copyPrompt = async () => {
 const useTemplate = async () => {
   if (!caseData.value) return
 
-  // 应用模板参数
   generatorStore.prompt = caseData.value.prompt
   generatorStore.negativePrompt = caseData.value.negative_prompt || ''
 
-  // 应用其他参数
   if (caseData.value.parameters) {
     const params = caseData.value.parameters
     if (params.width) generatorStore.width = params.width
@@ -155,24 +146,16 @@ const useTemplate = async () => {
     if (params.seed) generatorStore.seed = params.seed
   }
 
-  // 设置模型
   if (caseData.value.model) {
     generatorStore.model = caseData.value.model
   }
 
-  // 记录使用
   await caseStore.useCaseTemplate(caseData.value.id)
-
-  // 关闭详情面板
   closeDetail()
-
   showToast('模板已应用')
 }
 
-// 简单的 toast 提示
 const showToast = (message) => {
-  // 这里可以集成一个全局的 toast 组件
-  // 暂时使用 console
   console.log(message)
 }
 </script>

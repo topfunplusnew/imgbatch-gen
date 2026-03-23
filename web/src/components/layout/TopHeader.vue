@@ -1,6 +1,13 @@
 <template>
   <header class="h-12 xs:h-14 md:h-16 lg:h-16 border-b border-border-dark flex items-center justify-between px-3 xs:px-4 md:px-6 lg:px-8 bg-white/80 backdrop-blur-xl sticky top-0 z-10">
     <div class="flex items-center gap-2 md:gap-4 min-w-0">
+      <button
+        @click="$emit('toggleSidebar')"
+        class="md:hidden flex items-center justify-center p-1.5 rounded-lg border border-border-dark bg-white/90 hover:bg-primary/5 text-ink-700 min-h-[44px] min-w-[44px]"
+        aria-label="Open sidebar">
+        <span class="material-symbols-outlined !text-xl">menu</span>
+      </button>
+
       <!-- Back to Home button (shown in chat view) -->
       <button
         v-if="appStore.currentView === 'chat'"
@@ -21,6 +28,7 @@
       <!-- 通知按钮（已登录时显示） -->
       <NotificationButton
         v-if="authStore.isAuthenticated"
+        class="hidden md:flex"
         :unread-count="notificationStore.unreadCount"
         :active="showNotifications"
         @toggle="toggleNotifications"
@@ -40,7 +48,7 @@
       <button
         v-if="!authStore.isAuthenticated"
         @click="goToLogin"
-        class="lg:hidden flex items-center gap-1.5 xs:gap-2 px-2.5 xs:px-3 py-1.5 bg-white rounded-full shadow-sm border border-border-dark hover:shadow-md transition-all min-h-[44px]">
+        class="hidden md:flex lg:hidden items-center gap-1.5 xs:gap-2 px-2.5 xs:px-3 py-1.5 bg-white rounded-full shadow-sm border border-border-dark hover:shadow-md transition-all min-h-[44px]">
         <div class="w-7 h-7 xs:w-8 xs:h-8 rounded-full bg-gradient-to-br from-primary to-primary-deep flex items-center justify-center shrink-0">
           <span class="material-symbols-outlined !text-base xs:!text-lg text-white">login</span>
         </div>
@@ -51,7 +59,7 @@
       <button
         v-else
         @click="showUserMenu = !showUserMenu"
-        class="lg:hidden flex items-center gap-1.5 xs:gap-2 px-2 xs:px-2.5 py-1.5 bg-white rounded-full shadow-sm border border-border-dark hover:shadow-md transition-all min-h-[44px]">
+        class="hidden md:flex lg:hidden items-center gap-1.5 xs:gap-2 px-2 xs:px-2.5 py-1.5 bg-white rounded-full shadow-sm border border-border-dark hover:shadow-md transition-all min-h-[44px]">
         <div class="w-7 h-7 xs:w-8 xs:h-8 rounded-full bg-gradient-to-br from-primary to-primary-deep flex items-center justify-center text-white font-medium text-xs xs:text-sm shrink-0">
           {{ userInitial }}
         </div>
@@ -158,7 +166,7 @@ const authStore = useAuthStore()
 const appStore = useAppStore()
 const notificationStore = useNotificationStore()
 
-const emit = defineEmits(['toggleSettings', 'openHistory', 'openTemplates'])
+const emit = defineEmits(['toggleSettings', 'openHistory', 'openTemplates', 'toggleSidebar'])
 
 // 通知面板状态
 const showNotifications = ref(false)

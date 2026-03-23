@@ -1,7 +1,7 @@
 <template>
   <div class="h-screen flex overflow-hidden bg-background-dark text-ink-950 font-display">
     <!-- 左侧导航 (hidden on mobile) -->
-    <MainSidebar class="hidden md:flex" />
+    <MainSidebar />
 
     <!-- 主内容区 -->
     <main class="flex-1 flex flex-col relative bg-white/50 min-w-0">

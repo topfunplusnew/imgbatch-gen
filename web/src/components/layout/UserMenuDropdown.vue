@@ -39,6 +39,7 @@
             个人资料
           </button>
           <button
+            v-if="!props.hideUserCenter"
             @click="goToUserCenter"
             class="w-full px-4 py-2.5 text-left text-sm text-ink-700 hover:bg-primary/5 flex items-center gap-2"
           >
@@ -73,6 +74,10 @@ import { ref, computed } from 'vue'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useAppStore } from '@/store/useAppStore'
 import { useNotificationStore } from '@/store/useNotificationStore'
+
+const props = defineProps({
+  hideUserCenter: { type: Boolean, default: false }
+})
 
 const authStore = useAuthStore()
 const appStore = useAppStore()
