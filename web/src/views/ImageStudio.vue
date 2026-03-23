@@ -20,82 +20,70 @@
     <!-- 主交互区 - View Container -->
     <component
       :is="currentViewComponent"
-      @openModelSelector="showModelSelector = true"
       @openHistory="showHistoryDrawer = true"
       @openTemplates="appStore.toggleTemplateDrawer()"
+      @toggleSettings="handleToggleSettings"
     />
 
-    <!-- 移动端历史抽屉 -->
-    <Transition name="drawer-left">
-      <div v-if="showHistoryDrawer" class="md:hidden fixed inset-0 z-40">
-        <div class="absolute inset-0 bg-ink-950/10 backdrop-blur-sm" @click="showHistoryDrawer = false"></div>
-        <div class="absolute left-0 top-0 w-[85vw] max-w-[320px] md:max-w-[400px] h-full bg-white/95 backdrop-blur-xl border-r border-border-dark flex flex-col shadow-xl">
-          <div class="flex items-center justify-between p-3 border-b border-border-dark shrink-0">
-            <span class="font-bold text-sm uppercase tracking-wider">历史记录</span>
-            <button @click="showHistoryDrawer = false" class="text-ink-500 hover:text-ink-950">
-              <span class="material-symbols-outlined">close</span>
-            </button>
+    <!-- 历史记录居中弹窗 -->
+    <Teleport to="body">
+      <Transition name="panel">
+        <div
+          v-if="showHistoryDrawer"
+          class="fixed inset-0 z-50 flex items-center justify-center">
+          <!-- Backdrop -->
+          <div
+            class="absolute inset-0 bg-black/20 backdrop-blur-sm"
+            @click="showHistoryDrawer = false"></div>
+          <!-- Panel -->
+          <div
+            @click.stop
+            class="relative w-[560px] max-w-[calc(100vw-32px)] bg-white border border-border-dark rounded-xl shadow-2xl overflow-hidden max-h-[85vh]">
+            <CreationRecordList :onClose="() => showHistoryDrawer = false" />
           </div>
-          <MainSidebar class="flex flex-col flex-1 !w-auto !border-0 overflow-hidden" :hide-logo="true" />
         </div>
-        <div class="flex-1 bg-ink-950/10 backdrop-blur-sm" @click="showHistoryDrawer = false" />
-      </div>
-    </Transition>
+      </Transition>
+    </Teleport>
 
-    <!-- 桌面端历史记录抽屉 -->
-    <Transition name="drawer-left">
-      <div v-if="showHistoryDrawer" class="hidden md:flex fixed inset-0 z-40">
-        <div class="absolute inset-0 bg-ink-950/10 backdrop-blur-sm" @click="showHistoryDrawer = false"></div>
-        <div class="absolute left-0 top-0 w-[400px] h-full bg-white/95 backdrop-blur-xl border-r border-border-dark shadow-2xl flex flex-col">
-          <div class="flex items-center justify-between p-4 border-b border-border-dark shrink-0">
-            <span class="font-bold text-sm uppercase tracking-wider">历史记录</span>
-            <button @click="showHistoryDrawer = false" class="text-ink-500 hover:text-ink-950">
-              <span class="material-symbols-outlined">close</span>
-            </button>
+    <!-- 创作记录居中弹窗 -->
+    <Teleport to="body">
+      <Transition name="panel">
+        <div
+          v-if="appStore.showCreationRecords"
+          class="fixed inset-0 z-50 flex items-center justify-center">
+          <!-- Backdrop -->
+          <div
+            class="absolute inset-0 bg-black/20 backdrop-blur-sm"
+            @click="appStore.closeCreationRecords()"></div>
+          <!-- Panel -->
+          <div
+            @click.stop
+            class="relative w-[560px] max-w-[calc(100vw-32px)] bg-white border border-border-dark rounded-xl shadow-2xl overflow-hidden max-h-[85vh]">
+            <CreationRecordList />
           </div>
-          <CreationRecordList />
         </div>
-      </div>
-    </Transition>
+      </Transition>
+    </Teleport>
 
-    <!-- 创作记录右侧抽屉 -->
-    <Transition name="drawer">
-      <div v-if="appStore.showCreationRecords" class="fixed inset-0 z-50" @click.self="appStore.closeCreationRecords()">
-        <!-- 遮罩 -->
-        <div class="absolute inset-0 bg-ink-950/10 backdrop-blur-sm" @click="appStore.closeCreationRecords()"></div>
-        <!-- 抽屉面板 -->
-        <div class="absolute right-0 top-0 w-[85vw] md:w-[60vw] lg:w-[50vw] xl:w-[40vw] h-full flex flex-col bg-white/95 backdrop-blur-xl border-l border-border-dark shadow-xl">
-          <CreationRecordList />
+    <!-- 模板列表居中弹窗 -->
+    <Teleport to="body">
+      <Transition name="panel">
+        <div
+          v-if="appStore.showTemplateDrawer"
+          class="fixed inset-0 z-50 flex items-center justify-center">
+          <!-- Backdrop -->
+          <div
+            class="absolute inset-0 bg-black/20 backdrop-blur-sm"
+            @click="appStore.closeTemplateDrawer()"></div>
+          <!-- Panel -->
+          <div
+            @click.stop
+            class="relative w-[700px] max-w-[calc(100vw-32px)] bg-white border border-border-dark rounded-xl shadow-2xl overflow-hidden max-h-[85vh]">
+            <TemplateDrawer />
+          </div>
         </div>
-      </div>
-    </Transition>
-
-    <!-- 模板列表抽屉 -->
-    <Transition name="drawer">
-      <div v-if="appStore.showTemplateDrawer" class="fixed inset-0 z-50" @click.self="appStore.closeTemplateDrawer()">
-        <!-- 遮罩 -->
-        <div class="absolute inset-0 bg-ink-950/10 backdrop-blur-sm" @click="appStore.closeTemplateDrawer()"></div>
-        <!-- 抽屉面板 -->
-        <div class="absolute right-0 top-0 w-[85vw] md:w-[60vw] lg:w-[50vw] xl:w-[40vw] h-full flex flex-col bg-white/95 backdrop-blur-xl border-l border-border-dark shadow-xl">
-          <TemplateDrawer />
-        </div>
-      </div>
-    </Transition>
-
-    <!-- 模型选择器弹窗 -->
-    <div
-      v-if="showModelSelector"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/10 p-4 xs:p-6 md:p-8 backdrop-blur-sm"
-      @click.self="showModelSelector = false">
-      <div class="w-full max-w-full xs:max-w-2xl md:max-w-3xl max-h-[90vh] overflow-y-auto custom-scrollbar">
-        <ModelSelector
-          :current-model="generatorStore.model"
-          :attachments="generatorStore.attachments"
-          @select="handleModelSelect"
-          @close="showModelSelector = false"
-        />
-      </div>
-    </div>
+      </Transition>
+    </Teleport>
 
     <!-- 用户资料弹窗 -->
     <ProfileModal
@@ -110,7 +98,6 @@ import { ref, onMounted, computed, watch } from 'vue'
 import MainSidebar from '../components/sidebar/MainSidebar.vue'
 import LandingView from './LandingView.vue'
 import ChatView from './ChatView.vue'
-import ModelSelector from '../components/ModelSelector.vue'
 import CreationRecordList from '../components/creation/CreationRecordList.vue'
 import TemplateDrawer from '../components/cases/TemplateDrawer.vue'
 import ProfileModal from '../components/layout/ProfileModal.vue'
@@ -120,7 +107,6 @@ import { useAppStore } from '@/store/useAppStore'
 const generatorStore = useGeneratorStore()
 const appStore = useAppStore()
 
-const showModelSelector = ref(false)
 const showHistoryDrawer = ref(false)
 const showSettingsOverlay = ref(false)
 const mainSidebarRef = ref(null)
@@ -156,18 +142,17 @@ const closeSettingsDrawer = () => {
   }
 }
 
-// 处理模型选择
-const handleModelSelect = (model) => {
-  console.log('选择模型:', model)
-  generatorStore.setSelectedModel(model.model_name)
-  generatorStore.setSelectedModelInfo(model)
-  showModelSelector.value = false
-
-  // 保存到localStorage
-  localStorage.setItem('selectedModel', JSON.stringify({
-    modelName: model.model_name,
-    modelInfo: model
-  }))
+// Toggle settings drawer
+const handleToggleSettings = () => {
+  showSettingsOverlay.value = !showSettingsOverlay.value
+  // Notify MainSidebar to toggle the drawer
+  if (mainSidebarRef.value) {
+    if (showSettingsOverlay.value) {
+      mainSidebarRef.value.toggleSettingsDrawer()
+    } else {
+      mainSidebarRef.value.closeSettingsDrawer()
+    }
+  }
 }
 
 // 组件挂载时恢复模型选择
@@ -190,36 +175,34 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* 左侧抽屉 */
-.drawer-left-enter-active, .drawer-left-leave-active {
-  transition: opacity 0.25s ease;
+/* Panel transition */
+.panel-enter-active,
+.panel-leave-active {
+  transition: opacity 0.2s ease;
 }
-.drawer-left-enter-active > div:first-child,
-.drawer-left-leave-active > div:first-child {
-  transition: transform 0.25s ease;
-}
-.drawer-left-enter-from, .drawer-left-leave-to {
+.panel-enter-from,
+.panel-leave-to {
   opacity: 0;
 }
-.drawer-left-enter-from > div:first-child,
-.drawer-left-leave-to > div:first-child {
-  transform: translateX(-100%);
+.panel-enter-to,
+.panel-leave-from {
+  opacity: 1;
 }
 
-/* 右侧抽屉 (模板、创作记录) */
-.drawer-enter-active, .drawer-leave-active {
-  transition: opacity 0.3s ease;
+/* Scale animation for the panel content */
+.panel-enter-active > div > div:last-child,
+.panel-leave-active > div > div:last-child {
+  transition: transform 0.2s ease, opacity 0.2s ease;
 }
-.drawer-enter-active > div:last-child,
-.drawer-leave-active > div:last-child {
-  transition: transform 0.3s ease;
-}
-.drawer-enter-from, .drawer-leave-to {
+.panel-enter-from > div > div:last-child,
+.panel-leave-to > div > div:last-child {
+  transform: scale(0.95);
   opacity: 0;
 }
-.drawer-enter-from > div:last-child,
-.drawer-leave-to > div:last-child {
-  transform: translateX(100%);
+.panel-enter-to > div > div:last-child,
+.panel-leave-from > div > div:last-child {
+  transform: scale(1);
+  opacity: 1;
 }
 
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }

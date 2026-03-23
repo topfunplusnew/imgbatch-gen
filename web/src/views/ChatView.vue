@@ -1,9 +1,9 @@
 <template>
   <main class="flex-1 flex flex-col relative bg-white/60 min-w-0 xs:min-w-[300px] md:min-w-[400px] lg:min-w-[500px] h-screen overflow-hidden">
     <TopHeader
-      @openModelSelector="$emit('openModelSelector')"
       @openHistory="$emit('openHistory')"
       @openTemplates="$emit('openTemplates')"
+      @toggleSettings="$emit('toggleSettings')"
     />
 
     <!-- 对话滚动区域 -->
@@ -40,7 +40,7 @@ import { useGeneratorStore } from '@/store/useGeneratorStore'
 const generatorStore = useGeneratorStore()
 
 // Define emits
-defineEmits(['openModelSelector', 'openHistory', 'openTemplates'])
+defineEmits(['openHistory', 'openTemplates', 'toggleSettings'])
 
 // 对话区域高度拖拽（通过 chatAreaStyle 控制，这里保持 flex-1 自动）
 const chatAreaStyle = computed(() => ({}))

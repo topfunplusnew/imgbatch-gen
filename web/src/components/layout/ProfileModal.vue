@@ -10,7 +10,7 @@
   >
     <div
       v-if="appStore.showProfileModal"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      class="fixed inset-0 z-50 flex items-center justify-center p-3 xs:p-4"
     >
       <!-- 背景遮罩 -->
       <div
@@ -19,33 +19,33 @@
       ></div>
 
       <!-- 弹窗内容 -->
-      <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+      <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <!-- 头部 -->
-        <div class="sticky top-0 bg-white border-b border-border-dark px-6 py-4 flex items-center justify-between rounded-t-2xl">
-          <h2 class="text-xl font-bold text-ink-950">个人资料</h2>
+        <div class="sticky top-0 bg-white border-b border-border-dark px-4 xs:px-6 py-3 xs:py-4 flex items-center justify-between rounded-t-2xl">
+          <h2 class="text-lg xs:text-xl font-bold text-ink-950">个人资料</h2>
           <button
             @click="appStore.showProfileModal = false"
             class="p-1 rounded-lg hover:bg-gray-100 transition-colors"
           >
-            <span class="material-symbols-outlined !text-2xl text-ink-500">close</span>
+            <span class="material-symbols-outlined !text-xl xs:!text-2xl text-ink-500">close</span>
           </button>
         </div>
 
         <!-- 内容 -->
-        <div class="p-6 space-y-6">
+        <div class="p-4 xs:p-5 sm:p-6 space-y-4 xs:space-y-5 sm:space-y-6">
           <!-- 头像区域 -->
-          <div class="flex items-center gap-4">
-            <div class="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-primary-deep flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+          <div class="flex items-center gap-3 xs:gap-4">
+            <div class="w-16 xs:w-20 h-16 xs:h-20 rounded-full bg-gradient-to-br from-primary to-primary-deep flex items-center justify-center text-white text-xl xs:text-2xl font-bold shadow-lg">
               {{ userInitial }}
             </div>
             <div>
-              <p class="text-lg font-semibold text-ink-950">{{ displayName }}</p>
-              <p class="text-sm text-ink-500">{{ displayEmail || '未设置邮箱' }}</p>
+              <p class="text-base xs:text-lg font-semibold text-ink-950">{{ displayName }}</p>
+              <p class="text-xs xs:text-sm text-ink-500">{{ displayEmail || '未设置邮箱' }}</p>
             </div>
           </div>
 
           <!-- 用户信息表单 -->
-          <form @submit.prevent="handleSaveProfile" class="space-y-4">
+          <form @submit.prevent="handleSaveProfile" class="space-y-3 xs:space-y-4">
             <!-- 用户名 -->
             <div>
               <label class="block text-sm font-medium text-ink-700 mb-1.5">用户名</label>
@@ -55,7 +55,7 @@
                 placeholder="2-20位字符"
                 minlength="2"
                 maxlength="20"
-                class="w-full px-4 py-2.5 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                class="w-full px-3 xs:px-4 py-2 xs:py-2.5 text-sm xs:text-base border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
               />
             </div>
 
@@ -67,7 +67,7 @@
                   :value="authStore.userEmail || '未绑定'"
                   type="email"
                   readonly
-                  class="w-full px-4 py-2.5 border border-border-dark rounded-xl bg-gray-50 text-ink-500 cursor-not-allowed"
+                  class="w-full px-3 xs:px-4 py-2 xs:py-2.5 text-sm xs:text-base border border-border-dark rounded-xl bg-gray-50 text-ink-500 cursor-not-allowed"
                 />
                 <span v-if="authStore.userEmail" class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-primary bg-primary-soft px-2 py-0.5 rounded-full">
                   已验证
@@ -83,7 +83,7 @@
                   :value="authStore.userPhone || '未绑定'"
                   type="tel"
                   readonly
-                  class="w-full px-4 py-2.5 border border-border-dark rounded-xl bg-gray-50 text-ink-500 cursor-not-allowed"
+                  class="w-full px-3 xs:px-4 py-2 xs:py-2.5 text-sm xs:text-base border border-border-dark rounded-xl bg-gray-50 text-ink-500 cursor-not-allowed"
                 />
                 <span v-if="authStore.userPhone" class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-primary bg-primary-soft px-2 py-0.5 rounded-full">
                   已验证
@@ -98,7 +98,7 @@
                 :value="authStore.userId?.slice(0, 8) + '...' || ''"
                 type="text"
                 readonly
-                class="w-full px-4 py-2.5 border border-border-dark rounded-xl bg-gray-50 text-ink-500 cursor-not-allowed font-mono text-sm"
+                class="w-full px-3 xs:px-4 py-2 xs:py-2.5 text-sm xs:text-base border border-border-dark rounded-xl bg-gray-50 text-ink-500 cursor-not-allowed font-mono"
               />
             </div>
 
@@ -109,23 +109,23 @@
                 :value="formatDate(authStore.createdAt)"
                 type="text"
                 readonly
-                class="w-full px-4 py-2.5 border border-border-dark rounded-xl bg-gray-50 text-ink-500 cursor-not-allowed"
+                class="w-full px-3 xs:px-4 py-2 xs:py-2.5 text-sm xs:text-base border border-border-dark rounded-xl bg-gray-50 text-ink-500 cursor-not-allowed"
               />
             </div>
 
             <!-- 按钮组 -->
-            <div class="flex gap-3 pt-4">
+            <div class="flex gap-2 xs:gap-3 pt-4">
               <button
                 type="button"
                 @click="appStore.showProfileModal = false"
-                class="flex-1 py-2.5 px-4 border border-border-dark rounded-xl text-ink-700 hover:bg-gray-50 transition-colors font-medium"
+                class="flex-1 py-2.5 px-3 xs:px-4 border border-border-dark rounded-xl text-ink-700 hover:bg-gray-50 transition-colors font-medium text-sm xs:text-base"
               >
                 取消
               </button>
               <button
                 type="submit"
                 :disabled="saving"
-                class="flex-1 py-2.5 px-4 bg-gradient-to-r from-primary to-primary-deep text-white rounded-xl hover:from-primary-strong hover:to-primary-deep disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-lg"
+                class="flex-1 py-2.5 px-3 xs:px-4 bg-gradient-to-r from-primary to-primary-deep text-white rounded-xl hover:from-primary-strong hover:to-primary-deep disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-lg text-sm xs:text-base"
               >
                 {{ saving ? '保存中...' : '保存' }}
               </button>

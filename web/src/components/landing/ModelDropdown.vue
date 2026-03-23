@@ -2,12 +2,9 @@
   <div class="relative" ref="dropdownRef">
     <button
       @click="togglePanel"
-      class="w-full flex items-center justify-between px-3 py-2 bg-white border border-border-dark rounded-lg hover:border-primary/50 transition-colors">
-      <div class="flex items-center gap-2 min-w-0">
-        <span class="material-symbols-outlined !text-lg text-primary shrink-0">auto_awesome</span>
-        <span class="text-sm truncate">{{ currentModelLabel }}</span>
-      </div>
-      <span class="material-symbols-outlined !text-lg text-ink-500 shrink-0">expand_more</span>
+      class="flex items-center justify-center p-2 bg-white border border-border-dark rounded-lg hover:border-primary/50 transition-colors shrink-0"
+      :title="currentModelLabel">
+      <span class="material-symbols-outlined !text-xl text-primary">auto_awesome</span>
     </button>
 
     <!-- Floating Panel -->

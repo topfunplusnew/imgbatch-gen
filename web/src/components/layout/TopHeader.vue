@@ -15,15 +15,6 @@
         <span class="text-sm font-medium text-slate-500 shrink-0">当前会话:</span>
         <span class="text-sm font-semibold truncate">{{ generatorStore.currentSessionTitle }}</span>
       </div>
-
-      <button
-        @click="$emit('openModelSelector')"
-        class="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border border-border-dark bg-white/90 hover:bg-primary/5 text-ink-950 shrink-0 min-h-[44px] min-w-[44px]"
-      >
-        <span class="material-symbols-outlined !text-lg text-primary">auto_awesome</span>
-        <span class="max-w-[120px] md:max-w-none truncate">{{ currentModelDisplay }}</span>
-        <span class="material-symbols-outlined !text-lg text-ink-500">expand_more</span>
-      </button>
     </div>
 
     <div class="flex items-center gap-1.5 xs:gap-2 md:gap-4">
@@ -37,23 +28,12 @@
 
       <!-- 移动端操作按钮组 -->
       <button
-        @click="$emit('openHistory')"
-        class="lg:hidden flex items-center justify-center p-1.5 rounded-lg border border-border-dark bg-white/90 hover:bg-primary/5 text-ink-700 min-h-[44px] min-w-[44px]"
-        aria-label="Open history">
-        <span class="material-symbols-outlined !text-xl">history</span>
-      </button>
-      <button
         @click="$emit('toggleSettings')"
-        class="lg:hidden flex items-center justify-center p-1.5 rounded-lg border border-border-dark bg-white/90 hover:bg-primary/5 text-ink-700 min-h-[44px] min-w-[44px]"
+        class="flex items-center justify-center p-1.5 rounded-lg border border-border-dark bg-white/90 hover:bg-primary/5 text-ink-700 min-h-[44px] min-w-[44px]"
         aria-label="Open settings">
         <span class="material-symbols-outlined !text-xl">tune</span>
       </button>
-      <button
-        @click="$emit('openTemplates')"
-        class="lg:hidden flex items-center justify-center p-1.5 rounded-lg border border-border-dark bg-white/90 hover:bg-primary/5 text-ink-700 min-h-[44px] min-w-[44px]"
-        aria-label="Open templates">
-        <span class="material-symbols-outlined !text-xl">view_module</span>
-      </button>
+
 
       <!-- 用户菜单（仅在移动端显示） -->
       <!-- 未登录：显示登录按钮 -->
@@ -178,17 +158,13 @@ const authStore = useAuthStore()
 const appStore = useAppStore()
 const notificationStore = useNotificationStore()
 
-const emit = defineEmits(['openModelSelector', 'toggleSettings', 'openHistory', 'openTemplates'])
+const emit = defineEmits(['toggleSettings', 'openHistory', 'openTemplates'])
 
 // 通知面板状态
 const showNotifications = ref(false)
 
 // 用户菜单状态
 const showUserMenu = ref(false)
-
-const currentModelDisplay = computed(() => {
-  return generatorStore.selectedModelInfo?.model_name || generatorStore.model || '选择模型'
-})
 
 // 显示的用户名
 const displayName = computed(() => {

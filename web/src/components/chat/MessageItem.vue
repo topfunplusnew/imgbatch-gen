@@ -18,11 +18,11 @@
       <!-- 文本内容 -->
       <div v-if="msg.content"
            :class="[
-             'leading-relaxed mb-2 px-4 py-3 rounded-2xl block text-left',
+             'leading-relaxed mb-2 px-3 xs:px-4 py-2.5 xs:py-3 rounded-2xl block text-left',
              'text-sm xs:text-base md:text-base',
              msg.role === 'user'
-               ? 'bg-white text-ink-950 border border-primary/20 shadow-sm ml-auto max-w-[85%] md:max-w-[80%]'
-               : getStatusClasses(msg.status) + ' max-w-[85%] md:max-w-[80%]'
+               ? 'bg-white text-ink-950 border border-primary/20 shadow-sm ml-auto max-w-[90%] xs:max-w-[85%] sm:max-w-[80%]'
+               : getStatusClasses(msg.status) + ' max-w-[90%] xs:max-w-[85%] sm:max-w-[80%]'
            ]">
         <span v-if="msg.role === 'assistant'" class="markdown-body" v-html="renderMarkdown(msg.content)"></span>
         <span v-else>{{ msg.content }}</span>
@@ -154,7 +154,7 @@
         v-if="imageAttachments.length > 0 || fileAttachments.length > 0"
         :class="[
           'mt-3 space-y-3',
-          msg.role === 'user' ? 'ml-auto max-w-[85%] md:max-w-[80%]' : 'max-w-[85%] md:max-w-[80%]'
+          msg.role === 'user' ? 'ml-auto max-w-[90%] xs:max-w-[85%] sm:max-w-[80%]' : 'max-w-[90%] xs:max-w-[85%] sm:max-w-[80%]'
         ]"
       >
         <div v-if="imageAttachments.length > 0" class="grid grid-cols-2 md:grid-cols-3 gap-2">

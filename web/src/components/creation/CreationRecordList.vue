@@ -1,12 +1,15 @@
 <template>
   <div class="h-full flex flex-col bg-white">
-    <!-- 标题栏 -->
-<!--    <div class="flex items-center justify-between p-4 border-b border-border-dark shrink-0">-->
-<!--      <span class="font-bold text-sm uppercase tracking-wider">我的创作</span>-->
-<!--    </div>-->
+    <!-- 固定头部 -->
+    <div class="flex items-center justify-between px-4 py-3 border-b border-border-dark shrink-0">
+      <h3 class="text-base font-bold text-ink-950">我的创作</h3>
+      <button @click="handleClose" class="text-ink-500 hover:text-ink-950 transition-colors p-1 rounded hover:bg-gray-100">
+        <span class="material-symbols-outlined !text-xl">close</span>
+      </button>
+    </div>
 
     <!-- 记录列表 -->
-    <div class="flex-1 overflow-y-auto custom-scrollbar p-6">
+    <div class="flex-1 overflow-y-auto custom-scrollbar p-4">
       <!-- 加载状态 -->
       <div v-if="loading && records.length === 0" class="flex items-center justify-center py-20">
         <div class="flex flex-col items-center gap-4">
@@ -25,7 +28,7 @@
       </div>
 
       <!-- 图片网格 -->
-      <div v-else class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3">
         <div
           v-for="record in records"
           :key="record.id"
@@ -112,6 +115,23 @@ import { api } from '@/services/api'
 import { useAppStore } from '@/store/useAppStore'
 
 const appStore = useAppStore()
+
+// Define props
+const props = defineProps({
+  onClose: {
+    type: Function,
+    default: null
+  }
+})
+
+// Handle close
+const handleClose = () => {
+  if (props.onClose) {
+    props.onClose()
+  } else {
+    appStore.closeCreationRecords()
+  }
+}
 
 const loading = ref(false)
 const records = ref([])

@@ -1,15 +1,15 @@
 <template>
   <div class="flex flex-col h-full">
-    <!-- Header -->
-    <div class="flex items-center justify-between p-3 border-b border-border-dark shrink-0">
-      <span class="font-bold text-sm uppercase tracking-wider text-ink-950">全部模板</span>
-      <button @click="appStore.closeTemplateDrawer()" class="text-ink-500 hover:text-ink-950 transition-colors">
-        <span class="material-symbols-outlined">close</span>
+    <!-- 固定头部 -->
+    <div class="flex items-center justify-between px-4 py-3 border-b border-border-dark shrink-0">
+      <h3 class="text-base font-bold text-ink-950">模板库</h3>
+      <button @click="appStore.closeTemplateDrawer()" class="text-ink-500 hover:text-ink-950 transition-colors p-1 rounded hover:bg-gray-100">
+        <span class="material-symbols-outlined !text-xl">close</span>
       </button>
     </div>
 
     <!-- Category Filter -->
-    <div class="shrink-0 px-3 py-2.5 border-b border-border-dark">
+    <div class="shrink-0 px-4 py-3 border-b border-border-dark">
       <div class="relative flex items-center gap-1">
         <!-- Left arrow button -->
         <button
@@ -64,7 +64,7 @@
     </div>
 
     <!-- Template Grid -->
-    <div class="flex-1 overflow-y-auto custom-scrollbar p-3">
+    <div class="flex-1 overflow-y-auto custom-scrollbar p-4">
       <!-- Loading state -->
       <div v-if="loading && displayCases.length === 0" class="flex items-center justify-center py-8">
         <div class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>

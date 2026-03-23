@@ -1,9 +1,9 @@
 <template>
   <div class="case-card group relative rounded-lg overflow-hidden border border-border-dark hover:border-primary/50 hover:shadow-md transition-all duration-200 bg-white">
     <!-- 横向布局：左侧图片，右侧标题 -->
-    <div class="flex gap-2 p-2 items-center">
+    <div class="flex gap-2 p-2 xs:p-2.5 items-center">
       <!-- 左侧图片 -->
-      <div class="relative w-12 xs:w-14 md:w-12 h-12 xs:h-14 md:h-12 flex-shrink-0 overflow-hidden bg-gray-100 rounded">
+      <div class="relative w-12 xs:w-14 sm:w-12 h-12 xs:h-14 sm:h-12 flex-shrink-0 overflow-hidden bg-gray-100 rounded">
         <img
           :src="caseData.thumbnail_url || caseData.image_url || '/placeholder-case.png'"
           :alt="caseData.title"
@@ -14,17 +14,17 @@
 
       <!-- 右侧标题 -->
       <div class="flex-1 min-w-0 flex items-center">
-        <h3 class="font-semibold text-gray-900 text-sm leading-tight line-clamp-1">{{ caseData.title }}</h3>
+        <h3 class="font-semibold text-gray-900 text-xs xs:text-sm leading-tight line-clamp-1">{{ caseData.title }}</h3>
       </div>
 
       <!-- 操作按钮 -->
       <div class="flex items-center pl-1 border-l border-gray-200 flex-shrink-0">
         <button
           @click="viewDetails"
-          class="p-2 md:p-1 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 text-gray-500 hover:text-primary hover:bg-primary/5 rounded transition-colors flex items-center justify-center"
+          class="p-1.5 xs:p-2 min-h-[40px] xs:min-h-[44px] min-w-[40px] xs:min-w-[44px] text-gray-500 hover:text-primary hover:bg-primary/5 rounded transition-colors flex items-center justify-center"
           title="查看详情"
         >
-          <span class="material-symbols-outlined !text-base">more_horiz</span>
+          <span class="material-symbols-outlined !text-base xs:!text-lg">more_horiz</span>
         </button>
       </div>
     </div>

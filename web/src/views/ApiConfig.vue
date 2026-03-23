@@ -10,16 +10,16 @@
       </header>
 
       <!-- 配置内容区 -->
-      <div class="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
-        <div class="max-w-4xl mx-auto space-y-6 md:space-y-8">
+      <div class="flex-1 overflow-y-auto custom-scrollbar p-3 xs:p-4 sm:p-5 md:p-6 lg:p-8">
+        <div class="max-w-full sm:max-w-3xl md:max-w-4xl mx-auto space-y-4 xs:space-y-5 md:space-y-6 lg:space-y-8">
           <!-- API 配置 -->
-          <div class="bg-white border border-border-dark rounded-2xl p-4 md:p-6 space-y-4 shadow-lg">
-            <div class="flex items-center justify-between mb-4">
+          <div class="bg-white border border-border-dark rounded-2xl p-3 xs:p-4 sm:p-5 md:p-6 space-y-3 xs:space-y-4 shadow-lg">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3 xs:mb-4">
               <h3 class="text-base md:text-lg font-semibold">API 配置</h3>
               <button
                 @click="testConnection"
                 :disabled="!apiStore.apiKey"
-                class="px-3 md:px-4 py-2 text-sm font-medium rounded-lg border border-border-dark bg-white hover:bg-primary/5 disabled:opacity-50 disabled:cursor-not-allowed">
+                class="px-3 xs:px-4 py-2 text-sm font-medium rounded-lg border border-border-dark bg-white hover:bg-primary/5 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
                 <span class="material-symbols-outlined !text-base align-middle mr-1">sync</span>
                 测试连接
               </button>
@@ -39,7 +39,7 @@
           </div>
 
           <!-- 默认模型设置 -->
-          <div class="bg-white border border-border-dark rounded-2xl p-4 md:p-6 space-y-4 shadow-lg">
+          <div class="bg-white border border-border-dark rounded-2xl p-3 xs:p-4 sm:p-5 md:p-6 space-y-3 xs:space-y-4 shadow-lg">
             <h3 class="text-base md:text-lg font-semibold mb-4">默认模型设置</h3>
             <div>
               <label class="block text-xs font-bold text-slate-500 uppercase mb-2">默认模型</label>
@@ -71,15 +71,15 @@
           </div>
 
           <!-- 操作按钮 -->
-          <div class="flex gap-3 md:gap-4">
+          <div class="flex flex-col sm:flex-row gap-2 xs:gap-3 md:gap-4">
             <button
               @click="saveConfig"
-              class="flex-1 py-3 bg-primary-strong text-white rounded-xl font-semibold hover:bg-primary-deep transition-colors text-sm md:text-base shadow-lg">
+              class="flex-1 py-3 bg-primary-strong text-white rounded-xl font-semibold hover:bg-primary-deep transition-colors text-sm xs:text-base shadow-lg">
               保存配置
             </button>
             <button
               @click="apiStore.resetConfig()"
-              class="flex-1 py-3 bg-white border border-border-dark text-ink-700 rounded-xl font-semibold hover:bg-primary/5 transition-colors text-sm md:text-base">
+              class="flex-1 py-3 bg-white border border-border-dark text-ink-700 rounded-xl font-semibold hover:bg-primary/5 transition-colors text-sm xs:text-base">
               重置配置
             </button>
           </div>

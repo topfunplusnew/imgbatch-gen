@@ -1,91 +1,97 @@
 <template>
-  <div class="relative" ref="dropdownRef">
+  <div>
     <button
-      @click="toggleDropdown"
-      class="w-full flex items-center justify-between px-3 py-2 bg-white border border-border-dark rounded-lg hover:border-primary/50 transition-colors">
-      <span class="text-sm">{{ currentRatioLabel }}</span>
-      <span class="material-symbols-outlined !text-lg text-ink-500 shrink-0">expand_more</span>
+      @click="isOpen = true"
+      class="flex items-center justify-center p-2 bg-white border border-border-dark rounded-lg hover:border-primary/50 transition-colors"
+      :title="currentRatioLabel">
+      <span class="material-symbols-outlined !text-xl text-primary">crop_free</span>
     </button>
 
-    <Transition name="dropdown">
-      <div
-        v-if="isOpen"
-        class="absolute top-full left-0 right-0 mt-1 bg-white border border-border-dark rounded-lg shadow-lg z-50 overflow-hidden">
-        <div class="max-h-48 overflow-y-auto custom-scrollbar p-1">
+    <!-- Teleport Modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div
+          v-if="isOpen"
+          @click="isOpen = false"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/10 backdrop-blur-sm p-4">
           <div
-            v-for="ratio in ratioOptions"
-            :key="ratio.value"
-            @click="selectRatio(ratio)"
-            :class="[
-              'flex items-center justify-between px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors',
-              selectedRatio === ratio.value ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-gray-50'
-            ]">
-            <div class="flex items-center gap-2">
-              <span class="font-medium">{{ ratio.label }}</span>
-              <span class="text-xs text-ink-500">{{ ratio.desc }}</span>
+            @click.stop
+            class="bg-white border border-border-dark rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-4 py-3 border-b border-border-dark">
+              <h3 class="text-sm font-bold text-ink-950">选择比例</h3>
+              <button @click="isOpen = false" class="text-ink-500 hover:text-ink-950 transition-colors">
+                <span class="material-symbols-outlined !text-xl">close</span>
+              </button>
             </div>
-            <div class="flex items-center gap-1 text-xs text-ink-500">
-              <span>{{ ratio.w }}×{{ ratio.h }}</span>
+
+            <!-- Ratio Grid -->
+            <div class="p-4 grid grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto custom-scrollbar">
+              <button
+                v-for="ratio in ratioOptions"
+                :key="ratio.value"
+                @click="selectRatio(ratio)"
+                :class="[
+                  'flex flex-col items-center justify-center gap-1 p-3 rounded-xl transition-colors',
+                  selectedRatio === ratio.value
+                    ? 'bg-primary-strong text-white shadow-sm'
+                    : 'bg-white text-ink-700 border border-border-dark hover:bg-primary/5'
+                ]">
+                <!-- 比例预览框 -->
+                <div class="flex items-center justify-center w-8 h-8">
+                  <div
+                    :style="getRatioBoxStyle(ratio)"
+                    :class="[
+                      'rounded-sm border-2',
+                      selectedRatio === ratio.value ? 'border-white' : 'border-slate-500'
+                    ]">
+                  </div>
+                </div>
+                <span class="text-xs font-bold leading-tight">{{ ratio.label }}</span>
+                <span class="text-[10px] opacity-80">{{ ratio.desc }}</span>
+              </button>
+            </div>
+
+            <!-- Custom Ratio Input -->
+            <div v-if="selectedRatio === 'custom'" class="px-4 pb-4 border-t border-border-dark">
+              <div class="grid grid-cols-2 gap-2">
+                <input
+                  v-model.number="customWidth"
+                  type="number"
+                  placeholder="宽度"
+                  min="64"
+                  max="8192"
+                  class="w-full px-3 py-2 border border-border-dark rounded-lg text-sm focus:ring-1 focus:ring-primary focus:outline-none">
+                <input
+                  v-model.number="customHeight"
+                  type="number"
+                  placeholder="高度"
+                  min="64"
+                  max="8192"
+                  class="w-full px-3 py-2 border border-border-dark rounded-lg text-sm focus:ring-1 focus:ring-primary focus:outline-none">
+              </div>
+              <button
+                @click="applyCustomRatio"
+                class="w-full mt-2 px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-strong transition-colors">
+                应用自定义尺寸
+              </button>
             </div>
           </div>
         </div>
-      </div>
-    </Transition>
-
-    <!-- Custom Ratio Modal -->
-    <div
-      v-if="showCustomModal"
-      @click="showCustomModal = false"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/10 p-4 backdrop-blur-sm">
-      <div
-        @click.stop
-        class="bg-white border border-border-dark rounded-xl p-4 max-w-sm w-full shadow-xl">
-        <h3 class="text-sm font-semibold mb-3">自定义比例</h3>
-        <div class="grid grid-cols-2 gap-2">
-          <input
-            v-model.number="customWidth"
-            type="number"
-            placeholder="宽度"
-            min="64"
-            max="8192"
-            class="w-full px-3 py-2 border border-border-dark rounded-lg text-sm focus:ring-1 focus:ring-primary focus:outline-none">
-          <input
-            v-model.number="customHeight"
-            type="number"
-            placeholder="高度"
-            min="64"
-            max="8192"
-            class="w-full px-3 py-2 border border-border-dark rounded-lg text-sm focus:ring-1 focus:ring-primary focus:outline-none">
-        </div>
-        <p class="text-xs text-ink-500 mt-2">提示：输入宽高后，将根据当前质量设置自动调整</p>
-        <div class="flex justify-end gap-2 mt-3">
-          <button
-            @click="showCustomModal = false"
-            class="px-4 py-2 text-sm text-ink-700 hover:bg-gray-100 rounded-lg transition-colors">
-            取消
-          </button>
-          <button
-            @click="applyCustomRatio"
-            class="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-strong transition-colors">
-            确定
-          </button>
-        </div>
-      </div>
-    </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 
 const generatorStore = useGeneratorStore()
 const isOpen = ref(false)
 const selectedRatio = ref('1:1')
-const showCustomModal = ref(false)
 const customWidth = ref(1024)
 const customHeight = ref(1024)
-const dropdownRef = ref(null)
 
 const ratioOptions = [
   { value: 'auto',  label: 'Auto',  desc: '自动',   w: 1024, h: 1024 },
@@ -110,17 +116,22 @@ const currentRatioLabel = computed(() => {
   return current ? `${current.label} ${current.desc}` : '选择比例'
 })
 
-const toggleDropdown = () => {
-  isOpen.value = !isOpen.value
+const getRatioBoxStyle = (ratio) => {
+  if (!ratio.w || !ratio.h) return { width: '20px', height: '20px' }
+  const maxDim = 24
+  const r = ratio.w / ratio.h
+  if (r >= 1) {
+    return { width: `${maxDim}px`, height: `${Math.round(maxDim / r)}px` }
+  } else {
+    return { width: `${Math.round(maxDim * r)}px`, height: `${maxDim}px` }
+  }
 }
 
 const selectRatio = (ratio) => {
   if (ratio.value === 'custom') {
-    // Open custom ratio modal
     customWidth.value = generatorStore.width
     customHeight.value = generatorStore.height
-    showCustomModal.value = true
-    isOpen.value = false
+    selectedRatio.value = 'custom'
     return
   }
   selectedRatio.value = ratio.value
@@ -151,14 +162,6 @@ const applyCustomRatio = () => {
     generatorStore.height = customHeight.value
     generatorStore.aspectRatio = 'custom'
     selectedRatio.value = 'custom'
-    showCustomModal.value = false
-  }
-}
-
-const handleClickOutside = (event) => {
-  // Don't close if clicking on the modal
-  if (showCustomModal.value) return
-  if (dropdownRef.value && !dropdownRef.value.contains(event.target)) {
     isOpen.value = false
   }
 }
@@ -178,48 +181,49 @@ watch(() => [generatorStore.width, generatorStore.height], () => {
   else if (Math.abs(ratio - 5/4) < 0.01) selectedRatio.value = '5:4'
   else if (Math.abs(ratio - 21/9) < 0.01) selectedRatio.value = '21:9'
   else selectedRatio.value = 'custom'
-})
-
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
-  // Initialize selected ratio from store
-  if (generatorStore.aspectRatio) {
-    selectedRatio.value = generatorStore.aspectRatio
-  }
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside)
-})
+}, { immediate: true })
 </script>
 
 <style scoped>
 .custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #d1d8d3;
-  border-radius: 10px;
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
-/* Dropdown transition */
-.dropdown-enter-active,
-.dropdown-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+/* Modal transition */
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.2s ease;
 }
-.dropdown-enter-active > div,
-.dropdown-leave-active > div {
-  transition: transform 0.2s ease;
-}
-.dropdown-enter-from,
-.dropdown-leave-to {
+.modal-enter-from,
+.modal-leave-to {
   opacity: 0;
 }
-.dropdown-enter-from > div,
-.dropdown-leave-to > div {
-  transform: translateY(-8px);
+.modal-enter-to,
+.modal-leave-from {
+  opacity: 1;
+}
+
+/* Scale animation */
+.modal-enter-active > div > div:last-child,
+.modal-leave-active > div > div:last-child {
+  transition: transform 0.2s ease;
+}
+.modal-enter-from > div > div:last-child,
+.modal-leave-to > div > div:last-child {
+  transform: scale(0.95);
+}
+.modal-enter-to > div > div:last-child,
+.modal-leave-from > div > div:last-child {
+  transform: scale(1);
 }
 </style>

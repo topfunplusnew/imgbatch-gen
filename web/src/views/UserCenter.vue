@@ -16,8 +16,8 @@
     <div class="max-w-7xl mx-auto px-4 py-8">
       <div class="flex flex-col md:flex-row gap-6">
         <!-- 左侧导航栏 -->
-        <aside class="w-full md:w-56 shrink-0">
-          <nav class="bg-white rounded-2xl shadow-sm p-2 space-y-1 sticky top-24">
+        <aside class="w-full md:w-56 lg:w-64 shrink-0">
+          <nav class="bg-white rounded-2xl shadow-sm p-2 space-y-1 md:sticky md:top-24">
             <button
               @click="appStore.setUserCenterTab('account')"
               :class="[

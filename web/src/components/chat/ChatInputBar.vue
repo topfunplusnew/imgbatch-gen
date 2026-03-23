@@ -53,7 +53,6 @@
           @drop.prevent="handleDrop"
           :class="[
             'relative z-10 bg-white/95 border rounded-2xl shadow-xl',
-            'min-w-[200px] xs:min-w-[240px] md:min-w-[280px]',
             'w-full',
             isDragging ? 'border-primary border-2 bg-primary/5' : 'border-border-dark'
           ]">
@@ -83,6 +82,14 @@
               <span class="material-symbols-outlined">attach_file</span>
             </button>
 
+            <!-- 模型选择按钮 -->
+            <button
+              @click="showModelSelector = true"
+              class="flex items-center justify-center p-2 hover:bg-primary/5 rounded-xl text-ink-700 transition-colors shrink-0 border border-border-dark/50 bg-white/80"
+              :title="currentModelDisplay">
+              <span class="material-symbols-outlined !text-lg text-primary">auto_awesome</span>
+            </button>
+
             <textarea
               v-model="generatorStore.prompt"
               @keydown.enter.exact.prevent="handleSend"
@@ -107,15 +114,33 @@
         </div>
       </div>
     </div>
+
+    <!-- 模型选择器弹窗 -->
+    <Teleport to="body">
+      <div
+        v-if="showModelSelector"
+        class="fixed inset-0 z-50 grid place-items-center bg-ink-950/10 p-4 backdrop-blur-sm"
+        @click.self="showModelSelector = false">
+        <div class="w-full max-w-3xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+          <ModelSelector
+            :current-model="generatorStore.model"
+            :attachments="generatorStore.attachments"
+            @select="handleModelSelect"
+            @close="showModelSelector = false"
+          />
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, onUnmounted } from 'vue';
+import { ref, onUnmounted, computed } from 'vue';
 import { useGeneratorStore } from '@/store/useGeneratorStore';
 import { useAppStore } from '@/store/useAppStore';
 import { notification } from '@/utils/notification';
 import { api } from '@/services/api';
+import ModelSelector from '@/components/ModelSelector.vue';
 
 const generatorStore = useGeneratorStore();
 const appStore = useAppStore();
@@ -123,12 +148,36 @@ const fileInputRef = ref(null);
 const inputBoxRef = ref(null);
 const isDragging = ref(false);
 const isHoveringFile = ref(null);
+const showModelSelector = ref(false);
+
+// 当前模型显示名称
+const currentModelDisplay = computed(() => {
+  if (generatorStore.selectedModelInfo?.display_name) {
+    return generatorStore.selectedModelInfo.display_name;
+  }
+  return generatorStore.model || '选择模型';
+});
 
 // 聚焦时清除案例详情
 const handleFocus = () => {
   if (appStore.selectedCase) {
     appStore.clearSelectedCase();
   }
+};
+
+// 处理模型选择
+const handleModelSelect = (model) => {
+  generatorStore.setSelectedModel(model.model_name);
+  generatorStore.setSelectedModelInfo(model);
+  showModelSelector.value = false;
+
+  // 保存到localStorage
+  localStorage.setItem('selectedModel', JSON.stringify({
+    modelName: model.model_name,
+    modelInfo: model
+  }));
+
+  notification.success('模型已切换', `已切换到 ${model.model_name}`);
 };
 
 const textareaHeight = ref(80)
@@ -273,6 +322,34 @@ const cleanupFilePreviewUrls = () => {
   });
   filePreviewUrls.clear();
 };
+
+/**
+ * 从 File 对象构建消息文件元数据
+ */
+const buildMessageFileMeta = (file) => {
+  return {
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    url: null, // 上传前为 null，上传后更新
+  }
+}
+
+/**
+ * 将上传结果补丁到消息文件中
+ */
+const patchMessageFilesWithUploadResults = (messageId, messageFiles, uploadResults) => {
+  const message = generatorStore.messages.find(m => m.id === messageId)
+  if (!message || !message.files) return
+
+  // 按顺序匹配上传结果
+  message.files.forEach((file, index) => {
+    if (uploadResults[index]) {
+      file.url = uploadResults[index].url
+      file.file_id = uploadResults[index].file_id
+    }
+  })
+}
 
 /**
  * 发送消息 - 根据模型类型分流

@@ -76,9 +76,10 @@
 
           <!-- Parameter Controls & Start Button Row -->
           <div class="flex items-center gap-2 xs:gap-3 mt-4">
-            <ModelDropdown class="flex-1" />
-            <RatioDropdown class="flex-[1.5]" />
-            <ResolutionDropdown class="flex-1" />
+            <ModelDropdown class="shrink-0" />
+            <RatioDropdown class="shrink-0" />
+            <ResolutionDropdown class="shrink-0" />
+            <div class="flex-1 min-w-0"></div>
             <button
               @click="startGeneration"
               :disabled="!promptInput.trim() && attachments.length === 0"

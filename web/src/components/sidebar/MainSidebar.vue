@@ -1,34 +1,34 @@
 <template>
-  <aside class="w-12 xs:w-16 sm:w-20 md:w-56 lg:w-56 xl:w-64 flex flex-col border-r border-border-dark bg-white/90 backdrop-blur-xl shrink-0 h-screen transition-all duration-300 relative">
+  <aside class="w-28 xs:w-32 sm:w-44 md:w-56 lg:w-56 xl:w-64 flex flex-col border-r border-border-dark bg-white/90 backdrop-blur-xl shrink-0 h-screen transition-all duration-300 relative">
     <!-- Logo Section -->
     <nav v-if="!hideLogo" class="px-3 xs:px-4 md:px-4 pt-4 pb-3 space-y-1 shrink-0">
       <!-- App Logo and Settings Toggle Button -->
-      <div class="flex items-center gap-2 mb-4">
-        <div class="w-8 h-8 bg-gradient-to-br from-primary to-primary-deep rounded-lg flex items-center justify-center">
+      <div class="flex items-center justify-center mb-4">
+        <div class="w-8 h-8 bg-gradient-to-br from-primary to-primary-deep rounded-lg flex items-center justify-center shrink-0">
           <span class="material-symbols-outlined !text-lg text-white">auto_awesome</span>
         </div>
-        <span class="text-sm font-bold text-ink-950 hidden md:block">AI 生图助手</span>
+        <span class="text-sm font-bold text-ink-950 hidden md:block ml-2">AI 生图助手</span>
       </div>
 
       <!-- Main Navigation Menu -->
-      <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-3">主菜单</div>
+      <div class="text-[10px] xs:text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 text-center md:text-left md:px-3">主菜单</div>
 
       <button
         v-for="item in menuItems"
         :key="item.value || item.action"
         :class="getMenuItemClass(item)"
         @click="handleMenuClick(item)"
-        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-left"
+        class="w-full flex items-center justify-center md:justify-start gap-2 md:gap-3 px-2 md:px-3 py-2.5 rounded-xl transition-colors text-left"
       >
-        <span class="material-symbols-outlined">{{ item.icon }}</span>
-        <span class="hidden md:inline">{{ item.text }}</span>
+        <span class="material-symbols-outlined text-[20px] xs:text-[22px] md:text-[24px]">{{ item.icon }}</span>
+        <span class="hidden md:inline text-xs xs:text-sm">{{ item.text }}</span>
       </button>
     </nav>
 
     <!-- 案例模板区域 -->
     <div class="flex-1 flex flex-col min-h-0 border-t border-border-dark">
       <!-- 搜索框 -->
-      <div class="px-2 xs:px-3 py-2.5 shrink-0">
+      <div class="px-2 xs:px-3 py-3 shrink-0">
         <div class="relative">
           <span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-500 !text-sm">search</span>
           <input
@@ -36,7 +36,7 @@
             @input="handleSearch"
             type="text"
             placeholder="搜索模板..."
-            class="w-full bg-white border border-border-dark rounded-lg pl-8 pr-2.5 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:border-primary"
+            class="w-full bg-white border border-border-dark rounded-lg pl-8 pr-2 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:border-primary"
           >
         </div>
       </div>
@@ -89,7 +89,7 @@
     <Transition name="settings-drawer">
       <div
         v-if="showSettingsDrawer"
-        class="fixed top-0 h-full w-[85vw] md:w-80 lg:w-96 xl:w-[24rem] bg-white/95 backdrop-blur-xl border-r border-border-dark shadow-2xl z-[60] flex flex-col settings-drawer-panel">
+        class="fixed top-0 h-full w-[320px] xs:w-[360px] sm:w-[400px] md:w-80 lg:w-96 xl:w-[24rem] bg-white/95 backdrop-blur-xl border-r border-border-dark shadow-2xl z-[60] flex flex-col settings-drawer-panel">
         <!-- Drawer Header -->
         <div class="flex items-center justify-between px-4 py-3 border-b border-border-dark shrink-0">
           <div class="flex items-center gap-2">
@@ -315,6 +315,7 @@ const closeSettingsDrawer = () => {
 // Expose closeSettingsDrawer to parent
 defineExpose({
   closeSettingsDrawer,
+  toggleSettingsDrawer,
   showSettingsDrawer
 })
 
@@ -573,70 +574,34 @@ onUnmounted(() => {
 }
 
 /* Settings drawer positioning - 从侧边栏右边缘开始 */
-/* 默认移动端 */
+/* 默认移动端 (w-28 = 7rem = 112px) */
 .settings-drawer-panel {
-  left: 0 !important;
+  left: 7rem;
 }
 
-/* 小屏幕及以上 (sm: >= 640px, sidebar w-20 = 5rem) */
+/* xs断点 (475px, sidebar w-32 = 8rem = 128px) */
+@media (min-width: 475px) {
+  .settings-drawer-panel {
+    left: 8rem;
+  }
+}
+
+/* sm断点 (640px, sidebar w-44 = 11rem = 176px) */
 @media (min-width: 640px) {
   .settings-drawer-panel {
-    left: 5rem !important;
+    left: 11rem;
   }
 }
 
-/* 中等屏幕及以上 (md: >= 768px, sidebar w-56 = 14rem) */
+/* md断点 (768px, sidebar w-56 = 14rem = 224px) */
 @media (min-width: 768px) {
-  .settings-drawer-panel {
-    left: 14rem !important;
-  }
-}
-
-/* 大屏幕及以上 (lg: >= 1024px, sidebar w-56 = 14rem) */
-@media (min-width: 1024px) {
-  .settings-drawer-panel {
-    left: 14rem !important;
-  }
-}
-
-/* 超大屏幕及以上 (xl: >= 1280px, sidebar w-64 = 16rem) */
-@media (min-width: 1280px) {
-  .settings-drawer-panel {
-    left: 16rem !important;
-  }
-}
-
-/* 2XL屏幕 (2xl: >= 1536px, sidebar w-64 = 16rem) */
-@media (min-width: 1536px) {
-  .settings-drawer-panel {
-    left: 16rem !important;
-  }
-}
-
-/* Small tablet and up (sidebar: w-20 = 5rem) */
-@media (min-width: 768px) {
-  .settings-drawer-panel {
-    /* 从侧边栏右边缘开始 */
-    left: 5rem;
-  }
-}
-
-/* Medium screens (sidebar: w-56 = 14rem) */
-@media (min-width: 1024px) {
   .settings-drawer-panel {
     left: 14rem;
   }
 }
 
-/* Large screens (sidebar: w-56 = 14rem) */
+/* xl断点 (1280px, sidebar w-64 = 16rem = 256px) */
 @media (min-width: 1280px) {
-  .settings-drawer-panel {
-    left: 14rem;
-  }
-}
-
-/* Extra large screens (sidebar: w-64 = 16rem) */
-@media (min-width: 1536px) {
   .settings-drawer-panel {
     left: 16rem;
   }
