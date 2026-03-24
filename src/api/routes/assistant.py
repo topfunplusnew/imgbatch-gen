@@ -1140,7 +1140,6 @@ async def handle_single_generate(message: ChatMessage, intent: Intent, task_mana
                 credential = await db_manager.store_api_credential(
                     api_key=api_key,
                     provider="relay",
-                    base_url=settings.relay_base_url,
                     user_id="assistant",
                     session_id=session_id or None,
                 )
@@ -1156,7 +1155,6 @@ async def handle_single_generate(message: ChatMessage, intent: Intent, task_mana
                     "quality": params.quality,
                     "n": params.n,
                     "credential_id": credential_id,
-                    "relay_base_url": settings.relay_base_url,
                 }
             )
 

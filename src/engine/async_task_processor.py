@@ -1,7 +1,6 @@
 """Async task background processor."""
 
 import asyncio
-import os
 
 from loguru import logger
 
@@ -17,7 +16,7 @@ class AsyncTaskProcessor:
     def __init__(self):
         self.manager = get_async_task_manager()
         self.running = False
-        self.default_base_url = os.getenv("RELAY_BASE_URL") or settings.relay_base_url
+        self.default_base_url = settings.relay_base_url
 
         if not self.default_base_url:
             logger.warning("Async task processor has no default relay base URL configured.")
@@ -129,7 +128,7 @@ class AsyncTaskProcessor:
     async def _build_client_for_task(self, task) -> RelayClient:
         params = task.params or {}
         credential_id = params.get("credential_id")
-        base_url = params.get("relay_base_url") or self.default_base_url
+        base_url = self.default_base_url
         api_key = None
 
         if credential_id:
@@ -138,7 +137,6 @@ class AsyncTaskProcessor:
             if not credential:
                 raise ValueError("Async task is missing a usable API credential.")
             api_key = credential["api_key"]
-            base_url = credential.get("base_url") or base_url
 
         if not credential_id:
             raise ValueError("Async task is missing credential_id; API key must come from request.")

@@ -1,39 +1,49 @@
-"""系统配置API路由（仅管理员可访问）"""
+"""System configuration endpoints for admin-only settings."""
 
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel, Field
-from typing import Dict, Any, Optional, List
+from typing import Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
+from pydantic import BaseModel, Field
+from sqlalchemy import select
 
-from ...database import get_db_manager, SystemConfig
+from ...database import SystemConfig, get_db_manager
+from ...utils.credential_crypto import encrypt_api_key
 from ..auth import RequiredAuthDependency
-from ...services.auth_service import get_auth_service
-from ...utils.credential_crypto import encrypt_api_key, decrypt_api_key, mask_api_key
 
 
-router = APIRouter(prefix="/api/v1/admin/system-config", tags=["系统配置"])
+router = APIRouter(prefix="/api/v1/admin/system-config", tags=["system-config"])
 
+MASKED_VALUE = "••••••••"
 
-# ==================== 请求模型 ====================
+PREDEFINED_CONFIGS = {
+    "relay.api_key": {
+        "config_type": "string",
+        "category": "api",
+        "description": "Relay API Key (encrypted at rest)",
+        "is_encrypted": True,
+        "is_public": False,
+    },
+}
 
 
 class UpdateConfigRequest(BaseModel):
-    """更新配置请求"""
-    config_key: str = Field(..., description="配置键")
-    config_value: str = Field(..., description="配置值（JSON字符串）")
-    description: Optional[str] = Field(None, description="配置说明")
+    """Request body for updating a single system config."""
+
+    config_key: str = Field(..., description="Config key")
+    config_value: str = Field(..., description="Config value")
+    description: Optional[str] = Field(None, description="Config description")
 
 
 class BatchUpdateConfigRequest(BaseModel):
-    """批量更新配置请求"""
-    configs: Dict[str, str] = Field(..., description="配置键值对")
+    """Request body for updating multiple system configs."""
 
-
-# ==================== 响应模型 ====================
+    configs: Dict[str, str] = Field(..., description="Config map")
 
 
 class ConfigItemResponse(BaseModel):
-    """配置项响应"""
+    """System config item returned to the frontend."""
+
     config_key: str
     config_value: str
     config_type: str
@@ -42,356 +52,202 @@ class ConfigItemResponse(BaseModel):
     updated_at: Optional[str] = None
 
 
-# ==================== 辅助函数 ====================
-
-
 async def verify_admin(user_id: str) -> bool:
-    """验证用户是否为管理员"""
-    auth_service = get_auth_service()
-    db_manager = get_db_manager()
+    """Return whether the current user is an admin."""
 
+    db_manager = get_db_manager()
     user = await db_manager.get_user_by_id(user_id)
-    if not user:
-        return False
-
-    return user.role == "admin"
+    return bool(user and user.role == "admin")
 
 
-# 预定义的配置项
-PREDEFINED_CONFIGS = {
-    # API 配置
-    "relay.api_key": {
-        "config_type": "string",
-        "category": "api",
-        "description": "中转站API Key（加密存储）",
-        "is_encrypted": True,
-        "is_public": False,
-    },
-    "relay.base_url": {
-        "config_type": "string",
-        "category": "api",
-        "description": "中转站Base URL",
-        "is_encrypted": False,
-        "is_public": False,
-    },
-    "openai.api_key": {
-        "config_type": "string",
-        "category": "api",
-        "description": "OpenAI API Key（可选，用于直接调用OpenAI）",
-        "is_encrypted": True,
-        "is_public": False,
-    },
-    "openai.base_url": {
-        "config_type": "string",
-        "category": "api",
-        "description": "OpenAI Base URL（可选）",
-        "is_encrypted": False,
-        "is_public": False,
-    },
-    "config.api_url": {
-        "config_type": "string",
-        "category": "api",
-        "description": "模型配置接口URL",
-        "is_encrypted": False,
-        "is_public": False,
-    },
-
-    # 存储配置
-    "storage.type": {
-        "config_type": "string",
-        "category": "storage",
-        "description": "存储类型 (local/minio)",
-        "is_encrypted": False,
-        "is_public": False,
-    },
-    "minio.endpoint": {
-        "config_type": "string",
-        "category": "storage",
-        "description": "MinIO服务地址",
-        "is_encrypted": False,
-        "is_public": False,
-    },
-    "minio.access_key": {
-        "config_type": "string",
-        "category": "storage",
-        "description": "MinIO访问密钥",
-        "is_encrypted": True,
-        "is_public": False,
-    },
-    "minio.secret_key": {
-        "config_type": "string",
-        "category": "storage",
-        "description": "MinIO密钥",
-        "is_encrypted": True,
-        "is_public": False,
-    },
-    "minio.bucket_name": {
-        "config_type": "string",
-        "category": "storage",
-        "description": "MinIO存储桶名称",
-        "is_encrypted": False,
-        "is_public": False,
-    },
-}
-
-
-# ==================== 路由 ====================
-
-
-@router.get("/list", response_model=List[ConfigItemResponse], summary="获取所有配置项")
-async def get_all_configs(user: dict = Depends(RequiredAuthDependency())):
-    """
-    获取所有系统配置项
-
-    - 需要管理员权限
-    - 返回所有配置项
-    - 加密字段返回占位符（••••••••），表示已配置但不显示明文
-    """
-    # 验证管理员权限
-    if not await verify_admin(user["id"]):
-        raise HTTPException(status_code=403, detail="需要管理员权限")
+async def _ensure_predefined_configs(user_id: str) -> None:
+    """Create missing supported configs without touching obsolete rows."""
 
     db_manager = get_db_manager()
-
-    try:
-        async with db_manager.get_session() as session:
-            from sqlalchemy import select
-
-            stmt = select(SystemConfig)
-            result = await session.execute(stmt)
-            configs = result.scalars().all()
-
-            # 如果数据库中没有配置，初始化预定义配置
-            if not configs:
-                await _init_predefined_configs(db_manager, user["id"])
-                # 重新查询
-                result = await session.execute(stmt)
-                configs = result.scalars().all()
-
-            results = []
-            for c in configs:
-                # 对于加密字段，如果有值则显示占位符
-                config_value = c.config_value or ""
-                predefined = PREDEFINED_CONFIGS.get(c.config_key, {})
-                if predefined.get("is_encrypted") and config_value:
-                    config_value = "••••••••"  # 显示占位符表示已配置
-
-                results.append(
-                    ConfigItemResponse(
-                        config_key=c.config_key,
-                        config_value=config_value,
-                        config_type=c.config_type,
-                        category=c.category,
-                        description=c.description,
-                        updated_at=c.updated_at.isoformat() if c.updated_at else None,
-                    )
-                )
-
-            return results
-    except Exception as e:
-        logger.error(f"获取配置列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取配置列表失败")
-
-
-@router.get("/get/{config_key}", response_model=ConfigItemResponse, summary="获取单个配置项")
-async def get_config(config_key: str, user: dict = Depends(RequiredAuthDependency())):
-    """获取单个配置项的值"""
-    # 验证管理员权限
-    if not await verify_admin(user["id"]):
-        raise HTTPException(status_code=403, detail="需要管理员权限")
-
-    db_manager = get_db_manager()
-
-    try:
-        async with db_manager.get_session() as session:
-            from sqlalchemy import select
-
-            stmt = select(SystemConfig).where(SystemConfig.config_key == config_key)
-            result = await session.execute(stmt)
-            config = result.scalar_one_or_none()
-
-            if not config:
-                # 如果配置不存在，使用预定义配置创建
-                if config_key in PREDEFINED_CONFIGS:
-                    predefined = PREDEFINED_CONFIGS[config_key]
-                    config = SystemConfig(
-                        config_key=config_key,
-                        config_value="",
-                        **predefined
-                    )
-                    session.add(config)
-                    await session.commit()
-                else:
-                    raise HTTPException(status_code=404, detail="配置项不存在")
-
-            # 对于加密字段，如果有值则显示占位符
-            config_value = config.config_value or ""
-            predefined = PREDEFINED_CONFIGS.get(config_key, {})
-            if predefined.get("is_encrypted") and config_value:
-                config_value = "••••••••"
-
-            return ConfigItemResponse(
-                config_key=config.config_key,
-                config_value=config_value,
-                config_type=config.config_type,
-                category=config.category,
-                description=config.description,
-                updated_at=config.updated_at.isoformat() if config.updated_at else None,
+    async with db_manager.get_session() as session:
+        for config_key, config_data in PREDEFINED_CONFIGS.items():
+            existing = await session.scalar(
+                select(SystemConfig).where(SystemConfig.config_key == config_key)
             )
+            if existing:
+                continue
+
+            session.add(
+                SystemConfig(
+                    config_key=config_key,
+                    config_value="",
+                    updated_by=user_id,
+                    **config_data,
+                )
+            )
+
+        await session.commit()
+
+
+def _serialize_config(config: SystemConfig) -> ConfigItemResponse:
+    """Hide encrypted values while keeping presence visible to the UI."""
+
+    predefined = PREDEFINED_CONFIGS.get(config.config_key, {})
+    config_value = config.config_value or ""
+    if predefined.get("is_encrypted") and config_value:
+        config_value = MASKED_VALUE
+
+    return ConfigItemResponse(
+        config_key=config.config_key,
+        config_value=config_value,
+        config_type=config.config_type,
+        category=config.category,
+        description=config.description,
+        updated_at=config.updated_at.isoformat() if config.updated_at else None,
+    )
+
+
+@router.get("/list", response_model=List[ConfigItemResponse], summary="List supported system configs")
+async def get_all_configs(user: dict = Depends(RequiredAuthDependency())):
+    """Return only currently supported system configs."""
+
+    if not await verify_admin(user["id"]):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+
+    await _ensure_predefined_configs(user["id"])
+    db_manager = get_db_manager()
+
+    try:
+        async with db_manager.get_session() as session:
+            result = await session.execute(
+                select(SystemConfig).where(SystemConfig.config_key.in_(list(PREDEFINED_CONFIGS.keys())))
+            )
+            configs = result.scalars().all()
+            return [_serialize_config(config) for config in configs]
+    except Exception as exc:
+        logger.error(f"Failed to load system configs: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to load system configs.")
+
+
+@router.get("/get/{config_key}", response_model=ConfigItemResponse, summary="Get a single system config")
+async def get_config(config_key: str, user: dict = Depends(RequiredAuthDependency())):
+    """Return one supported system config."""
+
+    if not await verify_admin(user["id"]):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    if config_key not in PREDEFINED_CONFIGS:
+        raise HTTPException(status_code=404, detail="Config key is not supported.")
+
+    await _ensure_predefined_configs(user["id"])
+    db_manager = get_db_manager()
+
+    try:
+        async with db_manager.get_session() as session:
+            config = await session.scalar(
+                select(SystemConfig).where(SystemConfig.config_key == config_key)
+            )
+            if not config:
+                raise HTTPException(status_code=404, detail="Config key is not supported.")
+            return _serialize_config(config)
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"获取配置项失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取配置项失败")
+    except Exception as exc:
+        logger.error(f"Failed to load system config {config_key}: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to load system config.")
 
 
-@router.post("/update", summary="更新配置项")
+@router.post("/update", summary="Update a single system config")
 async def update_config(
     body: UpdateConfigRequest,
-    user: dict = Depends(RequiredAuthDependency())
+    user: dict = Depends(RequiredAuthDependency()),
 ):
-    """
-    更新单个配置项
+    """Update one supported system config."""
 
-    - 需要管理员权限
-    - 会记录更新者信息
-    - 对于标记为 is_encrypted 的配置，自动加密存储
-    """
-    # 验证管理员权限
     if not await verify_admin(user["id"]):
-        raise HTTPException(status_code=403, detail="需要管理员权限")
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    if body.config_key not in PREDEFINED_CONFIGS:
+        raise HTTPException(status_code=404, detail="Config key is not supported.")
+
+    db_manager = get_db_manager()
+    predefined = PREDEFINED_CONFIGS[body.config_key]
+    config_value = body.config_value
+    if predefined.get("is_encrypted") and config_value:
+        config_value = encrypt_api_key(config_value)
+
+    try:
+        async with db_manager.get_session() as session:
+            config = await session.scalar(
+                select(SystemConfig).where(SystemConfig.config_key == body.config_key)
+            )
+            if not config:
+                config = SystemConfig(
+                    config_key=body.config_key,
+                    config_value=config_value,
+                    description=body.description or predefined.get("description"),
+                    updated_by=user["id"],
+                    **predefined,
+                )
+                session.add(config)
+            else:
+                config.config_value = config_value
+                config.updated_by = user["id"]
+                if body.description:
+                    config.description = body.description
+
+            await session.commit()
+
+        return {"success": True, "message": "Config updated successfully."}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Failed to update config {body.config_key}: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to update config.")
+
+
+@router.post("/batch-update", summary="Batch update system configs")
+async def batch_update_config(
+    body: BatchUpdateConfigRequest,
+    user: dict = Depends(RequiredAuthDependency()),
+):
+    """Update multiple supported system configs in one request."""
+
+    if not await verify_admin(user["id"]):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+
+    unsupported_keys = [key for key in body.configs if key not in PREDEFINED_CONFIGS]
+    if unsupported_keys:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unsupported config keys: {', '.join(sorted(unsupported_keys))}",
+        )
 
     db_manager = get_db_manager()
 
     try:
         async with db_manager.get_session() as session:
-            from sqlalchemy import select
+            for config_key, config_value in body.configs.items():
+                predefined = PREDEFINED_CONFIGS[config_key]
+                final_value = config_value
+                if predefined.get("is_encrypted") and final_value:
+                    final_value = encrypt_api_key(final_value)
 
-            stmt = select(SystemConfig).where(SystemConfig.config_key == body.config_key)
-            result = await session.execute(stmt)
-            config = result.scalar_one_or_none()
-
-            # 获取预定义配置信息
-            predefined = PREDEFINED_CONFIGS.get(body.config_key, {})
-            is_encrypted = predefined.get("is_encrypted", False)
-
-            # 对加密字段进行加密
-            config_value = body.config_value
-            if is_encrypted and config_value:
-                config_value = encrypt_api_key(config_value)
-                logger.info(f"配置 {body.config_key} 已加密存储")
-
-            if not config:
-                # 如果配置不存在，创建新配置
-                if body.config_key in PREDEFINED_CONFIGS:
-                    config = SystemConfig(
-                        config_key=body.config_key,
-                        config_value=config_value,
-                        description=body.description or predefined.get("description"),
-                        updated_by=user["id"],
-                        **{k: v for k, v in predefined.items() if k not in ["description"]}
+                config = await session.scalar(
+                    select(SystemConfig).where(SystemConfig.config_key == config_key)
+                )
+                if not config:
+                    session.add(
+                        SystemConfig(
+                            config_key=config_key,
+                            config_value=final_value,
+                            updated_by=user["id"],
+                            **predefined,
+                        )
                     )
-                    session.add(config)
-                else:
-                    raise HTTPException(status_code=404, detail="配置项不存在")
-            else:
-                # 更新现有配置
-                config.config_value = config_value
-                if body.description:
-                    config.description = body.description
+                    continue
+
+                config.config_value = final_value
                 config.updated_by = user["id"]
 
             await session.commit()
 
-            logger.info(f"配置更新: {body.config_key} by user {user['id']}")
-
-            return {"success": True, "message": "配置更新成功"}
+        return {"success": True, "message": f"Updated {len(body.configs)} config(s)."}
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"更新配置失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="更新配置失败")
-
-
-@router.post("/batch-update", summary="批量更新配置")
-async def batch_update_config(
-    body: BatchUpdateConfigRequest,
-    user: dict = Depends(RequiredAuthDependency())
-):
-    """
-    批量更新多个配置项
-
-    - 需要管理员权限
-    - 会记录更新者信息
-    - 对于标记为 is_encrypted 的配置，自动加密存储
-    """
-    # 验证管理员权限
-    if not await verify_admin(user["id"]):
-        raise HTTPException(status_code=403, detail="需要管理员权限")
-
-    db_manager = get_db_manager()
-
-    try:
-        async with db_manager.get_session() as session:
-            from sqlalchemy import select
-
-            for config_key, config_value in body.configs.items():
-                stmt = select(SystemConfig).where(SystemConfig.config_key == config_key)
-                result = await session.execute(stmt)
-                config = result.scalar_one_or_none()
-
-                # 获取预定义配置信息，判断是否需要加密
-                predefined = PREDEFINED_CONFIGS.get(config_key, {})
-                is_encrypted = predefined.get("is_encrypted", False)
-
-                # 对加密字段进行加密
-                final_value = config_value
-                if is_encrypted and config_value:
-                    final_value = encrypt_api_key(config_value)
-
-                if config:
-                    # 更新现有配置
-                    config.config_value = final_value
-                    config.updated_by = user["id"]
-                else:
-                    # 创建新配置
-                    if config_key in PREDEFINED_CONFIGS:
-                        config = SystemConfig(
-                            config_key=config_key,
-                            config_value=final_value,
-                            updated_by=user["id"],
-                            **predefined
-                        )
-                        session.add(config)
-
-            await session.commit()
-
-            logger.info(f"批量更新配置: {len(body.configs)} 项 by user {user['id']}")
-
-            return {"success": True, "message": f"成功更新 {len(body.configs)} 项配置"}
-    except Exception as e:
-        logger.error(f"批量更新配置失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="批量更新配置失败")
-
-
-async def _init_predefined_configs(db_manager, user_id: str):
-    """初始化预定义配置"""
-    async with db_manager.get_session() as session:
-        for config_key, config_data in PREDEFINED_CONFIGS.items():
-            # 检查是否已存在
-            from sqlalchemy import select
-            stmt = select(SystemConfig).where(SystemConfig.config_key == config_key)
-            result = await session.execute(stmt)
-            existing = result.scalar_one_or_none()
-
-            if not existing:
-                config = SystemConfig(
-                    config_key=config_key,
-                    config_value="",
-                    updated_by=user_id,
-                    **config_data
-                )
-                session.add(config)
-
-        await session.commit()
-        logger.info("初始化系统配置完成")
+    except Exception as exc:
+        logger.error(f"Failed to batch update configs: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to batch update configs.")

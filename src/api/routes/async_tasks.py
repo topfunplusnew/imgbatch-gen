@@ -7,7 +7,6 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from ...config.settings import settings
 from ...database import get_db_manager
 from ...database.async_task_manager import get_async_task_manager
 from .chat import _extract_api_key
@@ -59,7 +58,6 @@ async def submit_task(request: SubmitTaskRequest, http_request: Request):
             credential = await db_manager.store_api_credential(
                 api_key=api_key,
                 provider="relay",
-                base_url=settings.relay_base_url,
                 user_id="async-api",
             )
             credential_id = credential.id
@@ -70,7 +68,6 @@ async def submit_task(request: SubmitTaskRequest, http_request: Request):
             "n": request.n,
             "quality": request.quality,
             "credential_id": credential_id,
-            "relay_base_url": settings.relay_base_url,
         }
 
         task = await manager.create_task(

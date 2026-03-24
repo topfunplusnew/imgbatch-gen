@@ -96,7 +96,6 @@ DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/agent_db
 # 1. 在这里配置默认 Key
 # 2. 每次请求用 Authorization: Bearer <key> 传入
 RELAY_API_KEY=
-RELAY_BASE_URL=https://api.yiwuxueshe.cn
 
 # 可选 OpenAI 直连配置
 OPENAI_API_KEY=
@@ -277,7 +276,7 @@ curl -X POST "http://127.0.0.1:8888/api/v1/assistant/chat" \
 - 推荐使用 `uv.lock` 维护依赖；`requirements.txt` 更像导出结果。
 - 当前主入口为 `src/api/main.py`，命令行入口为 `agent-py`。
 - 如果你只是在本地调试，优先使用 `STORAGE_TYPE=local`。
-- 如果你依赖远端模型注册表，建议显式配置 `CONFIG_API_URL`，否则会使用代码中的默认地址。
+- Relay 基础地址固定为 `https://api.yiwuxueshe.cn`，模型注册表固定使用 `https://api.yiwuxueshe.cn/api/pricing_new`。
 
 ## 已知差异与注意事项
 

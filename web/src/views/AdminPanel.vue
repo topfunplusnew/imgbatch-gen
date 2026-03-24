@@ -561,81 +561,7 @@
                     placeholder="请输入中转站API Key"
                     class="w-full px-4 py-2.5 border border-border-dark rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
                   />
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-ink-700 mb-2">中转站Base URL</label>
-                  <input
-                    v-model="configForm['relay.base_url']"
-                    type="text"
-                    placeholder="https://api.example.com"
-                    class="w-full px-4 py-2.5 border border-border-dark rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-ink-700 mb-2">模型配置API URL</label>
-                  <input
-                    v-model="configForm['config.api_url']"
-                    type="text"
-                    placeholder="https://api.example.com/models"
-                    class="w-full px-4 py-2.5 border border-border-dark rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <!-- 存储配置 -->
-            <div class="bg-white rounded-2xl shadow-sm p-6 border border-border-dark">
-              <h3 class="text-lg font-bold text-ink-950 mb-4">存储配置</h3>
-              <div class="space-y-4">
-                <div>
-                  <label class="block text-sm font-medium text-ink-700 mb-2">存储类型</label>
-                  <select
-                    v-model="configForm['storage.type']"
-                    class="w-full px-4 py-2.5 border border-border-dark rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="local">本地存储</option>
-                    <option value="minio">MinIO对象存储</option>
-                  </select>
-                </div>
-                <div v-if="configForm['storage.type'] === 'minio'">
-                  <div class="space-y-4">
-                    <div>
-                      <label class="block text-sm font-medium text-ink-700 mb-2">MinIO服务地址</label>
-                      <input
-                        v-model="configForm['minio.endpoint']"
-                        type="text"
-                        placeholder="minio.example.com:9000"
-                        class="w-full px-4 py-2.5 border border-border-dark rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-                      />
-                    </div>
-                    <div>
-                      <label class="block text-sm font-medium text-ink-700 mb-2">MinIO访问密钥</label>
-                      <input
-                        v-model="configForm['minio.access_key']"
-                        type="text"
-                        placeholder="Access Key"
-                        class="w-full px-4 py-2.5 border border-border-dark rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-                      />
-                    </div>
-                    <div>
-                      <label class="block text-sm font-medium text-ink-700 mb-2">MinIO密钥</label>
-                      <input
-                        v-model="configForm['minio.secret_key']"
-                        type="password"
-                        placeholder="Secret Key"
-                        class="w-full px-4 py-2.5 border border-border-dark rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-                      />
-                    </div>
-                    <div>
-                      <label class="block text-sm font-medium text-ink-700 mb-2">MinIO存储桶名称</label>
-                      <input
-                        v-model="configForm['minio.bucket_name']"
-                        type="text"
-                        placeholder="images"
-                        class="w-full px-4 py-2.5 border border-border-dark rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-                      />
-                    </div>
-                  </div>
+                  <p class="mt-2 text-sm text-ink-500">服务端已有配置时会显示掩码；未配置时这里会保持为空。</p>
                 </div>
               </div>
             </div>
@@ -1143,7 +1069,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useAppStore } from '@/store/useAppStore'
 import { useAuthStore } from '@/store/useAuthStore'
-import { api } from '@/services/api'
+import { api, type SystemConfigItem } from '@/services/api'
 import CaseManagement from '@/components/admin/CaseManagement.vue'
 import AnnouncementForm from '@/components/admin/AnnouncementForm.vue'
 
@@ -1207,18 +1133,12 @@ const totalCount = ref(0)
 const totalPages = computed(() => Math.ceil(totalCount.value / pageSize.value))
 
 // 系统配置
-const configs = ref([])
-const configForm = ref({
+const SYSTEM_CONFIG_MASK = '••••••••'
+const configs = ref<SystemConfigItem[]>([])
+const configForm = ref<Record<string, string>>({
   'relay.api_key': '',
-  'relay.base_url': '',
-  'config.api_url': '',
-  'storage.type': 'local',
-  'minio.endpoint': '',
-  'minio.access_key': '',
-  'minio.secret_key': '',
-  'minio.bucket_name': '',
 })
-const originalConfigs = ref({})
+const originalConfigs = ref<Record<string, string>>({})
 const loadingConfigs = ref(false)
 const savingConfigs = ref(false)
 
@@ -1488,21 +1408,12 @@ async function loadConfigs() {
   loadingConfigs.value = true
   try {
     configs.value = await api.getSystemConfigs()
+    const relayApiKeyConfig = configs.value.find(config => config.config_key === 'relay.api_key')
+    const relayApiKeyValue = relayApiKeyConfig?.config_value || ''
 
-    // 将配置转换为表单格式
-    const form = {}
-    const original = {}
-    for (const config of configs.value) {
-      form[config.config_key] = config.config_value || ''
-      original[config.config_key] = config.config_value || ''
-    }
-
-    // 更新表单，保留原有的值
-    for (const key in configForm.value) {
-      if (form[key] !== undefined) {
-        configForm.value[key] = form[key]
-      }
-      originalConfigs.value = { ...original }
+    configForm.value['relay.api_key'] = relayApiKeyValue
+    originalConfigs.value = {
+      'relay.api_key': relayApiKeyValue,
     }
   } catch (error) {
     console.error('加载系统配置失败:', error)
@@ -1516,12 +1427,12 @@ async function loadConfigs() {
 async function saveConfigs() {
   savingConfigs.value = true
   try {
-    // 找出有变化的配置
-    const changedConfigs = {}
-    for (const key in configForm.value) {
-      if (configForm.value[key] !== originalConfigs.value[key]) {
-        changedConfigs[key] = configForm.value[key]
-      }
+    const changedConfigs: Record<string, string> = {}
+    const currentApiKey = configForm.value['relay.api_key'] || ''
+    const originalApiKey = originalConfigs.value['relay.api_key'] || ''
+
+    if (currentApiKey !== originalApiKey && currentApiKey !== SYSTEM_CONFIG_MASK) {
+      changedConfigs['relay.api_key'] = currentApiKey
     }
 
     if (Object.keys(changedConfigs).length === 0) {
@@ -1546,9 +1457,7 @@ async function saveConfigs() {
 
 // 重置配置
 function resetConfigs() {
-  for (const key in configForm.value) {
-    configForm.value[key] = originalConfigs.value[key] || ''
-  }
+  configForm.value['relay.api_key'] = originalConfigs.value['relay.api_key'] || ''
 }
 
 // 加载提现记录

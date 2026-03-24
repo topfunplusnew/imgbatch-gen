@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 import httpx
 from loguru import logger
 
-from .settings import settings
+from .settings import FIXED_CONFIG_API_URL, settings
 
 
 @dataclass
@@ -36,7 +36,7 @@ class ProviderMapping:
 class ModelRegistry:
     """模型注册表 - 管理所有可用模型"""
     
-    def __init__(self, config_api_url: str = "https://api.yiwuxueshe.cn/api/pricing_new"):
+    def __init__(self, config_api_url: str = FIXED_CONFIG_API_URL):
         """初始化模型注册表"""
         self.config_api_url = config_api_url
         self.models: Dict[str, ModelInfo] = {}
@@ -388,8 +388,7 @@ async def get_model_registry() -> ModelRegistry:
     """获取模型注册表实例（单例模式）"""
     global _model_registry
     if _model_registry is None:
-        config_api_url = settings.config_api_url or "https://api.yiwuxueshe.cn/api/pricing_new"
-        _model_registry = ModelRegistry(config_api_url)
+        _model_registry = ModelRegistry(settings.config_api_url)
         await _model_registry.refresh()
     return _model_registry
 

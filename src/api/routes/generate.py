@@ -173,7 +173,6 @@ async def generate_image(
                 credential = await db_manager.store_api_credential(
                     api_key=params.api_key,
                     provider="relay",
-                    base_url=settings.relay_base_url,
                     user_id=request.user_id,
                 )
                 credential_id = credential.id
@@ -188,7 +187,6 @@ async def generate_image(
                     "quality": params.quality,
                     "n": params.n,
                     "credential_id": credential_id,
-                    "relay_base_url": settings.relay_base_url,
                 },
                 user_id=request.user_id  # 传递用户ID
             )

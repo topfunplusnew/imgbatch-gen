@@ -6,7 +6,6 @@ from fastapi import APIRouter, Header, HTTPException
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from ...config.settings import settings
 from ...database import get_db_manager
 from ...database.async_task_manager import get_async_task_manager
 
@@ -52,7 +51,6 @@ async def create_image(
         credential = await db_manager.store_api_credential(
             api_key=api_key,
             provider="relay",
-            base_url=settings.relay_base_url,
             user_id="openai-compat",
         )
         credential_id = credential.id
@@ -64,7 +62,6 @@ async def create_image(
             "n": request.n,
             "quality": request.quality,
             "credential_id": credential_id,
-            "relay_base_url": settings.relay_base_url,
         }
 
         task = await manager.create_task(
