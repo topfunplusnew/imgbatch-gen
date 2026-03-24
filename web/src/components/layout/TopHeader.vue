@@ -18,6 +18,16 @@
         <span class="hidden sm:inline">返回首页</span>
       </button>
 
+      <!-- 移动端模型选择按钮 -->
+      <button
+        @click="$emit('openModelSelector')"
+        class="md:hidden flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-border-dark bg-white/90 hover:bg-primary/5 text-ink-700 min-h-[44px] max-w-[180px]"
+        aria-label="选择模型"
+        :title="currentModelDisplay">
+        <span class="material-symbols-outlined !text-lg text-primary shrink-0">auto_awesome</span>
+        <span class="text-xs font-medium truncate">{{ currentModelDisplay }}</span>
+      </button>
+
       <div class="hidden xs:flex items-center gap-2 min-w-0">
         <span class="text-sm font-medium text-slate-500 shrink-0">当前会话:</span>
         <span class="text-sm font-semibold truncate">{{ generatorStore.currentSessionTitle }}</span>
@@ -175,13 +185,21 @@ const authStore = useAuthStore()
 const appStore = useAppStore()
 const notificationStore = useNotificationStore()
 
-const emit = defineEmits(['toggleSettings', 'openHistory', 'openTemplates', 'toggleSidebar'])
+const emit = defineEmits(['toggleSettings', 'openHistory', 'openTemplates', 'toggleSidebar', 'openModelSelector'])
 
 // 通知面板状态
 const showNotifications = ref(false)
 
 // 用户菜单状态
 const showUserMenu = ref(false)
+
+// 当前模型显示名称
+const currentModelDisplay = computed(() => {
+  if (generatorStore.selectedModelInfo?.display_name) {
+    return generatorStore.selectedModelInfo.display_name
+  }
+  return generatorStore.model || '选择模型'
+})
 
 // 显示的用户名
 const displayName = computed(() => {

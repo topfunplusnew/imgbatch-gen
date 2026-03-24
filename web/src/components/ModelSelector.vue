@@ -1,6 +1,15 @@
 <template>
-  <div class="overflow-hidden rounded-[1.25rem] border border-black/5 bg-white shadow-xl">
-    <div class="border-b border-border-dark bg-background-dark/70 px-6 py-5">
+  <el-dialog
+    v-model="visible"
+    title="选择模型"
+    width="640px"
+    :close-on-click-modal="true"
+    :fullscreen="isMobile"
+    class="model-selector-dialog"
+    @close="$emit('close')"
+  >
+    <!-- 头部信息 -->
+    <template #header>
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0">
           <h3 class="text-lg font-semibold text-ink-950">选择模型</h3>
@@ -16,174 +25,146 @@
             </span>
           </p>
         </div>
-
-        <div class="flex items-center gap-2">
-          <button
-            @click="loadModels"
-            :disabled="loading"
-            class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border-dark bg-white text-ink-500 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-ink-950 disabled:cursor-not-allowed disabled:opacity-50"
-            title="刷新模型列表"
-            type="button"
-          >
-            <span class="material-symbols-outlined !text-lg" :class="{ 'animate-spin': loading }">refresh</span>
-          </button>
-          <button
-            @click="$emit('close')"
-            class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border-dark bg-white text-ink-500 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-ink-950"
-            title="关闭"
-            type="button"
-          >
-            <span class="material-symbols-outlined !text-lg">close</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="mt-5 space-y-4">
-        <div class="inline-flex flex-wrap gap-2 rounded-xl border border-border-dark bg-white/70 p-1">
-          <button
-            v-for="tab in typeTabs"
-            :key="tab.value"
-            @click="activeTypeTab = tab.value"
-            :class="[
-              'rounded-lg px-4 py-2 text-xs font-semibold transition-all',
-              activeTypeTab === tab.value
-                ? 'border border-primary/25 bg-white text-ink-950 shadow-sm ring-2 ring-primary/10'
-                : 'text-ink-500 hover:bg-white hover:text-ink-950'
-            ]"
-            type="button"
-          >
-            {{ tab.label }}
-            <span v-if="activeTypeTab === tab.value && filteredModels.length > 0" class="ml-1 text-primary">
-              ({{ filteredModels.length }})
-            </span>
-          </button>
-        </div>
-
-
-
-
-      </div>
-    </div>
-
-    <div class="p-4 md:p-5">
-      <div class="rounded-[1rem] border border-border-dark bg-background-dark/70 p-2">
-        <div v-if="loading" class="flex min-h-[360px] flex-col items-center justify-center text-center text-ink-500">
-          <span class="material-symbols-outlined !text-4xl animate-spin text-primary">refresh</span>
-          <p class="mt-3 text-sm">加载模型列表中...</p>
-        </div>
-
-        <div
-          v-else-if="filteredModels.length === 0"
-          class="flex min-h-[360px] flex-col items-center justify-center text-center text-ink-500"
+        <el-button
+          @click="loadModels"
+          :loading="loading"
+          circle
+          class="!border-border-dark !bg-white hover:!border-primary/30"
         >
-          <span class="material-symbols-outlined !text-4xl text-ink-300">search_off</span>
-          <p class="mt-3 text-sm">没有找到匹配的模型</p>
-        </div>
+          <span class="material-symbols-outlined !text-lg">refresh</span>
+        </el-button>
+      </div>
+    </template>
 
-        <div v-else class="max-h-[58vh] overflow-y-auto pr-1 custom-scrollbar">
-          <div class="grid grid-cols-1 gap-3">
+    <!-- 分类标签 -->
+    <el-tabs v-model="activeTypeTab" class="mb-4">
+      <el-tab-pane
+        v-for="tab in typeTabs"
+        :key="tab.value"
+        :label="tab.label + ` (${getTabCount(tab.value)})`"
+        :name="tab.value"
+      />
+    </el-tabs>
+
+    <!-- 模型列表 -->
+    <div class="model-list overflow-y-auto pr-1 custom-scrollbar" :class="isMobile ? 'max-h-[calc(100vh-280px)]' : 'max-h-[50vh]'">
+      <!-- 加载中 -->
+      <div v-if="loading" class="flex min-h-[360px] flex-col items-center justify-center text-center text-ink-500">
+        <span class="material-symbols-outlined !text-4xl animate-spin text-primary">refresh</span>
+        <p class="mt-3 text-sm">加载模型列表中...</p>
+      </div>
+
+      <!-- 无结果 -->
+      <div
+        v-else-if="filteredModels.length === 0"
+        class="flex min-h-[360px] flex-col items-center justify-center text-center text-ink-500"
+      >
+        <span class="material-symbols-outlined !text-4xl text-ink-300">search_off</span>
+        <p class="mt-3 text-sm">没有找到匹配的模型</p>
+      </div>
+
+      <!-- 模型卡片列表 -->
+      <div v-else class="grid grid-cols-1 gap-3">
+        <div
+          v-for="model in filteredModels"
+          :key="model.model_name"
+          tabindex="0"
+          role="button"
+          @click="selectModel(model)"
+          @keydown.enter.prevent="selectModel(model)"
+          @keydown.space.prevent="selectModel(model)"
+          :class="[
+            'group rounded-[1rem] border p-4 transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer',
+            selectedModel === model.model_name
+              ? 'border-primary/30 bg-white shadow-lg shadow-primary/10'
+              : 'border-border-dark bg-white hover:border-primary/25 hover:shadow-lg'
+          ]"
+        >
+          <div class="flex items-start gap-3">
             <div
-              v-for="model in filteredModels"
-              :key="model.model_name"
-              tabindex="0"
-              role="button"
-              @click="selectModel(model)"
-              @keydown.enter.prevent="selectModel(model)"
-              @keydown.space.prevent="selectModel(model)"
               :class="[
-                'group rounded-[1rem] border p-4 transition-all focus:outline-none focus:ring-2 focus:ring-primary/20',
+                'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border',
                 selectedModel === model.model_name
-                  ? 'border-primary/30 bg-white shadow-lg shadow-primary/10'
-                  : 'border-border-dark bg-white hover:border-primary/25 hover:shadow-lg'
+                  ? 'border-primary/20 bg-primary/10'
+                  : 'border-border-dark bg-background-dark'
               ]"
             >
-              <div class="flex items-start gap-3">
-                <div
-                  :class="[
-                    'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border',
-                    selectedModel === model.model_name
-                      ? 'border-primary/20 bg-primary/10'
-                      : 'border-border-dark bg-background-dark'
-                  ]"
-                >
-                  <span class="material-symbols-outlined !text-xl text-primary">
-                    {{ getModelIcon(model.vendor_name) }}
+              <span class="material-symbols-outlined !text-xl text-primary">
+                {{ getModelIcon(model.vendor_name) }}
+              </span>
+            </div>
+
+            <div class="min-w-0 flex-1">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h4 class="truncate text-sm font-semibold text-ink-950">{{ model.model_name }}</h4>
+                    <span
+                      v-if="model.model_type === '图像'"
+                      class="rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary-deep"
+                    >
+                      图像
+                    </span>
+                    <span
+                      v-else-if="model.model_type === '文本'"
+                      class="rounded-md border border-border-dark bg-background-dark px-2 py-0.5 text-[10px] font-medium text-ink-700"
+                    >
+                      聊天
+                    </span>
+                    <span
+                      v-if="model.is_async"
+                      class="rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary-deep"
+                    >
+                      异步
+                    </span>
+                  </div>
+
+                  <p class="mt-2 line-clamp-2 text-xs leading-5 text-ink-700">
+                    {{ model.description || '暂无模型说明' }}
+                  </p>
+                </div>
+
+                <div class="flex items-center gap-2 shrink-0">
+                  <span
+                    v-if="selectedModel === model.model_name"
+                    class="material-symbols-outlined !text-lg text-primary"
+                  >
+                    check_circle
                   </span>
+                  <el-button
+                    @click.stop="showModelDetail(model)"
+                    circle
+                    size="small"
+                    class="!border-transparent hover:!border-primary/20 hover:!bg-primary/5"
+                  >
+                    <span class="material-symbols-outlined !text-lg text-ink-500 hover:!text-primary">info</span>
+                  </el-button>
                 </div>
+              </div>
 
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-start justify-between gap-3">
-                    <div class="min-w-0">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <h4 class="truncate text-sm font-semibold text-ink-950">{{ model.model_name }}</h4>
-                        <span
-                          v-if="model.model_type === '图像'"
-                          class="rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary-deep"
-                        >
-                          图像
-                        </span>
-                        <span
-                          v-else-if="model.model_type === '文本'"
-                          class="rounded-md border border-border-dark bg-background-dark px-2 py-0.5 text-[10px] font-medium text-ink-700"
-                        >
-                          聊天
-                        </span>
-                        <span
-                          v-if="model.is_async"
-                          class="rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary-deep"
-                        >
-                          异步
-                        </span>
-                      </div>
+              <div class="mt-3 flex flex-wrap items-center gap-2">
+                <span class="rounded-md border border-border-dark bg-background-dark px-2 py-1 text-[10px] text-ink-700">
+                  {{ model.vendor_name || '未知提供商' }}
+                </span>
+                <span class="text-[11px] text-ink-500">
+                  {{ model.provider || '未标注 Provider' }}
+                </span>
+              </div>
 
-                      <p class="mt-2 line-clamp-2 text-xs leading-5 text-ink-700">
-                        {{ model.description || '暂无模型说明' }}
-                      </p>
-                    </div>
-
-                    <div class="flex items-center gap-2 shrink-0">
-                      <span
-                        v-if="selectedModel === model.model_name"
-                        class="material-symbols-outlined !text-lg text-primary"
-                      >
-                        check_circle
-                      </span>
-                      <button
-                        @click.stop="showModelDetail(model)"
-                        class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-ink-500 transition-colors hover:border-primary/20 hover:bg-primary/5 hover:text-primary"
-                        title="查看详情"
-                        type="button"
-                      >
-                        <span class="material-symbols-outlined !text-lg">info</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="mt-3 flex flex-wrap items-center gap-2">
-                    <span class="rounded-md border border-border-dark bg-background-dark px-2 py-1 text-[10px] text-ink-700">
-                      {{ model.vendor_name || '未知提供商' }}
-                    </span>
-                    <span class="text-[11px] text-ink-500">
-                      {{ model.provider || '未标注 Provider' }}
-                    </span>
-                  </div>
-
-                  <div v-if="model.tags?.length" class="mt-3 flex flex-wrap gap-1.5">
-                    <span
-                      v-for="tag in model.tags.slice(0, 4)"
-                      :key="tag"
-                      class="rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary-deep"
-                    >
-                      {{ tag }}
-                    </span>
-                    <span
-                      v-if="model.tags.length > 4"
-                      class="inline-flex items-center rounded-md bg-background-dark px-2 py-0.5 text-[10px] text-ink-500"
-                    >
-                      +{{ model.tags.length - 4 }}
-                    </span>
-                  </div>
-                </div>
+              <div v-if="model.tags?.length" class="mt-3 flex flex-wrap gap-1.5">
+                <span
+                  v-for="tag in model.tags.slice(0, 4)"
+                  :key="tag"
+                  class="rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary-deep"
+                >
+                  {{ tag }}
+                </span>
+                <span
+                  v-if="model.tags.length > 4"
+                  class="inline-flex items-center rounded-md bg-background-dark px-2 py-0.5 text-[10px] text-ink-500"
+                >
+                  +{{ model.tags.length - 4 }}
+                </span>
               </div>
             </div>
           </div>
@@ -191,6 +172,12 @@
       </div>
     </div>
 
+    <!-- 底部按钮 -->
+    <template #footer>
+      <el-button @click="$emit('close')">取消</el-button>
+    </template>
+
+    <!-- 模型详情弹窗 -->
     <div
       v-if="selectedModelDetail"
       class="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/10 p-4 backdrop-blur-sm"
@@ -204,11 +191,11 @@
         />
       </div>
     </div>
-  </div>
+  </el-dialog>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch, onUnmounted } from 'vue'
 import { api } from '@/services/api'
 import ModelInfoDetail from './ModelInfoDetail.vue'
 
@@ -225,6 +212,8 @@ const props = defineProps({
 
 const emit = defineEmits(['select', 'close'])
 
+const visible = ref(true)
+const isMobile = ref(false)
 const models = ref([])
 const loading = ref(false)
 const searchQuery = ref('')
@@ -239,6 +228,20 @@ const typeTabs = [
   { label: '聊天模型', value: 'chat' },
   { label: '异步模型', value: 'async' }
 ]
+
+// 获取分类数量
+const getTabCount = (tabValue) => {
+  if (tabValue === 'all') {
+    return models.value.length
+  } else if (tabValue === 'image') {
+    return models.value.filter(m => m.model_type === '图像').length
+  } else if (tabValue === 'chat') {
+    return models.value.filter(m => m.model_type === '文本').length
+  } else if (tabValue === 'async') {
+    return models.value.filter(m => m.is_async || m.tags?.includes('异步')).length
+  }
+  return 0
+}
 
 const hasImageAttachment = computed(() => {
   return props.attachments.some((file) => {
@@ -266,18 +269,14 @@ const popularTags = computed(() => {
 const filteredModels = computed(() => {
   let result = [...models.value]
 
-  // 第一步：根据分类标签筛选（严格互斥筛选，选中某个分类后只显示该分类的模型）
+  // 第一步：根据分类标签筛选
   if (activeTypeTab.value === 'image') {
-    // 只显示图像模型，严格过滤掉所有非图像模型
     result = result.filter((model) => model.model_type === '图像')
   } else if (activeTypeTab.value === 'chat') {
-    // 只显示聊天模型（文本模型），严格过滤掉所有非文本模型
     result = result.filter((model) => model.model_type === '文本')
   } else if (activeTypeTab.value === 'async') {
-    // 只显示异步模型，严格过滤掉所有非异步模型
     result = result.filter((model) => model.is_async || model.tags?.includes('异步'))
   }
-  // activeTypeTab.value === 'all' 时显示所有模型，不进行分类筛选
 
   // 第二步：如果有图片附件，进一步筛选支持识图的模型
   if (hasImageAttachment.value) {
@@ -307,19 +306,6 @@ const filteredModels = computed(() => {
     })
   }
 
-  // 最终验证：确保结果中不包含其他分类的模型（开发调试用）
-  if (activeTypeTab.value === 'image') {
-    const hasNonImage = result.some(m => m.model_type !== '图像')
-    if (hasNonImage) {
-      console.warn('[ModelSelector] 警告：图像分类中包含非图像模型', result.filter(m => m.model_type !== '图像'))
-    }
-  } else if (activeTypeTab.value === 'chat') {
-    const hasNonChat = result.some(m => m.model_type !== '文本')
-    if (hasNonChat) {
-      console.warn('[ModelSelector] 警告：聊天分类中包含非聊天模型', result.filter(m => m.model_type !== '文本'))
-    }
-  }
-
   return result
 })
 
@@ -340,6 +326,7 @@ const loadModels = async () => {
 
 const selectModel = (model) => {
   selectedModel.value = model.model_name
+  visible.value = false
   emit('select', model)
 }
 
@@ -350,6 +337,7 @@ const showModelDetail = (model) => {
 const handleDetailSelect = (model) => {
   selectedModel.value = model.model_name
   selectedModelDetail.value = null
+  visible.value = false
   emit('select', model)
 }
 
@@ -382,8 +370,26 @@ const getModelIcon = (vendorName) => {
   return icons[vendorName] || 'deployed_code'
 }
 
+// 监听 visible 变化，关闭时触发 close 事件
+watch(visible, (newVal) => {
+  if (!newVal) {
+    emit('close')
+  }
+})
+
+// 检测移动端
+const checkMobile = () => {
+  isMobile.value = window.innerWidth < 768
+}
+
 onMounted(() => {
   loadModels()
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
 })
 </script>
 

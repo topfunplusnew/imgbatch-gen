@@ -82,13 +82,19 @@
               <span class="material-symbols-outlined">attach_file</span>
             </button>
 
-            <!-- 模型选择按钮 -->
-            <button
-              @click="showModelSelector = true"
-              class="flex items-center justify-center p-2 hover:bg-primary/5 rounded-xl text-ink-700 transition-colors shrink-0 border border-border-dark/50 bg-white/80"
-              :title="currentModelDisplay">
-              <span class="material-symbols-outlined !text-lg text-primary">auto_awesome</span>
-            </button>
+            <!-- 模型选择按钮 - 桌面端：显示图标和模型名称 -->
+            <el-button
+              @click="emit('update:showModelSelector', true)"
+              class="hidden md:flex !rounded-xl !border-border-dark/50 !bg-white/80"
+              size="default"
+            >
+              <template #icon>
+                <span class="material-symbols-outlined !text-lg text-primary">auto_awesome</span>
+              </template>
+              <span class="text-sm font-medium text-ink-950 truncate max-w-[120px]">
+                {{ currentModelDisplay }}
+              </span>
+            </el-button>
 
             <textarea
               v-model="generatorStore.prompt"
@@ -115,22 +121,6 @@
       </div>
     </div>
 
-    <!-- 模型选择器弹窗 -->
-    <Teleport to="body">
-      <div
-        v-if="showModelSelector"
-        class="fixed inset-0 z-50 grid place-items-center bg-ink-950/10 p-4 backdrop-blur-sm"
-        @click.self="showModelSelector = false">
-        <div class="w-full max-w-3xl max-h-[90vh] overflow-y-auto custom-scrollbar">
-          <ModelSelector
-            :current-model="generatorStore.model"
-            :attachments="generatorStore.attachments"
-            @select="handleModelSelect"
-            @close="showModelSelector = false"
-          />
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
@@ -140,7 +130,15 @@ import { useGeneratorStore } from '@/store/useGeneratorStore';
 import { useAppStore } from '@/store/useAppStore';
 import { notification } from '@/utils/notification';
 import { api } from '@/services/api';
-import ModelSelector from '@/components/ModelSelector.vue';
+
+const props = defineProps({
+  showModelSelector: {
+    type: Boolean,
+    default: false
+  }
+})
+
+const emit = defineEmits(['update:showModelSelector'])
 
 const generatorStore = useGeneratorStore();
 const appStore = useAppStore();
@@ -148,7 +146,6 @@ const fileInputRef = ref(null);
 const inputBoxRef = ref(null);
 const isDragging = ref(false);
 const isHoveringFile = ref(null);
-const showModelSelector = ref(false);
 
 // 当前模型显示名称
 const currentModelDisplay = computed(() => {
@@ -163,21 +160,6 @@ const handleFocus = () => {
   if (appStore.selectedCase) {
     appStore.clearSelectedCase();
   }
-};
-
-// 处理模型选择
-const handleModelSelect = (model) => {
-  generatorStore.setSelectedModel(model.model_name);
-  generatorStore.setSelectedModelInfo(model);
-  showModelSelector.value = false;
-
-  // 保存到localStorage
-  localStorage.setItem('selectedModel', JSON.stringify({
-    modelName: model.model_name,
-    modelInfo: model
-  }));
-
-  notification.success('模型已切换', `已切换到 ${model.model_name}`);
 };
 
 const textareaHeight = ref(80)

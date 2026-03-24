@@ -15,6 +15,23 @@
         <span v-if="msg.role === 'assistant'" class="text-[10px] font-normal text-ink-500 ml-2">v2.4.0</span>
       </div>
 
+      <!-- Thinking/Loading Animation - 当 AI 正在思考时显示 -->
+      <div
+        v-if="msg.role === 'assistant' && msg.status === 'processing' && !msg.content"
+        :class="[
+          'leading-relaxed mb-2 px-3 xs:px-4 py-2.5 xs:py-3 rounded-2xl block text-left',
+          'bg-primary/10 text-ink-950 border border-primary/20 max-w-[90%] xs:max-w-[85%] sm:max-w-[80%]'
+        ]">
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-1.5">
+            <span class="thinking-dot w-2 h-2 bg-primary rounded-full"></span>
+            <span class="thinking-dot w-2 h-2 bg-primary rounded-full"></span>
+            <span class="thinking-dot w-2 h-2 bg-primary rounded-full"></span>
+          </div>
+          <span class="text-ink-700 text-sm">AI 正在思考...</span>
+        </div>
+      </div>
+
       <!-- 文本内容 -->
       <div v-if="msg.content"
            :class="[
@@ -25,6 +42,11 @@
                : getStatusClasses(msg.status) + ' max-w-[90%] xs:max-w-[85%] sm:max-w-[80%]'
            ]">
         <span v-if="msg.role === 'assistant'" class="markdown-body" v-html="renderMarkdown(msg.content)"></span>
+        <!-- 流式输出时的闪烁光标 -->
+        <span
+          v-if="msg.role === 'assistant' && msg.status === 'processing' && msg.content"
+          class="inline-block w-0.5 h-4 bg-primary ml-0.5 animate-pulse rounded-sm align-middle">
+        </span>
         <span v-else>{{ msg.content }}</span>
       </div>
 
@@ -831,4 +853,24 @@ onUnmounted(() => {
 .markdown-body :deep(th),
 .markdown-body :deep(td) { border: 1px solid rgba(16, 19, 18, 0.08); padding: 0.4em 0.8em; }
 .markdown-body :deep(th) { background: rgba(16, 19, 18, 0.04); }
+
+/* Thinking animation dots */
+@keyframes thinking-bounce {
+  0%, 80%, 100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
+}
+
+.thinking-dot {
+  animation: thinking-bounce 1.4s ease-in-out infinite;
+}
+
+.thinking-dot:nth-child(1) { animation-delay: 0s; }
+.thinking-dot:nth-child(2) { animation-delay: 0.15s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.3s; }
 </style>
