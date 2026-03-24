@@ -38,10 +38,10 @@
           <div class="aspect-square">
             <img
               v-if="record.image_urls && record.image_urls.length > 0"
-              :src="record.image_urls[0]"
+              :src="resolveImageSrc(record.image_urls[0])"
               :alt="record.prompt"
               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              @error="handleImageError"
+              @error="handleImageFallback"
             >
             <div v-else class="w-full h-full flex items-center justify-center text-ink-300">
               <span class="material-symbols-outlined !text-4xl">image</span>
@@ -113,6 +113,7 @@
 import { ref, onMounted, watch } from 'vue'
 import { api } from '@/services/api'
 import { useAppStore } from '@/store/useAppStore'
+import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
 
 const appStore = useAppStore()
 
@@ -139,10 +140,6 @@ const hasMore = ref(true)
 const totalRecords = ref(0)
 const offset = ref(0)
 const limit = 20
-
-const handleImageError = (event) => {
-  event.target.src = '/placeholder-case.png'
-}
 
 const loadRecords = async (reset = false) => {
   if (loading.value) return

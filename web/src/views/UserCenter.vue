@@ -425,9 +425,10 @@
                   <div class="aspect-square bg-gray-200 relative group">
                     <img
                       v-if="record.image_urls && record.image_urls.length > 0"
-                      :src="record.image_urls[0]"
+                      :src="resolveImageSrc(record.image_urls[0])"
                       :alt="record.prompt"
                       class="w-full h-full object-cover"
+                      @error="handleImageFallback"
                     />
                     <div v-else class="w-full h-full flex items-center justify-center">
                       <span class="material-symbols-outlined !text-6xl text-gray-400">image_not_supported</span>
@@ -500,9 +501,10 @@
                 >
                   <div class="w-16 h-16 bg-gray-200 rounded-lg overflow-hidden shrink-0">
                     <img
-                      :src="record.image_url"
+                      :src="resolveImageSrc(record.image_url)"
                       :alt="record.file_name"
                       class="w-full h-full object-cover"
+                      @error="handleImageFallback"
                     />
                   </div>
                   <div class="flex-1 min-w-0">
@@ -635,9 +637,9 @@
                       <img
                         v-for="(url, idx) in record.image_urls.slice(0, 3)"
                         :key="idx"
-                        :src="getImageUrl(url)"
+                        :src="resolveImageSrc(getImageUrl(url))"
                         class="w-12 h-12 object-cover rounded-lg border border-border-dark"
-                        @error="handleImageError"
+                        @error="handleImageFallback"
                       >
                       <span v-if="record.image_urls.length > 3" class="text-xs text-gray-500">
                         +{{ record.image_urls.length - 3 }}
@@ -1229,6 +1231,7 @@ import { useAuthStore } from '@/store/useAuthStore'
 import { useAppStore } from '@/store/useAppStore'
 import { useNotificationStore } from '@/store/useNotificationStore'
 import { api } from '@/services/api'
+import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
 import { notification } from '@/utils/notification'
 import AnnouncementList from '@/components/AnnouncementList.vue'
 
@@ -1424,12 +1427,6 @@ function getImageUrl(url) {
   if (!url) return ''
   if (url.startsWith('http')) return url
   return `/api/v1${url.startsWith('/') ? '' : '/'}${url}`
-}
-
-// 图片加载错误处理
-function handleImageError(e) {
-  const target = e.target
-  target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjZDFlM2U4Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9Ii05ODUiIGZvbnQtc2l6ZT0iMTIiPuaWr+ihqDwvdGV4dD48L3N2Zz4='
 }
 
 // 格式化日期时间

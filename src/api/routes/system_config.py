@@ -20,7 +20,7 @@ PREDEFINED_CONFIGS = {
     "relay.api_key": {
         "config_type": "string",
         "category": "api",
-        "description": "Relay API Key (encrypted at rest)",
+        "description": "中转站API Key",
         "is_encrypted": True,
         "is_public": False,
     },

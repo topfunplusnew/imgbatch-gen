@@ -6,10 +6,10 @@
     <!-- 图片 -->
     <div class="relative w-full aspect-[4/3] overflow-hidden bg-gray-100">
       <img
-        :src="caseData.thumbnail_url || caseData.image_url || '/placeholder-case.png'"
+        :src="resolveImageSrc(caseData.thumbnail_url, caseData.image_url)"
         :alt="caseData.title"
         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-        @error="handleImageError"
+        @error="handleImageFallback"
       >
 
       <!-- 分类标签 -->
@@ -53,6 +53,7 @@
 import { useCaseStore } from '@/store/useCaseStore'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import { useAppStore } from '@/store/useAppStore'
+import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
 
 const props = defineProps({
   caseData: {
@@ -64,10 +65,6 @@ const props = defineProps({
 const caseStore = useCaseStore()
 const generatorStore = useGeneratorStore()
 const appStore = useAppStore()
-
-const handleImageError = (event) => {
-  event.target.src = '/placeholder-case.png'
-}
 
 const viewDetails = () => {
   appStore.setSelectedCase(props.caseData)

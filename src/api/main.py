@@ -13,6 +13,7 @@ from ..config.settings import settings
 from ..config.model_registry import get_model_registry
 from ..engine import TaskManager
 from ..database import get_db_manager
+from ..services.system_config_service import ensure_startup_system_configs
 from .middleware import setup_cors, logging_middleware
 from .routes import generate, batch, status, models, unified, chat, assistant, health, history, files, async_tasks, auth, account, payment, checkin, download, referral, admin, system_config, withdrawal, case_management, notifications, maintenance, user_config
 
@@ -49,6 +50,12 @@ async def lifespan(app: FastAPI):
         app.state.db_manager = None
 
     # 初始化管理员账户（仅当不存在时）
+    if app.state.db_manager:
+        try:
+            await ensure_startup_system_configs(db_manager)
+        except Exception as e:
+            logger.error(f"初始化系统配置默认数据失败: {str(e)}")
+
     try:
         from ..database import User, Account
         from ..services.auth_service import AuthService

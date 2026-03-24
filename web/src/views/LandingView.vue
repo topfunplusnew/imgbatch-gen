@@ -143,10 +143,10 @@
               >
                 <div class="aspect-video relative">
                   <img
-                    :src="caseItem.thumbnail_url || caseItem.image_url || '/placeholder-case.png'"
+                    :src="resolveImageSrc(caseItem.thumbnail_url, caseItem.image_url)"
                     :alt="caseItem.title"
                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    @error="handleImageError"
+                    @error="handleImageFallback"
                   >
                   <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                   <div class="absolute bottom-2 left-2 right-2">
@@ -180,10 +180,10 @@
               >
                 <div class="aspect-video relative">
                   <img
-                    :src="caseItem.thumbnail_url || caseItem.image_url || '/placeholder-case.png'"
+                    :src="resolveImageSrc(caseItem.thumbnail_url, caseItem.image_url)"
                     :alt="caseItem.title"
                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    @error="handleImageError"
+                    @error="handleImageFallback"
                   >
                   <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 </div>
@@ -215,6 +215,7 @@ import NotificationCarousel from '@/components/NotificationCarousel.vue'
 import ModelDropdown from '@/components/landing/ModelDropdown.vue'
 import RatioDropdown from '@/components/landing/RatioDropdown.vue'
 import ResolutionDropdown from '@/components/landing/ResolutionDropdown.vue'
+import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
 
 const appStore = useAppStore()
 const generatorStore = useGeneratorStore()
@@ -346,11 +347,6 @@ const getFileIcon = (file) => {
 // Remove file
 const removeFile = (index) => {
   attachments.value.splice(index, 1)
-}
-
-// Handle image error
-const handleImageError = (event) => {
-  event.target.src = '/placeholder-case.png'
 }
 
 // Start generation

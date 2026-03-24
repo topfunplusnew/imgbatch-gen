@@ -97,10 +97,10 @@
           <tr v-for="caseItem in cases" :key="caseItem.id" class="hover:bg-gray-50">
             <td class="px-4 py-3">
               <img
-                :src="caseItem.thumbnail_url || caseItem.image_url || '/placeholder-case.png'"
+                :src="resolveImageSrc(caseItem.thumbnail_url, caseItem.image_url)"
                 :alt="caseItem.title"
                 class="w-16 h-16 rounded-lg object-cover"
-                @error="handleImageError"
+                @error="handleImageFallback"
               >
             </td>
             <td class="px-4 py-3">
@@ -180,10 +180,10 @@
           <!-- 卡片头部：图片 + 标题 + 状态 -->
           <div class="flex gap-3">
             <img
-              :src="caseItem.thumbnail_url || caseItem.image_url || '/placeholder-case.png'"
+              :src="resolveImageSrc(caseItem.thumbnail_url, caseItem.image_url)"
               :alt="caseItem.title"
               class="w-20 h-20 rounded-lg object-cover flex-shrink-0"
-              @error="handleImageError"
+              @error="handleImageFallback"
             >
             <div class="flex-1 min-w-0">
               <div class="flex items-start justify-between gap-2">
@@ -287,6 +287,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { api } from '@/services/api'
+import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
 import CaseFormModal from './CaseFormModal.vue'
 
 const cases = ref([])
@@ -448,10 +449,6 @@ const deleteCase = async (caseItem) => {
   } catch (error) {
     console.error('删除案例失败:', error)
   }
-}
-
-const handleImageError = (event) => {
-  event.target.src = '/placeholder-case.png'
 }
 
 onMounted(() => {
