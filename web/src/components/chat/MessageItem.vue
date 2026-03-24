@@ -47,7 +47,7 @@
           v-if="msg.role === 'assistant' && msg.status === 'processing' && msg.content"
           class="inline-block w-0.5 h-4 bg-primary ml-0.5 animate-pulse rounded-sm align-middle">
         </span>
-        <span v-else>{{ msg.content }}</span>
+        <template v-else-if="msg.role === 'user'">{{ msg.content }}</template>
       </div>
 
       <!-- Message Action Bar - Only for assistant messages (outside the bubble) -->
