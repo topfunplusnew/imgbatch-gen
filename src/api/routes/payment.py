@@ -36,6 +36,12 @@ class CreateRechargeOrderRequest(BaseModel):
     payment_method: str = Field(..., pattern=r'^(wechat|alipay)$', description="支付方式")
 
 
+class CreateH5OrderRequest(BaseModel):
+    """创建 H5 支付订单请求"""
+    recharge_option_id: str = Field(..., description="充值选项ID")
+    client_ip: str = Field(..., description="客户端IP地址")
+
+
 # ==================== 响应模型 ====================
 
 
@@ -163,6 +169,84 @@ async def create_payment_order(
     )
 
 
+@router.post("/create-h5", response_model=OrderResponse, summary="创建H5支付订单")
+async def create_h5_payment_order(
+    request: Request,
+    body: CreateH5OrderRequest,
+    user: dict = Depends(RequiredAuthDependency())
+):
+    """
+    创建H5支付订单（手机网页支付）
+
+    返回支付跳转URL，适用于手机端网页支付场景
+    """
+    payment_service = get_payment_service()
+
+    # 获取充值配置
+    import json
+    from pathlib import Path
+    config_path = Path(__file__).parent.parent.parent / "config" / "billing_config.json"
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = json.load(f)
+
+    recharge_options = config.get("recharge_options", {}).get("options", [])
+    selected_option = None
+    for opt in recharge_options:
+        if opt.get("id") == body.recharge_option_id:
+            selected_option = opt
+            break
+
+    if not selected_option:
+        raise HTTPException(status_code=400, detail="无效的充值选项")
+
+    # 创建订单
+    order = await payment_service.create_order(
+        user_id=user["id"],
+        order_type="recharge",
+        amount=selected_option["amount"],
+        payment_method="wechat",  # H5支付仅支持微信
+        subject=selected_option["name"],
+        body=f"充值 {selected_option['amount_yuan']} 元，获得 {selected_option['points']} 积分",
+    )
+
+    # 调用微信H5支付接口
+    wechat_service = get_wechat_pay_service()
+    result = await wechat_service.create_h5_pay(
+        order_id=order.order_id,
+        amount=order.amount,
+        subject=order.subject,
+        client_ip=body.client_ip,
+    )
+    h5_url = result.get("h5_url")
+
+    # 更新订单
+    async with payment_service.db_manager.get_session() as session:
+        from sqlalchemy import select
+        from ...database import PaymentOrder
+        stmt = select(PaymentOrder).where(PaymentOrder.order_id == order.order_id)
+        db_result = await session.execute(stmt)
+        db_order = db_result.scalar_one_or_none()
+        if db_order:
+            db_order.pay_url = h5_url
+            db_order.payment_channel = "h5"
+            await session.commit()
+
+    return OrderResponse(
+        order_id=order.order_id,
+        user_id=order.user_id,
+        order_type=order.order_type,
+        amount=order.amount,
+        amount_yuan=order.amount / 100,
+        payment_method=order.payment_method,
+        status=order.status,
+        subject=order.subject,
+        created_at=order.created_at.isoformat() if order.created_at else "",
+        expire_time=order.expire_time.isoformat() if order.expire_time else None,
+        qr_code_url=None,
+        pay_url=h5_url,
+    )
+
+
 @router.get("/qrcode/{order_id}", summary="获取支付二维码")
 async def get_payment_qrcode(
     order_id: str,
@@ -283,42 +367,84 @@ async def cancel_order(
 @router.post("/callback/wechat", summary="微信支付回调")
 async def wechat_pay_callback(request: Request):
     """
-    微信支付回调通知
+    微信支付回调通知（V3 JSON 格式）
 
     注意：此接口不需要认证，由微信服务器调用
     """
-    import xml.etree.ElementTree as ET
+    import json
+    import time
 
-    # 获取回调数据
+    # 获取回调头和请求体
+    headers = dict(request.headers)
     body = await request.body()
-    data = ET.fromstring(body)
 
-    # 提取字段
-    order_id = data.find("out_trade_no").text
-    transaction_id = data.find("transaction_id").text
-    return_code = data.find("return_code").text
-    result_code = data.find("result_code").text
+    logger.info(f"收到微信支付回调")
 
-    logger.info(f"微信支付回调: order={order_id}, transaction={transaction_id}")
+    # 时间戳校验：防止重放攻击
+    wechatpay_timestamp = headers.get("wechatpay-timestamp") or headers.get("Wechatpay-Timestamp")
+    if wechatpay_timestamp:
+        callback_time = int(wechatpay_timestamp)
+        current_time = int(time.time())
+        time_diff = abs(current_time - callback_time)
+        # 5分钟内的请求才有效
+        if time_diff > 300:
+            logger.error(f"微信支付回调时间戳过期: diff={time_diff}s")
+            return Response(content="FAIL", status_code=401, media_type="text/plain")
 
-    # 验证签名
+    # 使用 SDK 验签 + 解密
     wechat_service = get_wechat_pay_service()
-    # TODO: 验证签名
+    result = await wechat_service.handle_callback(headers, body)
 
-    # 处理支付结果
-    if return_code == "SUCCESS" and result_code == "SUCCESS":
-        payment_service = get_payment_service()
-        await payment_service.handle_payment_success(
-            order_id=order_id,
-            transaction_id=transaction_id,
-            notify_data=ET.tostring(data),
+    if result is None:
+        # 验签失败
+        logger.error("微信支付回调验签失败")
+        return Response(content="FAIL", status_code=401, media_type="text/plain")
+
+    try:
+        # 解析回调数据
+        resource = result.get("resource", {})
+        if isinstance(resource, str):
+            # 如果 resource 是字符串，需要再解析
+            transaction = json.loads(resource)
+        else:
+            transaction = resource
+
+        # 如果 result 本身就是 transaction 数据
+        if not resource and "out_trade_no" in result:
+            transaction = result
+
+        order_id = transaction.get("out_trade_no")
+        transaction_id = transaction.get("transaction_id")
+        trade_state = transaction.get("trade_state")
+
+        # 提取支付金额用于校验
+        amount_info = transaction.get("amount", {})
+        paid_amount = amount_info.get("total") if isinstance(amount_info, dict) else None
+
+        logger.info(
+            f"微信支付回调: order={order_id}, transaction={transaction_id}, "
+            f"state={trade_state}, paid_amount={paid_amount}"
         )
 
-    # 返回微信要求的格式
-    return Response(
-        content="<xml><return_code><![CDATA[SUCCESS]]></return_code><return_msg><![CDATA[OK]]></return_msg></xml>",
-        media_type="application/xml",
-    )
+        # 处理支付成功
+        if trade_state == "SUCCESS":
+            payment_service = get_payment_service()
+            success = await payment_service.handle_payment_success(
+                order_id=order_id,
+                transaction_id=transaction_id,
+                notify_data=transaction,
+                paid_amount=paid_amount,
+            )
+            if not success:
+                logger.error(f"微信支付回调处理失败: order={order_id}")
+                return Response(content="FAIL", status_code=500, media_type="text/plain")
+
+        # 返回 SUCCESS
+        return Response(content="SUCCESS", media_type="text/plain")
+
+    except Exception as e:
+        logger.error(f"处理微信支付回调异常: {e}")
+        return Response(content="FAIL", status_code=500, media_type="text/plain")
 
 
 @router.post("/callback/alipay", summary="支付宝回调")
@@ -328,26 +454,57 @@ async def alipay_pay_callback(request: Request):
 
     注意：此接口不需要认证，由支付宝服务器调用
     """
+    import time
+
     form_data = await request.form()
 
     order_id = form_data.get("out_trade_no")
     trade_no = form_data.get("trade_no")
     trade_status = form_data.get("trade_status")
+    # 支付宝金额单位是元，需要转换为分
+    total_amount = form_data.get("total_amount")
+    paid_amount = int(float(total_amount) * 100) if total_amount else None
 
-    logger.info(f"支付宝回调: order={order_id}, trade={trade_no}, status={trade_status}")
+    # 支付宝时间戳校验
+    notify_time = form_data.get("notify_time")
+    if notify_time:
+        try:
+            from datetime import datetime
+            notify_dt = datetime.strptime(notify_time, "%Y-%m-%d %H:%M:%S")
+            current_dt = datetime.utcnow()
+            time_diff = (current_dt - notify_dt.replace(tzinfo=None)).total_seconds()
+            # 5分钟内的请求才有效
+            if abs(time_diff) > 300:
+                logger.error(f"支付宝回调时间戳过期: diff={time_diff}s")
+                return "fail"
+        except Exception as e:
+            logger.warning(f"支付宝时间戳解析失败: {e}")
+
+    logger.info(
+        f"支付宝回调: order={order_id}, trade={trade_no}, "
+        f"status={trade_status}, paid_amount={paid_amount}"
+    )
 
     # 验证签名
     alipay_service = get_alipay_service()
-    # TODO: 验证签名
+    # TODO: 需要实现支付宝签名验证
+    # verified = alipay_service.verify_notify(dict(form_data))
+    # if not verified:
+    #     logger.error("支付宝签名验证失败")
+    #     return "fail"
 
     # 处理支付结果
     if trade_status in ("TRADE_SUCCESS", "TRADE_FINISHED"):
         payment_service = get_payment_service()
-        await payment_service.handle_payment_success(
+        success = await payment_service.handle_payment_success(
             order_id=order_id,
             transaction_id=trade_no,
             notify_data=dict(form_data),
+            paid_amount=paid_amount,
         )
+        if not success:
+            logger.error(f"支付宝回调处理失败: order={order_id}")
+            return "fail"
 
     return "success"
 

@@ -126,10 +126,12 @@ class Settings(BaseSettings):
 
     wechat_appid: Optional[str] = None
     wechat_mch_id: Optional[str] = None
-    wechat_api_key: Optional[str] = None
-    wechat_cert_path: Optional[str] = None
-    wechat_key_path: Optional[str] = None
-    wechat_notify_url: Optional[str] = None
+    wechat_api_key: Optional[str] = None  # APIv3密钥
+    wechat_cert_serial_no: Optional[str] = None  # 商户证书序列号
+    wechat_cert_path: Optional[str] = None  # 商户证书路径（可选）
+    wechat_key_path: Optional[str] = None  # 商户私钥文件路径
+    wechat_notify_url: Optional[str] = None  # 支付回调URL
+    wechat_cert_dir: Optional[str] = None  # 证书缓存目录（可选，自动下载证书模式）
 
     alipay_app_id: Optional[str] = None
     alipay_private_key: Optional[str] = None

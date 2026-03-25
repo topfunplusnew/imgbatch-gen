@@ -44,7 +44,7 @@
       </div>
     </div>
 
-    <div class="px-3 xs:px-4 md:px-6 py-2 xs:py-2.5 md:py-4 min-h-[80px] xs:min-h-[100px] md:min-h-[120px]">
+    <div class="px-3 xs:px-4 md:px-6 py-2 xs:py-2.5 md:py-4">
       <div class="w-full">
         <div
           ref="inputBoxRef"
@@ -52,84 +52,141 @@
           @dragleave="handleDragLeave"
           @drop.prevent="handleDrop"
           :class="[
-            'relative z-10 bg-white/95 border rounded-2xl shadow-xl',
-            'w-full',
-            isDragging ? 'border-primary border-2 bg-primary/5' : 'border-border-dark'
+            'relative z-10 bg-white/95 rounded-2xl shadow-xl overflow-hidden',
+            'w-full border',
+            isDragging ? 'border-accent-purple border-2 bg-accent-purple/5' : 'border-gray-200'
           ]">
 
-          <!-- 上边框拖拽把手：拖动改变高度，不可获取焦点 -->
-          <div
-            @mousedown.prevent="startResizeHeight"
-            tabindex="-1"
-            class="w-full h-4 flex items-center justify-center cursor-ns-resize rounded-t-2xl select-none hover:bg-primary/5 transition-colors"
-            title="拖拽调整高度">
-            <div class="w-10 h-1 bg-border-dark rounded-full opacity-70 hover:opacity-100 transition-opacity pointer-events-none"></div>
+          <!-- Top Toolbar -->
+          <div class="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50/50">
+            <!-- Left: Model Selector -->
+            <div ref="modelButtonRef" class="relative">
+              <button
+                @click="showModelPopup = !showModelPopup"
+                class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+              >
+                <span class="material-symbols-outlined !text-base text-accent-purple">auto_awesome</span>
+                <span class="text-sm font-medium text-gray-800 truncate max-w-[100px] md:max-w-[140px]">
+                  {{ currentModelDisplay }}
+                </span>
+                <span class="material-symbols-outlined !text-sm text-gray-500">
+                  {{ showModelPopup ? 'expand_less' : 'expand_more' }}
+                </span>
+              </button>
+
+              <!-- Model Selector Popup -->
+              <ModelSelectorPopup
+                :visible="showModelPopup"
+                :current-model="generatorStore.model"
+                :attachments="generatorStore.attachments"
+                @select="handleModelSelect"
+                @close="showModelPopup = false"
+              />
+            </div>
+
+            <!-- Right: Attachment buttons -->
+            <div class="flex items-center gap-1">
+              <input
+                ref="fileInputRef"
+                type="file"
+                multiple
+                accept=".pdf,.docx,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg"
+                @change="handleFileSelect"
+                class="hidden">
+
+              <button
+                @click="triggerFileSelect"
+                class="p-2 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors"
+                title="添加附件">
+                <span class="material-symbols-outlined !text-lg">attach_file</span>
+              </button>
+
+              <button
+                @click="handleNewConversation"
+                class="w-7 h-7 flex items-center justify-center bg-gray-800 hover:bg-gray-700 rounded-full text-white transition-colors"
+                title="新建对话">
+                <span class="material-symbols-outlined !text-base">add</span>
+              </button>
+            </div>
           </div>
 
-          <!-- 内容区 -->
-          <div class="relative flex items-end gap-2 px-2 pb-2">
-            <input
-              ref="fileInputRef"
-              type="file"
-              multiple
-              accept=".pdf,.docx,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg"
-              @change="handleFileSelect"
-              class="hidden">
-
-            <button
-              @click="triggerFileSelect"
-              class="p-2 hover:bg-primary/5 rounded-xl text-ink-500 transition-colors shrink-0">
-              <span class="material-symbols-outlined">attach_file</span>
-            </button>
-
-            <!-- 模型选择按钮 - 桌面端：显示图标和模型名称 -->
-            <el-button
-              @click="emit('update:showModelSelector', true)"
-              class="hidden md:flex !rounded-xl !border-border-dark/50 !bg-white/80"
-              size="default"
-            >
-              <template #icon>
-                <span class="material-symbols-outlined !text-lg text-primary">auto_awesome</span>
-              </template>
-              <span class="text-sm font-medium text-ink-950 truncate max-w-[120px]">
-                {{ currentModelDisplay }}
-              </span>
-            </el-button>
+          <!-- Main Input Area -->
+          <div class="relative">
+            <!-- 拖拽把手 -->
+            <div
+              @mousedown.prevent="startResizeHeight"
+              tabindex="-1"
+              class="w-full h-3 flex items-center justify-center cursor-ns-resize select-none hover:bg-gray-100 transition-colors"
+              title="拖拽调整高度">
+              <div class="w-8 h-0.5 bg-gray-300 rounded-full opacity-60 hover:opacity-100 transition-opacity pointer-events-none"></div>
+            </div>
 
             <textarea
+              ref="textareaRef"
               v-model="generatorStore.prompt"
               @keydown.enter.exact.prevent="handleSend"
+              @keydown.enter.shift.exact="() => {}"
               @focus="handleFocus"
               :style="{ height: textareaHeight + 'px' }"
-              class="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2 px-2 overflow-y-auto custom-scrollbar min-w-0 resize-none text-ink-950 placeholder:text-ink-500"
-              placeholder="描述您想要创建的图像...">
+              class="w-full bg-transparent border-none focus:ring-0 focus:outline-none text-sm px-4 pb-2 overflow-y-auto custom-scrollbar resize-none text-gray-900 placeholder:text-gray-400"
+              placeholder="输入内容开始聊天 (Shift + Enter 换行) ...">
             </textarea>
+          </div>
 
-            <button
-              @click="handleSend"
-              :disabled="generatorStore.isGenerating || (!generatorStore.prompt.trim() && generatorStore.attachments.length === 0)"
-              class="p-2 bg-primary-strong text-white rounded-xl shadow-lg hover:bg-primary-deep disabled:opacity-50 disabled:cursor-not-allowed shrink-0">
-              <span class="material-symbols-outlined">{{ generatorStore.isGenerating ? 'hourglass_empty' : 'send' }}</span>
-            </button>
+          <!-- Bottom Action Bar -->
+          <div class="flex items-center justify-end px-3 py-2 border-t border-gray-100 bg-gray-50/50">
+            <!-- Right side buttons -->
+            <div class="flex items-center gap-1">
+              <!-- Purchase button -->
+              <button
+                @click="goToRecharge"
+                class="hidden sm:flex items-center gap-1 px-2.5 py-1.5 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                <span class="material-symbols-outlined !text-base text-accent-purple">diamond</span>
+                <span class="text-sm font-medium text-accent-purple">购买</span>
+              </button>
 
+              <!-- Expand/Fullscreen button -->
+              <button
+                @click="toggleExpand"
+                class="hidden md:flex p-1.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600 rounded-lg transition-colors"
+                title="全屏模式">
+                <span class="material-symbols-outlined !text-lg">{{ isExpanded ? 'close_fullscreen' : 'open_in_full' }}</span>
+              </button>
+
+              <!-- Send button -->
+              <button
+                @click="handleSend"
+                :disabled="generatorStore.isGenerating || (!generatorStore.prompt.trim() && generatorStore.attachments.length === 0)"
+                :class="[
+                  'p-2 rounded-xl transition-all shrink-0',
+                  (generatorStore.prompt.trim() || generatorStore.attachments.length > 0) && !generatorStore.isGenerating
+                    ? 'bg-accent-purple text-white hover:bg-accent-purple-dark shadow-md'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                ]">
+                <span class="material-symbols-outlined !text-lg">
+                  {{ generatorStore.isGenerating ? 'hourglass_empty' : 'send' }}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
 
-        <div class="hidden md:block text-[10px] text-ink-500 text-center mt-2">
+        <div class="hidden md:block text-[10px] text-gray-400 text-center mt-2">
           支持格式：PDF、Word (.docx)、图片 (.jpg, .png, .gif, .webp, .bmp, .svg)
         </div>
       </div>
     </div>
-
   </div>
 </template>
 
 <script setup>
-import { ref, onUnmounted, computed } from 'vue';
+import { ref, onUnmounted, computed, onMounted, watch } from 'vue';
 import { useGeneratorStore } from '@/store/useGeneratorStore';
 import { useAppStore } from '@/store/useAppStore';
 import { notification } from '@/utils/notification';
 import { api } from '@/services/api';
+import ModelSelectorPopup from './ModelSelectorPopup.vue';
 
 const props = defineProps({
   showModelSelector: {
@@ -146,6 +203,31 @@ const fileInputRef = ref(null);
 const inputBoxRef = ref(null);
 const isDragging = ref(false);
 const isHoveringFile = ref(null);
+
+// Local state for model selector popup
+const showModelPopup = ref(false);
+const modelButtonRef = ref(null);
+
+// Expand toggle
+const isExpanded = ref(false);
+
+// Textarea ref
+const textareaRef = ref(null);
+
+// Click outside handler for model popup
+const handleClickOutside = (event) => {
+  if (showModelPopup.value && modelButtonRef.value && !modelButtonRef.value.contains(event.target)) {
+    showModelPopup.value = false;
+  }
+};
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside);
+});
 
 // 当前模型显示名称
 const currentModelDisplay = computed(() => {
@@ -743,6 +825,35 @@ const handleImageModelSend = async () => {
 onUnmounted(() => {
   cleanupFilePreviewUrls();
 });
+
+// Navigate to recharge page
+const goToRecharge = () => {
+  appStore.setCurrentPage('user-center', 'balance');
+};
+
+// Create new conversation
+const handleNewConversation = () => {
+  generatorStore.clearMessages();
+  generatorStore.clearAttachments();
+  generatorStore.prompt = '';
+};
+
+// Toggle expand/fullscreen mode
+const toggleExpand = () => {
+  isExpanded.value = !isExpanded.value;
+  if (isExpanded.value) {
+    textareaHeight.value = MAX_HEIGHT;
+  } else {
+    textareaHeight.value = 80;
+  }
+};
+
+// Handle model selection from popup
+const handleModelSelect = (model) => {
+  generatorStore.setModel(model.model_name);
+  generatorStore.selectedModelInfo = model;
+  showModelPopup.value = false;
+};
 </script>
 
 <style scoped>

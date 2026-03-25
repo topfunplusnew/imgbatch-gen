@@ -2,10 +2,8 @@
   <aside :class="asideClass">
     <nav v-if="!hideLogo" class="px-3 xs:px-4 md:px-4 pt-4 pb-3 space-y-1 shrink-0">
       <div :class="['flex items-center mb-4', props.mobileDrawer ? 'justify-between' : 'justify-center']">
-        <div class="w-8 h-8 bg-gradient-to-br from-primary to-primary-deep rounded-lg flex items-center justify-center shrink-0">
-          <span class="material-symbols-outlined !text-lg text-white">auto_awesome</span>
-        </div>
-        <span :class="menuTitleClass">AI 生图助手</span>
+        <img src="/photo/logo.png" alt="Logo" class="w-8 h-8 rounded-lg object-cover shrink-0" />
+        <span :class="menuTitleClass">一悟学舍</span>
         <button
           v-if="props.mobileDrawer"
           @click="emit('requestClose')"

@@ -15,10 +15,8 @@
       <!-- Logo -->
       <div class="mb-8 md:mb-12">
         <div class="flex items-center justify-center mb-4">
-          <div class="w-16 h-16 bg-gradient-to-br from-primary to-primary-deep rounded-full flex items-center justify-center mr-4">
-            <span class="material-symbols-outlined !text-3xl text-white">auto_awesome</span>
-          </div>
-          <h1 class="text-3xl md:text-4xl font-bold text-ink-950">AI 图像生成助手</h1>
+          <img src="/photo/logo.png" alt="Logo" class="w-16 h-16 rounded-full mr-4 object-cover" />
+          <h1 class="text-3xl md:text-4xl font-bold text-ink-950">一悟学舍</h1>
         </div>
         <p class="text-base md:text-lg text-ink-500 max-w-2xl mx-auto">
           强大的AI图像生成工具，支持多种模型和风格，轻松创建您想要的图像
