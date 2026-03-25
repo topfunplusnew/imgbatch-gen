@@ -337,6 +337,7 @@ const togglePanel = () => {
 
 const selectModel = (model: any) => {
   generatorStore.model = model.model_name
+  generatorStore.setSelectedModelInfo(model)
   isOpen.value = false
 }
 

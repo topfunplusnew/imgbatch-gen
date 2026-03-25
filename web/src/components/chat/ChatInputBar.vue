@@ -183,7 +183,7 @@
 </template>
 
 <script setup>
-import { ref, onUnmounted, computed, onMounted, watch } from 'vue';
+import { ref, onUnmounted, computed, onMounted, watch, nextTick } from 'vue';
 import { useGeneratorStore } from '@/store/useGeneratorStore';
 import { useAppStore } from '@/store/useAppStore';
 import { notification } from '@/utils/notification';
@@ -841,6 +841,43 @@ const handleModelSelect = (model) => {
   generatorStore.setSelectedModelInfo(model);
   showModelPopup.value = false;
 };
+
+// 自动发送处理
+const handleAutoSend = async () => {
+  // 确保有内容可发送
+  if ((!generatorStore.prompt.trim() && generatorStore.attachments.length === 0)) {
+    return;
+  }
+
+  // 确保模型信息已加载
+  if (!generatorStore.selectedModelInfo) {
+    console.warn('[自动发送] 模型信息未加载');
+    return;
+  }
+
+  // 清除标记，防止重复触发
+  generatorStore.clearPendingAutoSend();
+
+  // 使用 nextTick 确保 DOM 已更新
+  await nextTick();
+
+  // 触发发送
+  await handleSend();
+};
+
+// 监听自动发送标记
+watch(
+  () => generatorStore.pendingAutoSend,
+  async (newValue) => {
+    if (newValue) {
+      // 延迟执行，确保 ChatView 完全渲染
+      setTimeout(() => {
+        handleAutoSend();
+      }, 100);
+    }
+  },
+  { immediate: true }
+);
 </script>
 
 <style scoped>

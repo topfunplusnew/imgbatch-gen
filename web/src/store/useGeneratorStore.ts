@@ -28,6 +28,7 @@ export const useGeneratorStore = defineStore('generator', {
         justCreatedSession: false, // 标记是否刚刚创建了新会话
         availableModels: [] as Array<{model_name: string, display_name?: string, provider?: string, model_type?: string}>, // 可用模型列表
         quotedMessage: null as {id: string, content: string} | null, // 引用的消息
+        pendingAutoSend: false, // 标记是否需要自动发送
     }),
     getters: {
         // 动态计算宽高比
@@ -59,6 +60,14 @@ export const useGeneratorStore = defineStore('generator', {
 
         setSelectedModelInfo(modelInfo) {
             this.selectedModelInfo = modelInfo
+        },
+
+        setPendingAutoSend(value) {
+            this.pendingAutoSend = value
+        },
+
+        clearPendingAutoSend() {
+            this.pendingAutoSend = false
         },
 
         setStyle(style) {
