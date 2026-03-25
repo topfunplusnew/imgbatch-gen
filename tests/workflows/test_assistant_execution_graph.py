@@ -7,6 +7,7 @@ from src.workflows import assistant_execution_graph as graph
 from src.workflows.multimodal_attachment_graph import (
     AttachmentDescriptor,
     AttachmentRouteDecision,
+    TextAttachmentPromptResult,
 )
 
 
@@ -79,3 +80,169 @@ async def test_plan_assistant_execution_uses_chat_model_for_attachment_chat(monk
     assert all(message["content"] != "图像生成完成！" for message in plan.messages)
     assert all(not str(message["content"]).startswith("正在上传文件") for message in plan.messages)
     assert "[Attachment: sample.pdf]" in str(plan.messages[-1]["content"])
+
+
+@pytest.mark.asyncio
+async def test_plan_assistant_execution_builds_page_matched_pdf_prompts(monkeypatch):
+    async def fake_load_attachment_descriptors(files, db_manager, api_key=None):
+        return [
+            AttachmentDescriptor(
+                name="catalog.pdf",
+                kind="pdf",
+                source="http://example.com/catalog.pdf",
+                text_excerpt="[Page 1]\n第一页内容\n\n[Page 2]\n第二页内容\n\n[Page 3]\n第三页内容",
+                page_excerpts=["第一页内容", "第二页内容", "第三页内容"],
+            )
+        ]
+
+    async def fake_build_attachment_route(user_instruction, attachments, api_key=None, model_hint=None):
+        return AttachmentRouteDecision(
+            route="image",
+            confidence=0.91,
+            reasoning="The request explicitly asks for image generation from the PDF.",
+            source="langgraph",
+        )
+
+    async def fake_build_text_attachment_prompt(user_instruction, attachments, api_key=None):
+        primary = attachments[0]
+        return TextAttachmentPromptResult(
+            prompt=f"Prompt for {primary.name}: {primary.text_excerpt}",
+            summary=primary.text_excerpt or "",
+            source="test",
+        )
+
+    monkeypatch.setattr(graph, "_load_attachment_descriptors", fake_load_attachment_descriptors)
+    monkeypatch.setattr(graph, "build_attachment_route", fake_build_attachment_route)
+    monkeypatch.setattr(graph, "build_text_attachment_prompt", fake_build_text_attachment_prompt)
+
+    plan = await graph.plan_assistant_execution(
+        messages=[{"role": "user", "content": "根据PDF生成2张图"}],
+        files=["file-1"],
+        user_instruction="根据PDF生成2张图",
+        request_model="gpt-image-1",
+        request_model_type="image",
+        requested_count=2,
+        db_manager=object(),
+        app_state=SimpleNamespace(model_registry=None),
+        api_key="test-key",
+    )
+
+    assert plan.mode == "image"
+    assert plan.intent_type == "batch_generate"
+    assert plan.batch_count == 2
+    assert plan.metadata["pdf_page_match_enabled"] is True
+    assert plan.metadata["pdf_total_pages"] == 3
+    assert plan.metadata["pdf_page_match_count"] == 2
+    assert len(plan.metadata["_batch_prompts"]) == 2
+    assert "第一页内容" in plan.metadata["_batch_prompts"][0]
+    assert "第二页内容" in plan.metadata["_batch_prompts"][1]
+    assert "第三页内容" not in plan.metadata["_batch_prompts"][0]
+    assert "第三页内容" not in plan.metadata["_batch_prompts"][1]
+
+
+@pytest.mark.asyncio
+async def test_plan_assistant_execution_matches_all_pdf_pages_when_count_is_equal(monkeypatch):
+    async def fake_load_attachment_descriptors(files, db_manager, api_key=None):
+        return [
+            AttachmentDescriptor(
+                name="catalog.pdf",
+                kind="pdf",
+                source="http://example.com/catalog.pdf",
+                text_excerpt="[Page 1]\n第一页内容\n\n[Page 2]\n第二页内容\n\n[Page 3]\n第三页内容",
+                page_excerpts=["第一页内容", "第二页内容", "第三页内容"],
+            )
+        ]
+
+    async def fake_build_attachment_route(user_instruction, attachments, api_key=None, model_hint=None):
+        return AttachmentRouteDecision(
+            route="image",
+            confidence=0.91,
+            reasoning="The request explicitly asks for image generation from the PDF.",
+            source="langgraph",
+        )
+
+    async def fake_build_text_attachment_prompt(user_instruction, attachments, api_key=None):
+        primary = attachments[0]
+        return TextAttachmentPromptResult(
+            prompt=f"Prompt for {primary.name}: {primary.text_excerpt}",
+            summary=primary.text_excerpt or "",
+            source="test",
+        )
+
+    monkeypatch.setattr(graph, "_load_attachment_descriptors", fake_load_attachment_descriptors)
+    monkeypatch.setattr(graph, "build_attachment_route", fake_build_attachment_route)
+    monkeypatch.setattr(graph, "build_text_attachment_prompt", fake_build_text_attachment_prompt)
+
+    plan = await graph.plan_assistant_execution(
+        messages=[{"role": "user", "content": "根据PDF生成3张图"}],
+        files=["file-1"],
+        user_instruction="根据PDF生成3张图",
+        request_model="gpt-image-1",
+        request_model_type="image",
+        requested_count=3,
+        db_manager=object(),
+        app_state=SimpleNamespace(model_registry=None),
+        api_key="test-key",
+    )
+
+    assert plan.mode == "image"
+    assert plan.intent_type == "batch_generate"
+    assert plan.batch_count == 3
+    assert plan.metadata["pdf_page_match_enabled"] is True
+    assert plan.metadata["pdf_total_pages"] == 3
+    assert plan.metadata["pdf_page_match_count"] == 3
+    assert len(plan.metadata["_batch_prompts"]) == 3
+    assert "第一页内容" in plan.metadata["_batch_prompts"][0]
+    assert "第二页内容" in plan.metadata["_batch_prompts"][1]
+    assert "第三页内容" in plan.metadata["_batch_prompts"][2]
+
+
+@pytest.mark.asyncio
+async def test_plan_assistant_execution_caps_pdf_page_matching_to_available_pages(monkeypatch):
+    async def fake_load_attachment_descriptors(files, db_manager, api_key=None):
+        return [
+            AttachmentDescriptor(
+                name="catalog.pdf",
+                kind="pdf",
+                source="http://example.com/catalog.pdf",
+                text_excerpt="[Page 1]\n第一页内容\n\n[Page 2]\n第二页内容",
+                page_excerpts=["第一页内容", "第二页内容"],
+            )
+        ]
+
+    async def fake_build_attachment_route(user_instruction, attachments, api_key=None, model_hint=None):
+        return AttachmentRouteDecision(
+            route="image",
+            confidence=0.91,
+            reasoning="The request explicitly asks for image generation from the PDF.",
+            source="langgraph",
+        )
+
+    async def fake_build_text_attachment_prompt(user_instruction, attachments, api_key=None):
+        primary = attachments[0]
+        return TextAttachmentPromptResult(
+            prompt=f"Prompt for {primary.name}: {primary.text_excerpt}",
+            summary=primary.text_excerpt or "",
+            source="test",
+        )
+
+    monkeypatch.setattr(graph, "_load_attachment_descriptors", fake_load_attachment_descriptors)
+    monkeypatch.setattr(graph, "build_attachment_route", fake_build_attachment_route)
+    monkeypatch.setattr(graph, "build_text_attachment_prompt", fake_build_text_attachment_prompt)
+
+    plan = await graph.plan_assistant_execution(
+        messages=[{"role": "user", "content": "根据PDF生成5张图"}],
+        files=["file-1"],
+        user_instruction="根据PDF生成5张图",
+        request_model="gpt-image-1",
+        request_model_type="image",
+        requested_count=5,
+        db_manager=object(),
+        app_state=SimpleNamespace(model_registry=None),
+        api_key="test-key",
+    )
+
+    assert plan.mode == "image"
+    assert plan.intent_type == "batch_generate"
+    assert plan.batch_count == 2
+    assert len(plan.metadata["_batch_prompts"]) == 2

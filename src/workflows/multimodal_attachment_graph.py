@@ -26,6 +26,7 @@ class AttachmentDescriptor(BaseModel):
     kind: str = Field(..., description="pdf/docx/doc/image/unknown")
     source: Optional[str] = None
     text_excerpt: Optional[str] = None
+    page_excerpts: Optional[List[str]] = None
 
 
 class AttachmentRouteDecision(BaseModel):

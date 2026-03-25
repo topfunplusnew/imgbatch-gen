@@ -1,5 +1,6 @@
 """统一AI助手聊天接口"""
 
+import asyncio
 import json
 import uuid
 from typing import Any, Dict, List, Optional
@@ -638,8 +639,10 @@ async def assistant_chat(
             app_state=http_request.app.state,
             api_key=api_key,
         )
+        execution_plan_metadata = dict(execution_plan.metadata or {})
+        planned_batch_prompts = execution_plan_metadata.pop("_batch_prompts", None)
         route_metadata: Dict[str, Any] = {
-            **(execution_plan.metadata or {}),
+            **execution_plan_metadata,
             "planned_mode": execution_plan.mode,
             "planned_intent_type": execution_plan.intent_type,
             "planned_effective_model": execution_plan.effective_model,
@@ -733,6 +736,7 @@ async def assistant_chat(
                     request.image_params,
                     image_model,
                     api_key,
+                    precomputed_prompts=planned_batch_prompts,
                 )
             else:
                 intent = Intent(
@@ -1221,7 +1225,7 @@ async def handle_single_generate(message: ChatMessage, intent: Intent, task_mana
         )
 
 
-async def handle_batch_generate(message: ChatMessage, intent: Intent, task_manager: TaskManager, user_request_id: str = "", session_id: str = "", image_params: Optional[ImageParamsInput] = None, request_model: Optional[str] = None, api_key: str = None) -> ChatResponse:
+async def handle_batch_generate(message: ChatMessage, intent: Intent, task_manager: TaskManager, user_request_id: str = "", session_id: str = "", image_params: Optional[ImageParamsInput] = None, request_model: Optional[str] = None, api_key: str = None, precomputed_prompts: Optional[List[str]] = None) -> ChatResponse:
     """处理批量生成意图"""
 
     try:
@@ -1248,12 +1252,24 @@ async def handle_batch_generate(message: ChatMessage, intent: Intent, task_manag
         if not provider_name:
             provider_name = settings.default_image_provider
 
-        # 优先使用前端传来的 n 参数，其次用意图识别的 count
-        count = ip.n or intent.parameters.get("count", 4)
-        original_prompt = intent.parameters.get("original_prompt", message.content)
+        explicit_prompts = [
+            str(prompt).strip()
+            for prompt in (precomputed_prompts or [])
+            if str(prompt).strip()
+        ]
 
-        # 生成多个不同的提示词
-        prompts = await generate_batch_prompts(original_prompt, count)
+        if explicit_prompts:
+            prompts = explicit_prompts
+            count = len(prompts)
+            original_prompt = intent.parameters.get("original_prompt", prompts[0])
+            logger.info("使用预构建批量提示词，数量: {}", count)
+        else:
+            # 优先使用前端传来的 n 参数，其次用意图识别的 count
+            count = ip.n or intent.parameters.get("count", 4)
+            original_prompt = intent.parameters.get("original_prompt", message.content)
+
+            # 生成多个不同的提示词
+            prompts = await generate_batch_prompts(original_prompt, count)
 
         # 创建批量任务
         params_list = []
@@ -1344,6 +1360,21 @@ def _should_retry_chat_with_safe_model(error: Exception) -> bool:
     return any(marker in text for marker in retry_markers)
 
 
+def _should_retry_chat_invalid_token(error: Exception) -> bool:
+    raw_text = str(error)
+    lowered = raw_text.lower()
+    if "401" not in lowered:
+        return False
+    retry_markers = (
+        "无效的令牌",
+        "invalid token",
+        "new_api_error",
+        "unauthorized",
+        "authentication",
+    )
+    return any(marker in raw_text or marker in lowered for marker in retry_markers)
+
+
 async def _run_chat_completion(client, messages: List[Dict[str, Any]], model: str):
     safe_model = _default_chat_execution_model()
     attempts: List[tuple[str, Optional[int]]] = [(model, 2000)]
@@ -1358,38 +1389,57 @@ async def _run_chat_completion(client, messages: List[Dict[str, Any]], model: st
 
     last_error: Optional[Exception] = None
     for index, (attempt_model, attempt_max_tokens) in enumerate(attempts):
-        try:
-            logger.info("非流式对话: model={}, messages={}条", attempt_model, len(messages))
-            request_kwargs: Dict[str, Any] = {
-                "model": attempt_model,
-                "messages": messages,
-                "stream": False,
-            }
-            if attempt_max_tokens is not None:
-                request_kwargs["max_tokens"] = attempt_max_tokens
+        request_kwargs: Dict[str, Any] = {
+            "model": attempt_model,
+            "messages": messages,
+            "stream": False,
+        }
+        if attempt_max_tokens is not None:
+            request_kwargs["max_tokens"] = attempt_max_tokens
 
-            raw = await client.chat.completions.create(**request_kwargs)
-            if isinstance(raw, str):
-                logger.error("LLM API 返回字符串而非对象: {}", raw[:200])
-                if index < len(attempts) - 1:
+        same_model_retry_limit = 2
+        for retry_index in range(same_model_retry_limit + 1):
+            try:
+                logger.info(
+                    "非流式对话: model={}, messages={}条, request_attempt={}",
+                    attempt_model,
+                    len(messages),
+                    retry_index + 1,
+                )
+                raw = await client.chat.completions.create(**request_kwargs)
+                if isinstance(raw, str):
+                    logger.error("LLM API 返回字符串而非对象: {}", raw[:200])
+                    if index < len(attempts) - 1:
+                        logger.warning(
+                            "Chat completion returned non-object for model={}, retrying with {}",
+                            attempt_model,
+                            attempts[index + 1][0],
+                        )
+                        break
+                    return raw, attempt_model
+                else:
+                    return raw, attempt_model
+            except Exception as exc:
+                last_error = exc
+                if retry_index < same_model_retry_limit and _should_retry_chat_invalid_token(exc):
                     logger.warning(
-                        "Chat completion returned non-object for model={}, retrying with {}",
+                        "Chat completion got retryable 401 token error for model={}, retry {}/{}: {}",
+                        attempt_model,
+                        retry_index + 1,
+                        same_model_retry_limit,
+                        exc,
+                    )
+                    await asyncio.sleep(0.2)
+                    continue
+                if index < len(attempts) - 1 and _should_retry_chat_with_safe_model(exc):
+                    logger.warning(
+                        "Chat completion failed for model={}, retrying with {}: {}",
                         attempt_model,
                         attempts[index + 1][0],
+                        exc,
                     )
-                    continue
-            return raw, attempt_model
-        except Exception as exc:
-            last_error = exc
-            if index < len(attempts) - 1 and _should_retry_chat_with_safe_model(exc):
-                logger.warning(
-                    "Chat completion failed for model={}, retrying with {}: {}",
-                    attempt_model,
-                    attempts[index + 1][0],
-                    exc,
-                )
-                continue
-            raise
+                    break
+                raise
 
     if last_error is not None:
         raise last_error
@@ -1488,7 +1538,6 @@ async def handle_chat_stream(model: str, history: List[ChatMessage], api_key: st
             else:
                 content = raw.choices[0].message.content if raw.choices else "抱歉，未能生成回复。"
 
-            chunk_count = 1
             collected_content = content or ""
             if collected_content:
                 data = json.dumps({"content": collected_content}, ensure_ascii=False)

@@ -205,6 +205,10 @@ def _trim_attachment_text(text: str, limit: Optional[int] = None) -> str:
     return text[: effective_limit - 3].rstrip() + "..."
 
 
+def _max_pdf_pages() -> int:
+    return max(1, settings.assistant_pdf_ocr_max_pages or 6)
+
+
 def _derive_batch_count(user_instruction: str, requested_count: Optional[int]) -> int:
     if requested_count and requested_count > 0:
         return max(1, min(requested_count, 10))
@@ -394,22 +398,20 @@ async def _extract_visual_excerpt(
         return ""
 
 
-def _extract_pdf_native_text(file_bytes: bytes) -> str:
-    max_pages = max(1, settings.assistant_pdf_ocr_max_pages or 6)
-    page_texts: List[str] = []
+def _extract_pdf_native_pages(file_bytes: bytes) -> List[str]:
+    max_pages = _max_pdf_pages()
+    native_pages: List[str] = []
     with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-        for page_index, page in enumerate(pdf.pages[:max_pages], start=1):
-            extracted = (page.extract_text() or "").strip()
-            if extracted:
-                page_texts.append(f"[Page {page_index}]\n{extracted}")
-    return "\n\n".join(page_texts)
+        for page in pdf.pages[:max_pages]:
+            native_pages.append((page.extract_text() or "").strip())
+    return native_pages
 
 
 def _render_pdf_pages_to_data_urls(file_bytes: bytes) -> List[str]:
     if fitz is None:
         return []
 
-    max_pages = max(1, settings.assistant_pdf_ocr_max_pages or 6)
+    max_pages = _max_pdf_pages()
     document = fitz.open(stream=file_bytes, filetype="pdf")
     page_urls: List[str] = []
     try:
@@ -423,34 +425,56 @@ def _render_pdf_pages_to_data_urls(file_bytes: bytes) -> List[str]:
     return page_urls
 
 
-async def _extract_pdf_excerpt(file_bytes: bytes, api_key: Optional[str]) -> str:
-    native_text = _trim_attachment_text(_extract_pdf_native_text(file_bytes))
+def _combine_pdf_page_excerpts(page_excerpts: List[str]) -> str:
+    combined_pages = [
+        f"[Page {page_index}]\n{page_excerpt}"
+        for page_index, page_excerpt in enumerate(page_excerpts, start=1)
+        if (page_excerpt or "").strip()
+    ]
+    if not combined_pages:
+        return ""
+    return _trim_attachment_text(
+        "\n\n".join(combined_pages),
+        limit=settings.assistant_attachment_text_limit or 12000,
+    )
+
+
+async def _extract_pdf_page_excerpts(file_bytes: bytes, api_key: Optional[str]) -> List[str]:
+    native_pages = _extract_pdf_native_pages(file_bytes)
+    if not native_pages:
+        return []
+
     native_threshold = settings.assistant_pdf_native_text_threshold or 120
-    if len(native_text.strip()) >= native_threshold:
-        return native_text
+    needs_ocr = any(len((page_text or "").strip()) < native_threshold for page_text in native_pages)
+    page_urls = _render_pdf_pages_to_data_urls(file_bytes) if needs_ocr else []
 
-    page_urls = _render_pdf_pages_to_data_urls(file_bytes)
-    if not page_urls:
-        return native_text
+    page_excerpts: List[str] = []
+    for page_index, native_text in enumerate(native_pages, start=1):
+        trimmed_native = _trim_attachment_text(native_text)
+        if len(trimmed_native.strip()) >= native_threshold:
+            page_excerpts.append(trimmed_native)
+            continue
 
-    ocr_pages: List[str] = []
-    for page_index, page_url in enumerate(page_urls, start=1):
-        page_text = await _extract_visual_excerpt(
-            image_urls=[page_url],
-            instruction=(
-                f"This is page {page_index} of a PDF. "
-                "Extract the visible text faithfully, preserve key numbers and headings, "
-                "and briefly mention diagrams or layout cues when they matter."
-            ),
-            api_key=api_key,
-        )
-        if page_text:
-            ocr_pages.append(f"[Page {page_index}]\n{page_text}")
+        ocr_text = ""
+        if page_index - 1 < len(page_urls):
+            ocr_text = await _extract_visual_excerpt(
+                image_urls=[page_urls[page_index - 1]],
+                instruction=(
+                    f"This is page {page_index} of a PDF. "
+                    "Extract the visible text faithfully, preserve key numbers and headings, "
+                    "and briefly mention diagrams or layout cues when they matter."
+                ),
+                api_key=api_key,
+            )
+        trimmed_ocr = _trim_attachment_text(ocr_text)
+        page_excerpts.append(trimmed_ocr if len(trimmed_ocr) >= len(trimmed_native) else trimmed_native)
 
-    ocr_text = _trim_attachment_text("\n\n".join(ocr_pages))
-    if len(ocr_text) >= len(native_text):
-        return ocr_text
-    return native_text
+    return page_excerpts
+
+
+async def _extract_pdf_excerpt_bundle(file_bytes: bytes, api_key: Optional[str]) -> tuple[str, List[str]]:
+    page_excerpts = await _extract_pdf_page_excerpts(file_bytes, api_key)
+    return _combine_pdf_page_excerpts(page_excerpts), page_excerpts
 
 
 def _extract_docx_excerpt(file_bytes: bytes) -> str:
@@ -478,12 +502,9 @@ async def _extract_attachment_excerpt(
     extension: str,
     api_key: Optional[str],
 ) -> str:
-    if extension not in {"pdf", "docx", "doc", "jpg", "jpeg", "png", "gif", "webp", "bmp"}:
+    if extension not in {"docx", "doc", "jpg", "jpeg", "png", "gif", "webp", "bmp"}:
         return ""
 
-    if extension == "pdf":
-        file_bytes = await _download_file_bytes(url)
-        return await _extract_pdf_excerpt(file_bytes, api_key)
     if extension == "docx":
         file_bytes = await _download_file_bytes(url)
         return _extract_docx_excerpt(file_bytes)
@@ -518,12 +539,17 @@ async def _load_attachment_descriptors(
             resolved.get("url", ""),
         )
         if extension in {"pdf", "docx", "doc"}:
+            page_excerpts: Optional[List[str]] = None
             try:
-                excerpt = await _extract_attachment_excerpt(
-                    url=resolved["url"],
-                    extension=extension,
-                    api_key=api_key,
-                )
+                if extension == "pdf":
+                    file_bytes = await _download_file_bytes(resolved["url"])
+                    excerpt, page_excerpts = await _extract_pdf_excerpt_bundle(file_bytes, api_key)
+                else:
+                    excerpt = await _extract_attachment_excerpt(
+                        url=resolved["url"],
+                        extension=extension,
+                        api_key=api_key,
+                    )
             except Exception as exc:
                 logger.warning(
                     "Failed to extract text from attachment {} ({}): {}",
@@ -532,6 +558,7 @@ async def _load_attachment_descriptors(
                     exc,
                 )
                 excerpt = ""
+                page_excerpts = None
             if excerpt:
                 logger.info(
                     "Attachment text extracted: name={}, extension={}, chars={}",
@@ -551,6 +578,7 @@ async def _load_attachment_descriptors(
                     kind=extension,
                     source=resolved["url"],
                     text_excerpt=excerpt or None,
+                    page_excerpts=page_excerpts or None,
                 )
             )
             continue
@@ -1046,6 +1074,126 @@ async def _build_image_prompt_from_attachments(
     return _merge_prompt_with_grounding(user_instruction or "", grounding_block)
 
 
+def _flatten_pdf_page_items(attachments: List[AttachmentDescriptor]) -> List[Dict[str, Any]]:
+    page_items: List[Dict[str, Any]] = []
+    for attachment in attachments:
+        if attachment.kind != "pdf":
+            continue
+
+        page_excerpts = list(attachment.page_excerpts or [])
+        if not page_excerpts and attachment.text_excerpt:
+            page_excerpts = [attachment.text_excerpt]
+
+        for page_number, page_excerpt in enumerate(page_excerpts, start=1):
+            page_items.append(
+                {
+                    "attachment_name": attachment.name,
+                    "page_number": page_number,
+                    "page_excerpt": (page_excerpt or "").strip(),
+                }
+            )
+    return page_items
+
+
+def _build_shared_non_pdf_grounding(attachments: List[AttachmentDescriptor]) -> str:
+    blocks: List[str] = []
+    for attachment in attachments:
+        if attachment.kind == "pdf":
+            continue
+        excerpt = (attachment.text_excerpt or "").strip()
+        if not excerpt:
+            continue
+        blocks.append(f"[Attachment: {attachment.name}]\n{_trim_attachment_text(excerpt, limit=1600)}")
+    return "\n\n".join(blocks)
+
+
+async def _build_pdf_page_matched_prompts(
+    *,
+    user_instruction: str,
+    attachments: List[AttachmentDescriptor],
+    requested_count: int,
+    api_key: Optional[str],
+) -> List[str]:
+    page_items = _flatten_pdf_page_items(attachments)
+    if not page_items:
+        return []
+
+    target_count = min(max(1, requested_count), len(page_items))
+    shared_text_attachments = [
+        AttachmentDescriptor(
+            name=attachment.name,
+            kind=attachment.kind,
+            source=attachment.source,
+            text_excerpt=attachment.text_excerpt,
+        )
+        for attachment in attachments
+        if attachment.kind != "pdf" and attachment.text_excerpt
+    ]
+    shared_grounding = _build_shared_non_pdf_grounding(attachments)
+
+    prompts: List[str] = []
+    for page_item in page_items[:target_count]:
+        attachment_name = str(page_item["attachment_name"])
+        page_number = int(page_item["page_number"])
+        page_excerpt = str(page_item.get("page_excerpt") or "").strip()
+        page_fallback_excerpt = (
+            page_excerpt
+            or f"第 {page_number} 页没有提取到可用文本，请尽量依据该页的版式、图示或结构线索生成与这一页对应的图像。"
+        )
+        page_instruction = (
+            f"{user_instruction or 'Generate one image based on the uploaded PDF page.'}\n\n"
+            f"Generate exactly one image that corresponds only to page {page_number} of the PDF "
+            f"\"{attachment_name}\". Do not mix content from other PDF pages."
+        )
+        page_attachment = AttachmentDescriptor(
+            name=f"{attachment_name} - Page {page_number}",
+            kind="pdf",
+            text_excerpt=page_fallback_excerpt,
+        )
+
+        try:
+            prompt_result = await build_text_attachment_prompt(
+                page_instruction,
+                [page_attachment, *shared_text_attachments],
+                api_key=api_key,
+            )
+            base_prompt = prompt_result.prompt
+        except Exception as exc:
+            logger.warning(
+                "Failed to build page-matched PDF prompt for {} page {}: {}",
+                attachment_name,
+                page_number,
+                exc,
+            )
+            base_prompt = page_instruction
+
+        prompt_sections = [
+            (base_prompt or page_instruction).strip(),
+            (
+                f"Must correspond only to page {page_number} of the PDF "
+                f"\"{attachment_name}\". Do not use content from other PDF pages."
+            ),
+            (
+                "Primary grounding content from the matched PDF page (must be reflected in the image):\n"
+                f"[Attachment: {attachment_name} | Page {page_number}]\n"
+                f"{_trim_attachment_text(page_fallback_excerpt, limit=1600)}"
+            ),
+        ]
+        if shared_grounding:
+            prompt_sections.append(
+                "Shared grounding from other uploaded files:\n"
+                f"{shared_grounding}"
+            )
+        prompts.append(
+            _trim_attachment_text(
+                "\n\n".join(section for section in prompt_sections if section),
+                limit=settings.assistant_attachment_text_limit or 12000,
+            )
+        )
+
+    return prompts
+
+
 async def _build_chat_plan(
     *,
     messages: List[Dict[str, Any]],
@@ -1082,11 +1230,26 @@ async def _build_image_plan(
     app_state,
     api_key: Optional[str],
 ) -> AssistantExecutionPlan:
-    final_prompt = await _build_image_prompt_from_attachments(
-        user_instruction,
-        attachments,
+    requested_batch_count = max(1, route_decision.batch_count or 1)
+    pdf_page_items = _flatten_pdf_page_items(attachments)
+    pdf_page_prompts = await _build_pdf_page_matched_prompts(
+        user_instruction=user_instruction,
+        attachments=attachments,
+        requested_count=requested_batch_count,
         api_key=api_key,
     )
+    if pdf_page_prompts:
+        final_prompt = pdf_page_prompts[0]
+        effective_batch_count = len(pdf_page_prompts)
+        effective_intent_type = "batch_generate" if effective_batch_count > 1 else "single_generate"
+    else:
+        final_prompt = await _build_image_prompt_from_attachments(
+            user_instruction,
+            attachments,
+            api_key=api_key,
+        )
+        effective_batch_count = route_decision.batch_count
+        effective_intent_type = route_decision.intent_type
     attachment_text_count = sum(1 for attachment in attachments if attachment.text_excerpt)
     logger.info(
         "Prepared grounded image prompt: chars={}, attachments={}, text_attachments={}",
@@ -1101,13 +1264,17 @@ async def _build_image_plan(
         source=route_decision.source,
         effective_model=await _resolve_image_model_name(request_model, request_model_type, app_state),
         prompt=final_prompt,
-        intent_type=route_decision.intent_type,
-        batch_count=route_decision.batch_count,
+        intent_type=effective_intent_type,
+        batch_count=effective_batch_count,
         metadata={
             "attachment_route": "image" if attachments else "none",
             "attachment_count": len(attachments),
             "attachment_text_count": attachment_text_count,
             "planning_basis": route_decision.planning_basis,
+            "pdf_page_match_enabled": bool(pdf_page_prompts),
+            "pdf_total_pages": len(pdf_page_items),
+            "pdf_page_match_count": len(pdf_page_prompts),
+            **({"_batch_prompts": pdf_page_prompts} if len(pdf_page_prompts) > 1 else {}),
         },
     )
 
