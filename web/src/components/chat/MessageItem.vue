@@ -183,15 +183,21 @@
           <div
             v-for="(file, index) in imageAttachments"
             :key="`att-image-${index}`"
-            class="relative group aspect-square rounded-xl overflow-hidden border border-border-dark bg-white"
+            class="relative group aspect-square rounded-xl overflow-hidden border border-border-dark bg-white cursor-zoom-in"
+            @click="openAttachmentPreview(index)"
           >
             <img
               :src="getFileUrl(file)"
               :alt="getAttachmentName(file)"
-              class="w-full h-full object-cover"
+              class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
             >
+            <div class="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent opacity-0 transition-opacity group-hover:opacity-100">
+              <div class="absolute left-2 top-2 rounded-full bg-black/45 px-2 py-1 text-[11px] text-white backdrop-blur-sm">
+                点击预览
+              </div>
+            </div>
             <button
-              @click="downloadAttachment(file)"
+              @click.stop="downloadAttachment(file)"
               :disabled="!getFileUrl(file)"
               class="absolute right-2 bottom-2 p-1.5 rounded-lg bg-black/45 hover:bg-black/60 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               title="下载图片附件"
@@ -222,20 +228,31 @@
       </div>
 
       <div v-if="msg.images && msg.images.length === 1" class="mt-3">
-        <div class="relative group max-w-xs md:max-w-md w-full">
+        <div
+          class="relative group max-w-xs md:max-w-md w-full cursor-zoom-in"
+          @click="openGeneratedImagePreview(0)"
+        >
           <img
             :src="getImageUrl(msg.images[0], true)"
             :alt="typeof msg.images[0] === 'object' ? msg.images[0].alt : '生成的图像'"
-            class="w-full rounded-xl shadow-lg">
+            class="w-full rounded-xl shadow-lg transition-transform duration-300 group-hover:scale-[1.01]">
           <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-xl">
             <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between">
               <p class="text-sm text-white truncate">{{ typeof msg.images[0] === 'object' ? (msg.images[0].alt || '生成的图像') : '生成的图像' }}</p>
-              <button
-                @click="downloadSingleImage(msg.images[0])"
-                class="p-2 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm transition-colors"
-                title="下载图片">
-                <span class="material-symbols-outlined !text-lg text-white">download</span>
-              </button>
+              <div class="flex items-center gap-2">
+                <button
+                  @click.stop="openGeneratedImagePreview(0)"
+                  class="p-2 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm transition-colors"
+                  title="预览图片">
+                  <span class="material-symbols-outlined !text-lg text-white">zoom_in</span>
+                </button>
+                <button
+                  @click.stop="downloadSingleImage(msg.images[0])"
+                  class="p-2 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm transition-colors"
+                  title="下载图片">
+                  <span class="material-symbols-outlined !text-lg text-white">download</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -260,7 +277,9 @@
           <div
             v-for="(image, index) in msg.images"
             :key="index"
-            class="relative group aspect-square bg-white rounded-xl overflow-hidden border border-border-dark shadow-lg hover:shadow-xl transition-shadow cursor-pointer">
+            class="relative group aspect-square bg-white rounded-xl overflow-hidden border border-border-dark shadow-lg hover:shadow-xl transition-shadow cursor-zoom-in"
+            @click="openGeneratedImagePreview(index)"
+          >
             <img
               :src="getImageUrl(image, true)"
               :alt="typeof image === 'object' ? (image.alt || `图片 ${index + 1}`) : `图片 ${index + 1}`"
@@ -268,12 +287,21 @@
             <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
               <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
                 <p class="text-xs text-white truncate">{{ typeof image === 'object' ? (image.alt || `图片 ${index + 1}`) : `图片 ${index + 1}` }}</p>
-                <button
-                  @click="downloadSingleImage(image)"
-                  class="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm transition-colors"
-                  title="下载此图片">
-                  <span class="material-symbols-outlined !text-base text-white">download</span>
-                </button>
+                <div class="flex items-center gap-1.5">
+                  <button
+                    @click.stop="openGeneratedImagePreview(index)"
+                    class="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm transition-colors"
+                    title="预览此图片"
+                  >
+                    <span class="material-symbols-outlined !text-base text-white">zoom_in</span>
+                  </button>
+                  <button
+                    @click.stop="downloadSingleImage(image)"
+                    class="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm transition-colors"
+                    title="下载此图片">
+                    <span class="material-symbols-outlined !text-base text-white">download</span>
+                  </button>
+                </div>
               </div>
             </div>
             <!-- 下载进度 -->
@@ -286,6 +314,8 @@
           </div>
         </div>
       </div>
+
+      <ImagePreviewModal ref="imagePreviewModalRef" @download="handlePreviewDownload" />
     </div>
   </div>
 </template>
@@ -297,6 +327,7 @@ import { notification } from '@/utils/notification'
 import { useApiConfigStore } from '@/store/useApiConfigStore'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import { api } from '@/services/api'
+import ImagePreviewModal from '@/components/ImagePreviewModal.vue'
 
 const apiConfigStore = useApiConfigStore()
 const generatorStore = useGeneratorStore()
@@ -323,6 +354,7 @@ const emit = defineEmits(['retry'])
 const isDownloading = ref(false)
 const downloadProgress = ref({})
 const copied = ref(false)
+const imagePreviewModalRef = ref(null)
 
 // Message interaction state
 const isLiked = ref(false)
@@ -337,6 +369,19 @@ const availableModels = computed(() => {
 const messageFiles = computed(() => (Array.isArray(props.msg.files) ? props.msg.files : []))
 const imageAttachments = computed(() => messageFiles.value.filter((file) => isImageAttachment(file)))
 const fileAttachments = computed(() => messageFiles.value.filter((file) => !isImageAttachment(file)))
+const previewableGeneratedImages = computed(() =>
+  (Array.isArray(props.msg.images) ? props.msg.images : [])
+    .map((image, index) => normalizePreviewImage(image, index))
+    .filter((image) => image.url)
+)
+const previewableAttachmentImages = computed(() =>
+  imageAttachments.value
+    .map((file, index) => ({
+      url: getFileUrl(file),
+      alt: getAttachmentName(file) || `图片附件 ${index + 1}`,
+    }))
+    .filter((image) => image.url)
+)
 
 function getAttachmentName(file) {
   return file?.name || file?.filename || file?.original_filename || '附件'
@@ -406,6 +451,23 @@ function getFileUrl(file) {
   return rawUrl
 }
 
+function normalizePreviewImage(image, index = 0) {
+  if (!image) return { url: '', alt: `图片 ${index + 1}` }
+
+  if (typeof image === 'string') {
+    return {
+      url: getImageUrl(image),
+      alt: `图片 ${index + 1}`,
+    }
+  }
+
+  return {
+    ...image,
+    url: getImageUrl(image),
+    alt: image.alt || `图片 ${index + 1}`,
+  }
+}
+
 function downloadAttachment(file) {
   const url = getFileUrl(file)
   if (!url) {
@@ -421,6 +483,20 @@ function downloadAttachment(file) {
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
+}
+
+function openGeneratedImagePreview(startIndex = 0) {
+  if (!previewableGeneratedImages.value.length) return
+  imagePreviewModalRef.value?.show(previewableGeneratedImages.value, startIndex)
+}
+
+function openAttachmentPreview(startIndex = 0) {
+  if (!previewableAttachmentImages.value.length) return
+  imagePreviewModalRef.value?.show(previewableAttachmentImages.value, startIndex)
+}
+
+function handlePreviewDownload(image) {
+  downloadSingleImage(image)
 }
 
 // 备用复制方法
