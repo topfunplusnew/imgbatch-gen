@@ -10,9 +10,6 @@
     </div>
 
     <div class="p-4 xs:p-5 md:p-6 space-y-4 md:space-y-6 overflow-y-auto flex-1 custom-scrollbar">
-      <!-- 参数预设（暂时隐藏） -->
-      <!-- <PresetManager /> -->
-
       <!-- 当前模型 -->
       <div class="space-y-3">
         <label class="text-xs font-bold text-slate-500 uppercase">当前模型</label>
@@ -26,27 +23,6 @@
           </p>
         </div>
       </div>
-
-      <!-- 图像风格（暂时隐藏） -->
-      <!--
-      <div class="space-y-3">
-        <label class="text-xs font-bold text-slate-500 uppercase">图像风格</label>
-        <select
-          v-model="generatorStore.style"
-          class="w-full bg-surface-dark border-none rounded-xl text-sm py-3 px-4 focus:ring-1 focus:ring-primary">
-          <option value="photorealistic">写实风格</option>
-          <option value="anime">动漫风格</option>
-          <option value="cartoon">卡通风格</option>
-          <option value="oil-painting">油画风格</option>
-          <option value="watercolor">水彩风格</option>
-          <option value="sketch">素描风格</option>
-          <option value="cyberpunk">赛博朋克</option>
-          <option value="fantasy">奇幻风格</option>
-          <option value="minimalist">简约风格</option>
-          <option value="abstract">抽象艺术</option>
-        </select>
-      </div>
-      -->
 
       <!-- 图像质量 -->
       <div class="space-y-3">
@@ -282,26 +258,9 @@ const currentModelDisplay = computed(() => {
   return generatorStore.selectedModelInfo?.model_name || generatorStore.model || '未选择模型'
 })
 
-// 质量标签
-const qualityLabel = computed(() => {
-  const qualityMap = {
-    '720p': '720P',
-    '2k': '2K',
-    '4k': '4K',
-  }
-  return qualityMap[generatorStore.quality] || generatorStore.quality
-})
-
 // 生成随机种子
 const generateRandomSeed = () => {
   generatorStore.setSeed(Math.floor(Math.random() * 999999999).toString())
-}
-
-// 重置所有参数
-const resetAllParams = () => {
-  if (confirm('确定要重置所有参数到默认值吗？')) {
-    generatorStore.resetParams()
-  }
 }
 </script>
 

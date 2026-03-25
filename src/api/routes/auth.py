@@ -344,8 +344,6 @@ async def send_verify_code(request: Request, body: SendVerifyCodeRequest):
             # TODO: 集成邮件发送服务
             # 临时：直接记录到日志
             logger.info(f"【测试】邮箱验证码: {code} -> {body.identifier}")
-            # 实际应该调用邮件服务
-            # await email_service.send_verification_code(body.identifier, code)
         else:  # phone
             # TODO: 集成短信服务
             from ...services.sms_service import get_sms_service

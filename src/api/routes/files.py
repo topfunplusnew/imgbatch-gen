@@ -226,15 +226,6 @@ async def upload_file(
             file_size = len(file_content)
             file_type = file.content_type or "application/octet-stream"
 
-            # 支持任意大小的文件，不再限制
-            # 如果需要限制，可以设置 max_size 值
-            # max_size = 50 * 1024 * 1024  # 50MB
-            # if file_size > max_size:
-            #     raise HTTPException(
-            #         status_code=400,
-            #         detail=f"文件大小超过限制，最大支持 {max_size // (1024 * 1024)}MB"
-            #     )
-
             # 确定文件分类
             category = get_file_category(original_filename, file_type)
 

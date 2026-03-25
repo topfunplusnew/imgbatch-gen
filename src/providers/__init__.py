@@ -13,9 +13,6 @@ from .replicate_provider import ReplicateProvider
 from .fal_ai_provider import FalAIProvider
 from .tencent_provider import TencentProvider
 
-# 保留旧的Provider以兼容（如果需要）
-from .openai_provider import OpenAIProvider
-from .stable_diffusion_provider import StableDiffusionProvider
 from .baidu_provider import BaiduProvider
 from .aliyun_provider import AliyunProvider
 
@@ -95,28 +92,6 @@ async def get_provider(provider: str = None, model_name: str = None, api_key: st
         return GeminiProvider(base_url, key)
     else:
         raise ValueError(f"不支持的Provider: {provider}。支持的Provider: midjourney, ideogram, openai, replicate, fal-ai, tencent, baidu, aliyun, doubao, kling, gemini")
-
-
-# 保持向后兼容的同步版本（已废弃，内部使用 asyncio）
-def get_provider_sync(provider: str = None, model_name: str = None, api_key: str = None) -> BaseProvider:
-    """
-    同步版本的 get_provider（已废弃，建议使用异步版本）
-    """
-    import asyncio
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-
-    if loop and loop.is_running():
-        # 如果已经在异步上下文中，创建任务
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor() as pool:
-            future = pool.submit(asyncio.run, get_provider(provider, model_name, api_key))
-            return future.result()
-    else:
-        return asyncio.run(get_provider(provider, model_name, api_key))
-
 
 async def get_provider_by_model(model_name: str, api_key: str = None) -> BaseProvider:
     """

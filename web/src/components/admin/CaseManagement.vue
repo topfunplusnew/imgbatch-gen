@@ -7,7 +7,7 @@
         <span class="text-xs xs:text-sm text-gray-500">共 {{ totalCount }} 个案例</span>
       </div>
       <button
-        @click="() => { console.log('按钮被点击'); showCreateModal = true; console.log('showCreateModal:', showCreateModal); }"
+        @click="showCreateModal = true"
         class="inline-flex items-center justify-center gap-1.5 xs:gap-2 px-3 xs:px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-strong transition-colors text-sm xs:text-base min-h-[44px] min-w-[44px]"
       >
         <span class="material-symbols-outlined !text-base">add</span>
@@ -60,11 +60,6 @@
 
     <!-- 案例列表 -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[200px]">
-      <!-- 调试信息 -->
-      <div class="px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-500 hidden" id="debug-info">
-        加载状态: {{ loading }}, 案例数量: {{ cases.length }}, 总数: {{ totalCount }}
-      </div>
-
       <div v-if="loading" class="flex items-center justify-center py-12">
         <div class="w-10 h-10 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
       </div>
@@ -309,10 +304,6 @@ const showCreateModal = ref(false)
 const showEditModal = ref(false)
 const editingCase = ref(null)
 
-// 临时调试
-console.log('CaseManagement组件已加载')
-console.log('showCreateModal:', showCreateModal)
-
 // 预设分类
 const presetCategories = [
   '电商',
@@ -350,7 +341,6 @@ let searchTimeout = null
 const fetchCases = async () => {
   loading.value = true
   try {
-    console.log('[案例管理] 开始获取案例列表...')
     const params = {
       keyword: filters.value.keyword || undefined,
       category: filters.value.category || undefined,
@@ -359,9 +349,7 @@ const fetchCases = async () => {
       offset: offset.value
     }
 
-    console.log('[案例管理] 请求参数:', params)
     cases.value = await api.getAdminCases(params)
-    console.log('[案例管理] 获取到案例:', cases.value.length, '个')
 
     const countResult = await api.getAdminCasesCount({
       keyword: params.keyword,
@@ -369,7 +357,6 @@ const fetchCases = async () => {
       is_published: params.is_published
     })
     totalCount.value = countResult.count
-    console.log('[案例管理] 总案例数:', totalCount.value)
   } catch (error) {
     console.error('[案例管理] 获取案例列表失败:', error)
     // 显示错误信息

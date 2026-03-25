@@ -6,7 +6,6 @@
       class="item align-center transition relative history flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-primary/5 shrink-0 border-b border-border-dark bg-white/90 backdrop-blur-xl"
     >
       <span class="material-symbols-outlined !text-xl text-primary icon">photo_library</span>
-<!--      <div class="text text-sm font-medium text-ink-950">我的创作</div>-->
       <span
         :class="[
           'material-symbols-outlined !text-sm arrow absolute transition right-3 text-ink-400',
@@ -29,14 +28,6 @@ const authStore = useAuthStore()
 
 const toggleRecords = () => {
   appStore.toggleCreationRecords()
-}
-
-const goToLogin = () => {
-  appStore.setCurrentPage('login')
-}
-
-const goToUserCenter = () => {
-  appStore.setCurrentPage('user-center')
 }
 
 onMounted(async () => {

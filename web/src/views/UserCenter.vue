@@ -903,21 +903,6 @@
                 </svg>
                 微信支付
               </button>
-              <!-- 支付宝支付暂时注释 -->
-              <!-- <button
-                @click="paymentMethod = 'alipay'"
-                :class="[
-                  'flex-1 py-3 px-4 rounded-lg border-2 transition-all flex items-center justify-center gap-2',
-                  paymentMethod === 'alipay'
-                    ? 'border-primary bg-primary-soft'
-                    : 'border-gray-200 hover:border-gray-300'
-                ]"
-              >
-                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="#1677FF">
-                  <path d="M7.916 19.834c-3.5 0-6.348-2.35-6.348-5.25 0-2.9 2.848-5.25 6.348-5.25 3.5 0 6.348 2.35 6.348 5.25 0 2.9-2.848 5.25-6.348 5.25zM19.834 9.333h-3.5V6.833h-2.334v2.5H10.5v2.334h3.5v3.5h2.334v-3.5h3.5V9.333zM19.834 9.333"/>
-                </svg>
-                支付宝
-              </button> -->
             </div>
 
             <button
@@ -1309,16 +1294,9 @@ const consumptionOffset = ref(0)
 
 // 初始化
 onMounted(async () => {
-  console.log('=== UserCenter onMounted 开始 ===')
-  console.log('当前用户信息:', authStore.user)
-  console.log('当前 userStatus:', authStore.userStatus)
-
   // 自动刷新用户信息
   try {
-    const user = await authStore.fetchCurrentUser()
-    console.log('从 API 获取的用户信息:', user)
-    console.log('更新后的 userStatus:', authStore.userStatus)
-    console.log('user.value:', authStore.user)
+    await authStore.fetchCurrentUser()
   } catch (error) {
     console.error('获取用户信息失败:', error)
   }
@@ -1327,8 +1305,6 @@ onMounted(async () => {
   await loadAccountInfo()
   await loadRechargeOptions()
   await loadCheckinStatus()
-
-  console.log('=== UserCenter onMounted 结束 ===')
 })
 
 onUnmounted(() => {
@@ -1495,13 +1471,8 @@ async function loadDownloadRecords() {
 // 加载邀请信息
 async function loadInviteInfo() {
   try {
-    console.log('开始加载邀请信息...')
     inviteInfo.value = await api.getInviteStats()
-    console.log('邀请统计:', inviteInfo.value)
-
     inviteRecords.value = await api.getInviteRecords()
-    console.log('邀请记录:', inviteRecords.value)
-    console.log('邀请记录数量:', inviteRecords.value.length)
   } catch (error) {
     console.error('加载邀请信息失败:', error)
   }

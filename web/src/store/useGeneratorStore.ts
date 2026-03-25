@@ -268,7 +268,6 @@ export const useGeneratorStore = defineStore('generator', {
                         prompt: promptToUse,
                         width: this.width,
                         height: this.height,
-                        // style: this.style,
                         quality: this.quality,
                     })
                 } else {
@@ -278,7 +277,6 @@ export const useGeneratorStore = defineStore('generator', {
                         model_name: this.model,
                         width: this.width,
                         height: this.height,
-                        // style: this.style,
                         quality: this.quality,
                         n: this.batchSize,
                         provider: undefined,
@@ -655,7 +653,6 @@ export const useGeneratorStore = defineStore('generator', {
                         default_params: {
                             width: this.width,
                             height: this.height,
-                            // style: this.style,
                             quality: this.quality
                         }
                     })

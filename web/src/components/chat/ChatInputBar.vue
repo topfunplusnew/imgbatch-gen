@@ -1,51 +1,51 @@
 <template>
   <div class="bg-white/70 backdrop-blur-xl border-t border-border-dark flex flex-col shrink-0">
-    <!-- 已选文件列表 -->
-    <div v-if="generatorStore.attachments.length > 0" class="px-3 md:px-6 pt-2 flex flex-wrap gap-2">
-      <div
-        v-for="(file, index) in generatorStore.attachments"
-        :key="index"
-        class="relative flex items-center gap-1.5 px-2 py-1 bg-white border border-border-dark rounded-lg text-xs shadow-lg overflow-hidden"
-        :class="{ 'ring-2 ring-primary': isHoveringFile === index }">
-
-        <!-- File content (z-index 10 to stay above overlay) -->
-        <div class="relative z-10 flex items-center gap-1.5">
-          <!-- 图片预览或文件图标 -->
-          <div v-if="isImageFile(file)" class="relative shrink-0">
-            <img
-              :src="getFilePreviewUrl(file)"
-              :alt="file.name"
-              class="w-[60px] h-[60px] object-cover rounded-lg border border-border-dark"
-              @load="revokeFilePreviewUrl(file)">
-          </div>
-          <span v-else class="material-symbols-outlined !text-sm text-primary">{{ getFileIcon(file) }}</span>
-
-          <!-- 文件名（图片时不显示） -->
-          <span v-if="!isImageFile(file)" class="text-ink-700 max-w-[120px] truncate">{{ file.name }}</span>
-
-          <button
-            @click.stop="removeFile(index)"
-            @mouseenter="isHoveringFile = index"
-            @mouseleave="isHoveringFile = null"
-            class="text-ink-500 hover:text-red-400 transition-colors shrink-0">
-            <span class="material-symbols-outlined !text-sm">close</span>
-          </button>
-        </div>
-
-        <!-- Hover overlay with absolute positioning -->
-        <div
-          class="absolute inset-0 z-0 grid place-items-center transition-opacity duration-200"
-          :class="isHoveringFile === index ? 'opacity-100' : 'opacity-0'">
-          <button
-            class="px-3 py-1 bg-primary text-white rounded-full border-2 border-white shadow-lg text-xs font-medium hover:bg-primary-deep transition-colors">
-            {{ file.name }}
-          </button>
-        </div>
-      </div>
-    </div>
-
     <div class="px-3 xs:px-4 md:px-6 py-2 xs:py-2.5 md:py-4">
       <div class="w-full md:w-[65%] mx-auto">
+        <!-- 已选文件列表 -->
+        <div v-if="generatorStore.attachments.length > 0" class="mb-2 flex flex-wrap gap-2">
+          <div
+            v-for="(file, index) in generatorStore.attachments"
+            :key="index"
+            class="relative flex max-w-full items-center gap-1.5 overflow-hidden rounded-lg border border-border-dark bg-white px-2 py-1 text-xs shadow-lg"
+            :class="{ 'ring-2 ring-primary': isHoveringFile === index }">
+
+            <!-- File content (z-index 10 to stay above overlay) -->
+            <div class="relative z-10 flex min-w-0 items-center gap-1.5">
+              <!-- 图片预览或文件图标 -->
+              <div v-if="isImageFile(file)" class="relative shrink-0">
+                <img
+                  :src="getFilePreviewUrl(file)"
+                  :alt="file.name"
+                  class="h-[60px] w-[60px] rounded-lg border border-border-dark object-cover"
+                  @load="revokeFilePreviewUrl(file)">
+              </div>
+              <span v-else class="material-symbols-outlined !text-sm text-primary">{{ getFileIcon(file) }}</span>
+
+              <!-- 文件名（图片时不显示） -->
+              <span v-if="!isImageFile(file)" class="max-w-[120px] truncate text-ink-700">{{ file.name }}</span>
+
+              <button
+                @click.stop="removeFile(index)"
+                @mouseenter="isHoveringFile = index"
+                @mouseleave="isHoveringFile = null"
+                class="shrink-0 text-ink-500 transition-colors hover:text-red-400">
+                <span class="material-symbols-outlined !text-sm">close</span>
+              </button>
+            </div>
+
+            <!-- Hover overlay with absolute positioning -->
+            <div
+              class="absolute inset-0 z-0 grid place-items-center transition-opacity duration-200"
+              :class="isHoveringFile === index ? 'opacity-100' : 'opacity-0'">
+              <button
+                class="max-w-[min(100%,14rem)] truncate rounded-full border-2 border-white bg-primary px-3 py-1 text-xs font-medium text-white shadow-lg transition-colors hover:bg-primary-deep">
+                {{ file.name }}
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div
           ref="inputBoxRef"
           @dragover.prevent="handleDragOver"
@@ -593,7 +593,6 @@ const handleImageModelSend = async () => {
       formData.append('provider', generatorStore.selectedModelInfo?.provider || '')
       formData.append('width', generatorStore.width.toString())
       formData.append('height', generatorStore.height.toString())
-      // formData.append('style', generatorStore.style)
       formData.append('quality', generatorStore.quality)
       formData.append('n', generatorStore.batchSize.toString())
       formData.append('operation_type', 'generate')
@@ -703,7 +702,6 @@ const handleImageModelSend = async () => {
         image_params: {
           width: generatorStore.width,
           height: generatorStore.height,
-          // style: generatorStore.style,
           quality: generatorStore.quality,
           n: generatorStore.batchSize,
           negative_prompt: generatorStore.negativePrompt || undefined,
