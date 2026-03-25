@@ -45,7 +45,7 @@
     </div>
 
     <div class="px-3 xs:px-4 md:px-6 py-2 xs:py-2.5 md:py-4">
-      <div class="w-full">
+      <div class="w-full md:w-[65%] mx-auto">
         <div
           ref="inputBoxRef"
           @dragover.prevent="handleDragOver"
@@ -64,12 +64,13 @@
               <button
                 @click="showModelPopup = !showModelPopup"
                 class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+                :title="currentModelDisplay"
               >
-                <span class="material-symbols-outlined !text-base text-accent-purple">auto_awesome</span>
-                <span class="text-sm font-medium text-gray-800 truncate max-w-[100px] md:max-w-[140px]">
+                <span class="material-symbols-outlined !text-base text-accent-purple shrink-0">auto_awesome</span>
+                <span class="text-sm font-medium text-gray-800 truncate max-w-[140px] md:max-w-[200px]">
                   {{ currentModelDisplay }}
                 </span>
-                <span class="material-symbols-outlined !text-sm text-gray-500">
+                <span class="material-symbols-outlined !text-sm text-gray-500 shrink-0">
                   {{ showModelPopup ? 'expand_less' : 'expand_more' }}
                 </span>
               </button>
@@ -79,6 +80,7 @@
                 :visible="showModelPopup"
                 :current-model="generatorStore.model"
                 :attachments="generatorStore.attachments"
+                :trigger-element="modelButtonRef"
                 @select="handleModelSelect"
                 @close="showModelPopup = false"
               />
@@ -213,21 +215,6 @@ const isExpanded = ref(false);
 
 // Textarea ref
 const textareaRef = ref(null);
-
-// Click outside handler for model popup
-const handleClickOutside = (event) => {
-  if (showModelPopup.value && modelButtonRef.value && !modelButtonRef.value.contains(event.target)) {
-    showModelPopup.value = false;
-  }
-};
-
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside);
-});
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside);
-});
 
 // 当前模型显示名称
 const currentModelDisplay = computed(() => {
@@ -850,8 +837,8 @@ const toggleExpand = () => {
 
 // Handle model selection from popup
 const handleModelSelect = (model) => {
-  generatorStore.setModel(model.model_name);
-  generatorStore.selectedModelInfo = model;
+  generatorStore.setSelectedModel(model.model_name);
+  generatorStore.setSelectedModelInfo(model);
   showModelPopup.value = false;
 };
 </script>

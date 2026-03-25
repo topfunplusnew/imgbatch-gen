@@ -1,25 +1,36 @@
 <template>
-  <!-- Backdrop for mobile -->
-  <div
-    v-if="visible"
-    class="fixed inset-0 z-30 md:hidden"
-    @click="$emit('close')"
-  ></div>
-
-  <!-- Popup container -->
-  <Transition
-    enter-active-class="transition duration-200 ease-out"
-    enter-from-class="opacity-0 translate-y-2"
-    enter-to-class="opacity-100 translate-y-0"
-    leave-active-class="transition duration-150 ease-in"
-    leave-from-class="opacity-100 translate-y-0"
-    leave-to-class="opacity-0 translate-y-2"
-  >
+  <Teleport to="body">
+    <!-- Backdrop for mobile -->
     <div
       v-if="visible"
-      class="fixed bottom-0 left-0 right-0 z-40 md:absolute md:bottom-[calc(100%+8px)] md:left-0 md:right-auto md:w-[340px] rounded-t-2xl md:rounded-[16px] bg-white shadow-[0_8px_32px_rgba(0,0,0,0.12)] border border-gray-200/50 overflow-hidden"
-      @click.stop
+      class="fixed inset-0 z-[100] md:hidden"
+      @click="$emit('close')"
+    ></div>
+
+    <!-- Backdrop for desktop (transparent, catches clicks outside popup) -->
+    <div
+      v-if="visible && isDesktop()"
+      class="fixed inset-0 z-[150]"
+      @click="$emit('close')"
+    ></div>
+
+    <!-- Popup container -->
+    <Transition
+      enter-active-class="transition duration-200 ease-out"
+      enter-from-class="opacity-0 translate-y-2"
+      enter-to-class="opacity-100 translate-y-0"
+      leave-active-class="transition duration-150 ease-in"
+      leave-from-class="opacity-100 translate-y-0"
+      leave-to-class="opacity-0 translate-y-2"
     >
+      <div
+        v-if="visible"
+        ref="popupRef"
+        class="fixed rounded-t-2xl md:rounded-[16px] bg-white shadow-[0_8px_32px_rgba(0,0,0,0.12)] border border-gray-200/50 overflow-hidden z-[200]"
+        :class="isDesktop() ? '' : 'bottom-0 left-0 right-0'"
+        :style="popupStyle"
+        @click.stop
+      >
       <!-- Header -->
       <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <div class="flex items-center gap-2">
@@ -77,11 +88,11 @@
           <p class="mt-2 text-xs">加载中...</p>
         </div>
 
-        <!-- Empty state -->
-        <div v-else-if="filteredModels.length === 0" class="flex flex-col items-center justify-center py-8 text-gray-500">
-          <span class="material-symbols-outlined !text-2xl text-gray-300">search_off</span>
-          <p class="mt-2 text-xs">未找到匹配的模型</p>
-        </div>
+        <!-- Empty state - no models available -->
+        <el-empty v-else-if="models.length === 0" description="暂无可用模型" :image-size="60" />
+
+        <!-- Empty state - search/filter no results -->
+        <el-empty v-else-if="filteredModels.length === 0" description="未找到匹配的模型" :image-size="60" />
 
         <!-- Model groups -->
         <div v-else class="py-1">
@@ -96,11 +107,13 @@
 
             <!-- Model items -->
             <button
+              type="button"
               v-for="model in group.models"
               :key="model.model_name"
-              @click="selectModel(model)"
+              :data-model="model.model_name"
+              @click.stop="selectModel(model)"
               :class="[
-                'w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors',
+                'w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors',
                 currentModel === model.model_name
                   ? 'bg-primary/5'
                   : 'hover:bg-gray-50'
@@ -109,7 +122,7 @@
               <!-- Model icon -->
               <div
                 :class="[
-                  'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                  'w-7 h-7 rounded-lg flex items-center justify-center shrink-0',
                   currentModel === model.model_name
                     ? 'bg-primary/10'
                     : 'bg-gray-100'
@@ -117,7 +130,7 @@
               >
                 <span
                   :class="[
-                    'material-symbols-outlined !text-base',
+                    'material-symbols-outlined !text-sm',
                     currentModel === model.model_name
                       ? 'text-primary'
                       : 'text-gray-500'
@@ -128,27 +141,28 @@
               </div>
 
               <!-- Model info -->
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2">
+              <div class="flex-1 min-w-0 overflow-hidden mr-2">
+                <div class="flex items-center gap-1.5 min-w-0 overflow-hidden">
                   <span
                     :class="[
-                      'text-sm font-medium truncate',
+                      'text-sm font-medium overflow-hidden text-ellipsis whitespace-nowrap flex-1 min-w-0 block',
                       currentModel === model.model_name
                         ? 'text-primary'
                         : 'text-gray-900'
                     ]"
+                    :title="model.display_name || model.model_name"
                   >
                     {{ model.display_name || model.model_name }}
                   </span>
                   <!-- NEW badge -->
                   <span
                     v-if="model.is_new"
-                    class="px-1.5 py-0.5 text-[10px] font-medium bg-gradient-to-r from-[#4649F6] to-[#AF46F6] text-white rounded"
+                    class="px-1.5 py-0.5 text-[10px] font-medium bg-gradient-to-r from-[#4649F6] to-[#AF46F6] text-white rounded shrink-0"
                   >
                     NEW
                   </span>
                 </div>
-                <p class="text-[11px] text-gray-500 truncate">
+                <p class="text-[11px] text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap">
                   {{ model.vendor_name || model.provider || '' }}
                 </p>
               </div>
@@ -156,7 +170,7 @@
               <!-- Check icon for selected model -->
               <span
                 v-if="currentModel === model.model_name"
-                class="material-symbols-outlined !text-lg text-primary shrink-0"
+                class="material-symbols-outlined !text-base text-primary shrink-0"
               >
                 check
               </span>
@@ -166,10 +180,11 @@
       </div>
     </div>
   </Transition>
+  </Teleport>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { api } from '@/services/api'
 
 const props = defineProps({
@@ -184,6 +199,10 @@ const props = defineProps({
   attachments: {
     type: Array,
     default: () => []
+  },
+  triggerElement: {
+    type: Object,
+    default: null
   }
 })
 
@@ -192,15 +211,125 @@ const emit = defineEmits(['select', 'close'])
 const loading = ref(false)
 const models = ref([])
 const searchQuery = ref('')
-const activeCategory = ref('all')
+const activeCategory = ref('image') // 默认选中生图分类
+const popupRef = ref(null)
+const popupStyle = ref({})
+
+// 是否为桌面端
+const isDesktop = () => window.innerWidth >= 768
+
+// 计算弹窗位置（桌面端）
+const updatePopupPosition = () => {
+  // 移动端不计算位置，使用默认的 bottom-0
+  if (!isDesktop()) {
+    popupStyle.value = {}
+    return
+  }
+
+  // 桌面端如果没有 triggerElement，使用默认位置（向上弹出）
+  if (!props.triggerElement) {
+    popupStyle.value = {
+      position: 'fixed',
+      top: 'auto',
+      bottom: '140px', // 上移更多，避免被遮挡
+      left: '50%',
+      transform: 'translateX(-50%)',
+      width: '320px',
+      maxWidth: 'calc(100vw - 32px)'
+    }
+    return
+  }
+
+  const triggerRect = props.triggerElement.getBoundingClientRect()
+  const popupWidth = triggerRect.width // 与按钮等宽
+
+  // 确保不超出左边界
+  let left = triggerRect.left
+  if (left < 16) {
+    left = 16
+  }
+
+  // 确保不超出右边界
+  if (left + popupWidth > window.innerWidth - 16) {
+    left = window.innerWidth - popupWidth - 16
+  }
+
+  // 使用 bottom 定位，弹窗底部紧贴按钮顶部，无需估计高度
+  popupStyle.value = {
+    position: 'fixed',
+    top: 'auto',
+    bottom: `${window.innerHeight - triggerRect.top}px`,  // 弹窗底部 = 按钮顶部
+    left: `${left}px`,
+    width: `${popupWidth}px`,
+    maxWidth: 'calc(100vw - 32px)',
+    minWidth: '280px', // 最小宽度，确保内容可读
+    right: 'auto'
+  }
+}
 
 const categoryTabs = [
-  { label: '全部', value: 'all' },
-  { label: '热门', value: 'hot' },
-  { label: '对话', value: 'chat' },
-  { label: '图片', value: 'image' },
-  { label: '视频', value: 'video' }
+  { label: '思考', value: 'reasoning', icon: 'psychology' },
+  { label: '对话', value: 'chat', icon: 'chat' },
+  { label: '生图', value: 'image', icon: 'image' },
+  { label: '异步', value: 'async', icon: 'sync' }
 ]
+
+// 分类类型配置
+const typeConfig = {
+  'reasoning': { label: '思考', icon: 'psychology', color: 'text-purple-600' },
+  'chat': { label: '对话', icon: 'chat', color: 'text-blue-600' },
+  'image': { label: '生图', icon: 'image', color: 'text-green-600' },
+  'async': { label: '异步', icon: 'sync', color: 'text-orange-600' }
+}
+
+// 根据模型属性判断分类
+const getModelCategories = (model) => {
+  const categories = []
+  const modelType = model.model_type || ''
+  const tags = model.tags || []
+
+  let tagList = []
+  if (Array.isArray(tags)) {
+    tagList = tags
+  } else if (typeof tags === 'string') {
+    tagList = tags.split(',').map(t => t.trim())
+  }
+  const tagSet = new Set(tagList)
+
+  // Reasoning models
+  if (tagSet.has('reasoning') || tagSet.has('思考') || tagSet.has('推理') ||
+      modelType.includes('reasoning') || modelType.includes('o1') ||
+      model.model_name?.toLowerCase().includes('o1')) {
+    categories.push('reasoning')
+  }
+
+  // Image models
+  if (modelType === '图像' || modelType.includes('image') ||
+      tagSet.has('image') || tagSet.has('生图') || tagSet.has('图像') ||
+      tagSet.has('绘图') || tagSet.has('drawing') || tagSet.has('绘画')) {
+    categories.push('image')
+  }
+
+  // Async models
+  if (tagSet.has('异步') || model.is_async === true) {
+    categories.push('async')
+  }
+
+  // Chat models (default for text models)
+  if (modelType === '文本' || modelType.includes('text') ||
+      modelType.includes('chat') || tagSet.has('chat') ||
+      tagSet.has('对话') || model.model_name?.toLowerCase().includes('gpt') ||
+      model.model_name?.toLowerCase().includes('claude')) {
+    categories.push('chat')
+  }
+
+  // If no category matched, default to chat
+  if (categories.length === 0) {
+    categories.push('chat')
+  }
+
+  return categories
+}
 
 // Check if has image attachment
 const hasImageAttachment = computed(() => {
@@ -214,22 +343,12 @@ const hasImageAttachment = computed(() => {
 const filteredModels = computed(() => {
   let result = [...models.value]
 
-  // Filter by category
-  if (activeCategory.value === 'chat') {
-    result = result.filter(m => m.model_type === '文本')
-  } else if (activeCategory.value === 'image') {
-    result = result.filter(m => m.model_type === '图像')
-  } else if (activeCategory.value === 'video') {
-    result = result.filter(m => m.model_type === '视频' || m.tags?.includes('视频'))
-  } else if (activeCategory.value === 'hot') {
-    // Hot models: popular providers or tagged as hot
-    result = result.filter(m =>
-      m.tags?.includes('热门') ||
-      m.tags?.includes('推荐') ||
-      ['midjourney', 'dall-e-3', 'stable-diffusion', 'gpt-4', 'claude'].some(name =>
-        m.model_name?.toLowerCase().includes(name)
-      )
-    )
+  // Filter by category using getModelCategories
+  if (activeCategory.value !== 'all') {
+    result = result.filter(m => {
+      const categories = getModelCategories(m)
+      return categories.includes(activeCategory.value)
+    })
   }
 
   // Filter by image attachment support
@@ -253,46 +372,70 @@ const filteredModels = computed(() => {
 
 // Group models by type for display
 const modelGroups = computed(() => {
-  const imageModels = filteredModels.value.filter(m => m.model_type === '图像')
-  const chatModels = filteredModels.value.filter(m => m.model_type === '文本')
-  const otherModels = filteredModels.value.filter(m => m.model_type !== '图像' && m.model_type !== '文本')
+  const groups = {
+    reasoning: [],
+    chat: [],
+    image: [],
+    async: []
+  }
 
-  return [
-    { type: 'image', label: '图像模型', models: imageModels },
-    { type: 'chat', label: '对话模型', models: chatModels },
-    { type: 'other', label: '其他', models: otherModels }
-  ].filter(g => g.models.length > 0)
+  const addedModels = new Set()
+
+  filteredModels.value.forEach(model => {
+    const categories = getModelCategories(model)
+
+    // 如果选中了某个分类，只把模型添加到该分类的分组中
+    if (activeCategory.value !== 'all') {
+      const cat = activeCategory.value
+      if (groups[cat]) {
+        const modelKey = `${cat}-${model.model_name}`
+        if (!addedModels.has(modelKey)) {
+          groups[cat].push(model)
+          addedModels.add(modelKey)
+        }
+      }
+    } else {
+      // 如果没有选中分类，把模型添加到所有它的分类中
+      categories.forEach(cat => {
+        if (groups[cat]) {
+          const modelKey = `${cat}-${model.model_name}`
+          if (!addedModels.has(modelKey)) {
+            groups[cat].push(model)
+            addedModels.add(modelKey)
+          }
+        }
+      })
+    }
+  })
+
+  // 按顺序返回非空分组
+  const typeOrder = ['reasoning', 'chat', 'image', 'async']
+  return typeOrder
+    .filter(key => groups[key].length > 0)
+    .map(key => ({
+      type: key,
+      label: typeConfig[key].label,
+      models: groups[key]
+    }))
 })
 
 // Get count for each category
 const getCategoryCount = (categoryValue) => {
-  if (categoryValue === 'all') {
-    return models.value.length
-  }
+  const countedModels = new Set()
 
-  let result = [...models.value]
+  const count = models.value.filter(model => {
+    const categories = getModelCategories(model)
+    if (categories.includes(categoryValue)) {
+      const modelKey = `${categoryValue}-${model.model_name}`
+      if (!countedModels.has(modelKey)) {
+        countedModels.add(modelKey)
+        return true
+      }
+    }
+    return false
+  }).length
 
-  if (categoryValue === 'chat') {
-    result = result.filter(m => m.model_type === '文本')
-  } else if (categoryValue === 'image') {
-    result = result.filter(m => m.model_type === '图像')
-  } else if (categoryValue === 'video') {
-    result = result.filter(m => m.model_type === '视频' || m.tags?.includes('视频'))
-  } else if (categoryValue === 'hot') {
-    result = result.filter(m =>
-      m.tags?.includes('热门') ||
-      m.tags?.includes('推荐') ||
-      ['midjourney', 'dall-e-3', 'stable-diffusion', 'gpt-4', 'claude'].some(name =>
-        m.model_name?.toLowerCase().includes(name)
-      )
-    )
-  }
-
-  if (hasImageAttachment.value) {
-    result = result.filter(m => m.tags?.includes('识图'))
-  }
-
-  return result.length
+  return count
 }
 
 // Get model icon based on vendor or type
@@ -344,10 +487,31 @@ onMounted(() => {
   loadModels()
 })
 
-// Reset search when popup closes
+// Scroll to current model when popup opens
+const scrollToCurrentModel = () => {
+  if (!props.currentModel) return
+
+  nextTick(() => {
+    const listContainer = popupRef.value?.querySelector('.max-h-\\[320px\\]')
+    if (!listContainer) return
+
+    const currentModelElement = listContainer.querySelector(`[data-model="${props.currentModel}"]`)
+    if (currentModelElement) {
+      currentModelElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  })
+}
+
+// Reset search when popup closes and update position when opens
 watch(() => props.visible, (newVal) => {
   if (!newVal) {
     searchQuery.value = ''
+  } else {
+    // 弹窗打开时更新位置并滚动到当前模型
+    nextTick(() => {
+      updatePopupPosition()
+      scrollToCurrentModel()
+    })
   }
 })
 </script>

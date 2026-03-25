@@ -132,7 +132,7 @@
           <div class="category-group">
             <h4 class="text-base font-semibold text-ink-950 mb-4">全部模板</h4>
             <!-- Horizontal scroll cards -->
-            <div class="flex gap-4 overflow-x-auto pb-4 scrollbar-hide scroll-smooth -mx-4 px-4">
+            <div v-if="cases.length > 0" class="flex gap-4 overflow-x-auto pb-4 scrollbar-hide scroll-smooth -mx-4 px-4">
               <div
                 v-for="caseItem in cases.slice(0, 10)"
                 :key="caseItem.id"
@@ -159,6 +159,7 @@
                 </div>
               </div>
             </div>
+            <el-empty v-else description="暂无模板" :image-size="60" />
           </div>
 
           <!-- Individual Category Groups -->
@@ -169,7 +170,7 @@
           >
             <h4 class="text-base font-semibold text-ink-950 mb-4">{{ category }}</h4>
             <!-- Horizontal scroll cards for this category -->
-            <div class="flex gap-4 overflow-x-auto pb-4 scrollbar-hide scroll-smooth -mx-4 px-4">
+            <div v-if="getCasesByCategory(category).length > 0" class="flex gap-4 overflow-x-auto pb-4 scrollbar-hide scroll-smooth -mx-4 px-4">
               <div
                 v-for="caseItem in getCasesByCategory(category)"
                 :key="caseItem.id"
@@ -191,6 +192,7 @@
                 </div>
               </div>
             </div>
+            <el-empty v-else description="暂无模板" :image-size="60" />
           </div>
         </div>
 
@@ -246,18 +248,13 @@ const selectTemplate = (caseItem) => {
   appStore.setCurrentView('chat')
 }
 
-// Handle prompt input - switch to chat view when user starts typing
+// Handle prompt input - sync prompt to store, don't switch view
 const handlePromptInput = () => {
   if (!hasStartedTyping.value && promptInput.value.trim().length > 0) {
     hasStartedTyping.value = true
   }
-
-  // If user has typed something, switch to chat view
-  if (promptInput.value.trim().length > 0 && appStore.currentView === 'landing') {
-    appStore.setCurrentView('chat')
-    // Keep the prompt in the generator store
-    generatorStore.prompt = promptInput.value
-  }
+  // 同步 prompt 到 store，但不切换视图
+  generatorStore.prompt = promptInput.value
 }
 
 // Pause notification carousel when input is focused

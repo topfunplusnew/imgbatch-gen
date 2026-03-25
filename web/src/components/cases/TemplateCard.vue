@@ -50,6 +50,7 @@
 import { useAppStore } from '@/store/useAppStore'
 import { useCaseStore } from '@/store/useCaseStore'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
+import { notification } from '@/utils/notification'
 
 const props = defineProps({
   caseData: {
@@ -90,6 +91,9 @@ const useTemplate = async () => {
   }
 
   await caseStore.useCaseTemplate(props.caseData.id)
+
+  // 显示成功提示
+  notification.success('模板已应用', '模板参数已填充到输入框')
 }
 </script>
 
