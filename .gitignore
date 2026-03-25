@@ -46,6 +46,11 @@ logs/
 *.png
 *.jpg
 *.jpeg
+# 例外：web/public/photo 目录下的图片需要提交
+!web/public/photo/
+!web/public/photo/*.png
+!web/public/photo/*.jpg
+!web/public/photo/*.jpeg
 
 # 测试
 .pytest_cache/
