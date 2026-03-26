@@ -246,3 +246,75 @@ async def test_plan_assistant_execution_caps_pdf_page_matching_to_available_page
     assert plan.intent_type == "batch_generate"
     assert plan.batch_count == 2
     assert len(plan.metadata["_batch_prompts"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_plan_assistant_execution_uses_context_for_referential_image_follow_up(monkeypatch):
+    async def fake_load_attachment_descriptors(files, db_manager, api_key=None):
+        return []
+
+    monkeypatch.setattr(graph, "_load_attachment_descriptors", fake_load_attachment_descriptors)
+
+    plan = await graph.plan_assistant_execution(
+        messages=[
+            {"role": "user", "content": "帮我分析这个文章展示网站应该做成什么视觉方向"},
+            {
+                "role": "assistant",
+                "content": "建议做成现代杂志风的文章展示首页，使用深蓝色导航、卡片式文章流和编辑感排版。",
+            },
+            {"role": "user", "content": "不错，根据你分析的内容生图吧"},
+        ],
+        files=[],
+        user_instruction="不错，根据你分析的内容生图吧",
+        request_model="gpt-image-1",
+        request_model_type="image",
+        requested_count=1,
+        db_manager=object(),
+        app_state=SimpleNamespace(model_registry=None),
+        api_key=None,
+    )
+
+    assert plan.mode == "image"
+    assert plan.intent_type == "single_generate"
+    assert plan.effective_model == "gpt-image-1"
+    assert plan.metadata["conversation_context_used"] is True
+    assert "现代杂志风" in (plan.prompt or "")
+    assert "卡片式文章流" in (plan.prompt or "")
+
+
+@pytest.mark.asyncio
+async def test_plan_assistant_execution_prefers_chat_for_contextual_summary_even_with_image_model(monkeypatch):
+    async def fake_load_attachment_descriptors(files, db_manager, api_key=None):
+        return []
+
+    monkeypatch.setattr(graph, "_load_attachment_descriptors", fake_load_attachment_descriptors)
+
+    plan = await graph.plan_assistant_execution(
+        messages=[
+            {"role": "user", "content": "帮我分析这个文章展示网站应该做成什么视觉方向"},
+            {
+                "role": "assistant",
+                "content": "建议做成现代杂志风的文章展示首页，使用深蓝色导航、卡片式文章流和编辑感排版。",
+            },
+            {"role": "user", "content": "把上面的内容总结成三点"},
+        ],
+        files=[],
+        user_instruction="把上面的内容总结成三点",
+        request_model="gpt-image-1",
+        request_model_type="image",
+        requested_count=1,
+        db_manager=object(),
+        app_state=SimpleNamespace(model_registry=None),
+        api_key=None,
+    )
+
+    expected_chat_model = (
+        settings.assistant_text_model
+        or settings.langchain_pdf_prompt_model
+        or settings.openai_model
+        or "gpt-4o-mini"
+    )
+
+    assert plan.mode == "chat"
+    assert plan.intent_type == "chat"
+    assert plan.effective_model == expected_chat_model

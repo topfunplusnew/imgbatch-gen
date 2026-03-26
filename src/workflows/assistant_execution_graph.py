@@ -133,6 +133,87 @@ def _extract_message_text(content: Any) -> str:
     return str(content).strip() if content is not None else ""
 
 
+def _message_role_label(role: str) -> str:
+    normalized_role = (role or "").strip().lower()
+    if normalized_role == "assistant":
+        return "Assistant"
+    if normalized_role == "system":
+        return "System"
+    return "User"
+
+
+def _build_recent_conversation_context(
+    messages: List[Dict[str, Any]],
+    *,
+    max_messages: int = 6,
+    max_chars: int = 3200,
+    include_latest_user: bool = False,
+) -> str:
+    normalized = _normalize_messages(messages)
+    if not normalized:
+        return ""
+
+    if not include_latest_user and normalized and normalized[-1]["role"] == "user":
+        normalized = normalized[:-1]
+    if not normalized:
+        return ""
+
+    rendered_messages: List[str] = []
+    for message in normalized[-max_messages:]:
+        text = _extract_message_text(message.get("content", ""))
+        if not text:
+            continue
+        rendered_messages.append(
+            f"{_message_role_label(str(message.get('role', 'user')))}: "
+            f"{_trim_attachment_text(text, limit=900)}"
+        )
+
+    if not rendered_messages:
+        return ""
+    return _trim_attachment_text("\n\n".join(rendered_messages), limit=max_chars)
+
+
+def _looks_like_contextual_follow_up(user_instruction: str) -> bool:
+    lowered = (user_instruction or "").strip().lower()
+    if not lowered:
+        return False
+
+    markers = (
+        "根据你分析",
+        "根据上面",
+        "根据前面",
+        "根据刚才",
+        "根据之前",
+        "根据上述",
+        "基于上面",
+        "基于前面",
+        "基于刚才",
+        "基于之前",
+        "参考上面",
+        "参考前面",
+        "按上面",
+        "按前面",
+        "按刚才",
+        "按之前",
+        "按这个",
+        "照这个",
+        "用刚才的",
+        "用上面的",
+        "延续上面",
+        "继续刚才",
+        "上述内容",
+        "前面的内容",
+        "刚才的分析",
+        "之前的分析",
+        "based on your analysis",
+        "based on the above",
+        "based on that",
+        "use the above",
+        "from the previous",
+    )
+    return any(marker in lowered for marker in markers)
+
+
 def _guess_extension(value: str) -> str:
     if not value:
         return ""
@@ -740,9 +821,12 @@ def _fallback_text_route(
     user_instruction: str,
     model_hint: Optional[str],
     requested_count: Optional[int],
+    messages: Optional[List[Dict[str, Any]]] = None,
 ) -> TextIntentDecision:
     text = (user_instruction or "").strip().lower()
     batch_count = _derive_batch_count(user_instruction, requested_count)
+    recent_context = _build_recent_conversation_context(messages or [])
+    contextual_follow_up = _looks_like_contextual_follow_up(user_instruction)
 
     chat_keywords = [
         "summarize",
@@ -794,8 +878,13 @@ def _fallback_text_route(
 
     if model_hint == "chat":
         chat_score += 1
-    elif model_hint == "image" and image_keyword_score > 0:
+    if model_hint == "image" and image_keyword_score > 0:
         image_score += 1
+    if model_hint == "image" and contextual_follow_up:
+        if image_keyword_score > 0 or batch_count > 1:
+            image_score += 2
+        elif chat_keyword_score == 0 and recent_context and len(text) <= 24:
+            image_score += 1
 
     if batch_count > 1:
         image_score += 2
@@ -837,6 +926,7 @@ def _fallback_text_route(
 
 async def _classify_text_request(
     *,
+    messages: List[Dict[str, Any]],
     user_instruction: str,
     request_model: Optional[str],
     request_model_type: Optional[str],
@@ -848,7 +938,13 @@ async def _classify_text_request(
     if not model_hint and request_model:
         model_hint = "image" if await _is_image_model_name(request_model, app_state) else "chat"
 
-    fallback = _fallback_text_route(user_instruction, model_hint, requested_count)
+    recent_context = _build_recent_conversation_context(messages)
+    fallback = _fallback_text_route(
+        user_instruction,
+        model_hint,
+        requested_count,
+        messages=messages,
+    )
     if (
         not LANGCHAIN_ASSISTANT_AVAILABLE
         or SystemMessage is None
@@ -883,6 +979,8 @@ async def _classify_text_request(
                 ),
                 HumanMessage(
                     content=(
+                        f"Recent conversation context (latest first-hand references should be resolved against this): "
+                        f"{recent_context or 'None'}\n"
                         f"User instruction: {user_instruction or 'None'}\n"
                         f"Model hint: {model_hint or 'none'}\n"
                         f"Requested image count hint: {_derive_batch_count(user_instruction, requested_count)}"
@@ -933,6 +1031,7 @@ async def _classify_text_request(
 async def _decide_execution_route(
     *,
     attachments: List[AttachmentDescriptor],
+    messages: List[Dict[str, Any]],
     user_instruction: str,
     request_model: Optional[str],
     request_model_type: Optional[str],
@@ -973,6 +1072,7 @@ async def _decide_execution_route(
         )
 
     return await _classify_text_request(
+        messages=messages,
         user_instruction=user_instruction,
         request_model=request_model,
         request_model_type=request_model_type,
@@ -1072,6 +1172,65 @@ async def _build_image_prompt_from_attachments(
         return _merge_prompt_with_grounding(reference_note, grounding_block)
 
     return _merge_prompt_with_grounding(user_instruction or "", grounding_block)
+
+
+async def _build_contextual_image_instruction(
+    *,
+    user_instruction: str,
+    messages: List[Dict[str, Any]],
+    api_key: Optional[str],
+) -> str:
+    instruction = (user_instruction or "").strip()
+    if not instruction:
+        return ""
+
+    recent_context = _build_recent_conversation_context(messages)
+    if not recent_context:
+        return instruction
+
+    should_rewrite = _looks_like_contextual_follow_up(instruction) or len(instruction) <= 32
+    if should_rewrite and LANGCHAIN_ASSISTANT_AVAILABLE and HumanMessage is not None and SystemMessage is not None and _has_llm_credentials(api_key):
+        try:
+            llm = await _build_model(api_key=api_key, model=_get_default_planner_model())
+            response = await llm.ainvoke(
+                [
+                    SystemMessage(
+                        content=(
+                            "You rewrite the user's latest request into one standalone image-generation brief. "
+                            "Use the recent conversation context to resolve references like 'based on your analysis' "
+                            "or 'use the above'. Keep only information useful for image generation. "
+                            "Output only the standalone brief in the user's language."
+                        )
+                    ),
+                    HumanMessage(
+                        content=(
+                            f"Recent conversation context:\n{recent_context}\n\n"
+                            f"Latest user request:\n{instruction}"
+                        )
+                    ),
+                ]
+            )
+            rewritten = response.content if isinstance(response.content, str) else _extract_message_text(response.content)
+            rewritten = (rewritten or "").strip()
+            if rewritten:
+                return _trim_attachment_text(
+                    rewritten,
+                    limit=settings.assistant_attachment_text_limit or 12000,
+                )
+        except Exception as exc:
+            logger.warning("Failed to rewrite contextual image instruction: {}", exc)
+
+    if should_rewrite:
+        return _trim_attachment_text(
+            (
+                "Create an image based on the latest request and the recent conversation context.\n\n"
+                f"Latest request:\n{instruction}\n\n"
+                f"Recent conversation context:\n{recent_context}"
+            ),
+            limit=settings.assistant_attachment_text_limit or 12000,
+        )
+
+    return instruction
 
 
 def _flatten_pdf_page_items(attachments: List[AttachmentDescriptor]) -> List[Dict[str, Any]]:
@@ -1223,6 +1382,7 @@ async def _build_chat_plan(
 async def _build_image_plan(
     *,
     user_instruction: str,
+    messages: List[Dict[str, Any]],
     attachments: List[AttachmentDescriptor],
     route_decision: RequestRouteDecision,
     request_model: Optional[str],
@@ -1230,10 +1390,15 @@ async def _build_image_plan(
     app_state,
     api_key: Optional[str],
 ) -> AssistantExecutionPlan:
+    contextual_user_instruction = await _build_contextual_image_instruction(
+        user_instruction=user_instruction,
+        messages=messages,
+        api_key=api_key,
+    )
     requested_batch_count = max(1, route_decision.batch_count or 1)
     pdf_page_items = _flatten_pdf_page_items(attachments)
     pdf_page_prompts = await _build_pdf_page_matched_prompts(
-        user_instruction=user_instruction,
+        user_instruction=contextual_user_instruction,
         attachments=attachments,
         requested_count=requested_batch_count,
         api_key=api_key,
@@ -1244,7 +1409,7 @@ async def _build_image_plan(
         effective_intent_type = "batch_generate" if effective_batch_count > 1 else "single_generate"
     else:
         final_prompt = await _build_image_prompt_from_attachments(
-            user_instruction,
+            contextual_user_instruction,
             attachments,
             api_key=api_key,
         )
@@ -1271,6 +1436,7 @@ async def _build_image_plan(
             "attachment_count": len(attachments),
             "attachment_text_count": attachment_text_count,
             "planning_basis": route_decision.planning_basis,
+            "conversation_context_used": contextual_user_instruction != (user_instruction or "").strip(),
             "pdf_page_match_enabled": bool(pdf_page_prompts),
             "pdf_total_pages": len(pdf_page_items),
             "pdf_page_match_count": len(pdf_page_prompts),
@@ -1295,6 +1461,7 @@ async def _route_request_node(state: AssistantExecutionState) -> Dict[str, objec
     attachments = [AttachmentDescriptor.model_validate(item) for item in state.get("attachments", [])]
     decision = await _decide_execution_route(
         attachments=attachments,
+        messages=state.get("messages", []),
         user_instruction=state.get("user_instruction", ""),
         request_model=state.get("request_model"),
         request_model_type=state.get("request_model_type"),
@@ -1329,6 +1496,7 @@ async def _prepare_image_node(state: AssistantExecutionState) -> Dict[str, objec
     route_decision = RequestRouteDecision.model_validate(state.get("route_decision") or {})
     plan = await _build_image_plan(
         user_instruction=state.get("user_instruction", ""),
+        messages=state.get("messages", []),
         attachments=attachments,
         route_decision=route_decision,
         request_model=state.get("request_model"),
@@ -1381,6 +1549,7 @@ async def _fallback_execution_plan(
     attachments = await _load_attachment_descriptors(files, db_manager, api_key)
     route_decision = await _decide_execution_route(
         attachments=attachments,
+        messages=messages,
         user_instruction=user_instruction,
         request_model=request_model,
         request_model_type=request_model_type,
@@ -1391,6 +1560,7 @@ async def _fallback_execution_plan(
     if route_decision.route == "image":
         return await _build_image_plan(
             user_instruction=user_instruction,
+            messages=messages,
             attachments=attachments,
             route_decision=route_decision,
             request_model=request_model,

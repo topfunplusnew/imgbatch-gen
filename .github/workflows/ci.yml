@@ -6,10 +6,6 @@ on:
 permissions:
   contents: read
 
-env:
-  UV_DEFAULT_INDEX: https://mirrors.aliyun.com/pypi/simple/
-  PIP_INDEX_URL: https://mirrors.aliyun.com/pypi/simple/
-
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -23,8 +19,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install uv
-        run: python -m pip install uv -i https://mirrors.aliyun.com/pypi/simple/
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
 
       - name: Install backend dependencies
         run: uv sync --frozen --extra dev
@@ -111,6 +110,9 @@ jobs:
 
       - name: Build backend image
         run: docker build -t img-batch-agent-backend .
+
+      - name: Build frontend image
+        run: docker build -t img-batch-agent-frontend ./web
 
       - name: Validate nginx configuration
         run: |

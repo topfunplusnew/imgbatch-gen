@@ -8,10 +8,6 @@ on:
 permissions:
   contents: read
 
-env:
-  UV_DEFAULT_INDEX: https://mirrors.aliyun.com/pypi/simple/
-  PIP_INDEX_URL: https://mirrors.aliyun.com/pypi/simple/
-
 concurrency:
   group: production-deploy
   cancel-in-progress: true
@@ -30,8 +26,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install uv
-        run: python -m pip install uv -i https://mirrors.aliyun.com/pypi/simple/
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
 
       - name: Install backend dependencies
         run: uv sync --frozen --extra dev
@@ -65,6 +64,9 @@ jobs:
         working-directory: web
         run: npm run build
 
+      - name: Build frontend image
+        run: docker build -t img-batch-agent-frontend ./web
+
       - name: Validate docker compose file
         run: docker compose -f docker-compose.yml config
 
@@ -84,21 +86,16 @@ jobs:
           cp -r src deploy-root/src
           if [ -d migrations ]; then cp -r migrations deploy-root/; fi
           if [ -d sql ]; then cp -r sql deploy-root/; fi
-          cp web/nginx.conf web/.env.production deploy-root/web/
+          cp web/Dockerfile web/package.json web/package-lock.json web/index.html web/jsconfig.json web/postcss.config.js web/tailwind.config.js web/vite.config.js web/nginx.conf web/.env.production deploy-root/web/
+          if [ -d web/public ]; then cp -r web/public deploy-root/web/; fi
+          cp -r web/src deploy-root/web/src
           tar czf deploy-root.tgz -C deploy-root .
-          tar czf frontend-dist.tgz -C web/dist .
 
       - name: Upload deploy payload
         uses: actions/upload-artifact@v4
         with:
           name: deploy-root
           path: deploy-root.tgz
-
-      - name: Upload frontend dist
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: frontend-dist.tgz
 
   deploy:
     needs: build
@@ -113,17 +110,10 @@ jobs:
           name: deploy-root
           path: artifacts
 
-      - name: Download frontend dist
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: artifacts
-
       - name: Extract deployment artifacts
         run: |
-          mkdir -p deploy-root web/dist
+          mkdir -p deploy-root
           tar xzf artifacts/deploy-root.tgz -C deploy-root
-          tar xzf artifacts/frontend-dist.tgz -C web/dist
 
       - name: Configure SSH
         shell: bash
@@ -259,13 +249,9 @@ jobs:
               "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/sql/"
           fi
 
-          rsync -az -e "$rsync_ssh" \
-            deploy-root/web/nginx.conf \
-            deploy-root/web/.env.production \
+          rsync -az --delete -e "$rsync_ssh" \
+            deploy-root/web/ \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/web/"
-
-          rsync -az --delete -e "$rsync_ssh" web/dist/ \
-            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/web/dist.new/"
 
       - name: Remote deploy
         shell: bash
@@ -292,11 +278,6 @@ jobs:
             compose_cmd+=(--env-file .env)
           fi
           frontend_port="${FRONTEND_PORT:-8080}"
-
-          if [ ! -d web/dist.new ]; then
-            echo "web/dist.new does not exist"
-            exit 1
-          fi
 
           "${compose_cmd[@]}" config >/dev/null
 
@@ -348,22 +329,7 @@ jobs:
             exit 1
           fi
 
-          rollback_frontend() {
-            echo "Rolling back frontend dist"
-            rm -rf web/dist
-            if [ -d web/dist.prev ]; then
-              mv web/dist.prev web/dist
-              "${compose_cmd[@]}" up -d --force-recreate frontend || true
-            fi
-          }
-
-          rm -rf web/dist.prev
-          if [ -d web/dist ]; then
-            mv web/dist web/dist.prev
-          fi
-          mv web/dist.new web/dist
-
-          "${compose_cmd[@]}" up -d --force-recreate frontend
+          "${compose_cmd[@]}" up -d --build --force-recreate frontend
           for i in $(seq 1 30); do
             frontend_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' img-batch-agent-frontend 2>/dev/null || true)"
             echo "Frontend status attempt $i: ${frontend_status:-missing}"
@@ -375,22 +341,18 @@ jobs:
           if [ "$frontend_status" != "healthy" ]; then
             echo "Frontend did not start in time"
             "${compose_cmd[@]}" logs --tail=200 frontend
-            rollback_frontend
             exit 1
           fi
 
           curl -fsS "http://127.0.0.1:${frontend_port}/nginx-health" >/dev/null || {
             "${compose_cmd[@]}" logs --tail=200 frontend
-            rollback_frontend
             exit 1
           }
           curl -fsS "http://127.0.0.1:${frontend_port}/api/v1/health/storage" >/dev/null || {
             "${compose_cmd[@]}" logs --tail=200 postgres postgres-init backend frontend
-            rollback_frontend
             exit 1
           }
 
-          rm -rf web/dist.prev
           "${compose_cmd[@]}" ps
           EOF
 
