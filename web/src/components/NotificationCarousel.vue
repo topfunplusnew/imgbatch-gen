@@ -1,31 +1,32 @@
 <template>
   <div
     v-if="announcements.length > 0"
-    class="relative rounded-xl overflow-hidden bg-gradient-to-br from-primary/10 to-primary/5 dark:from-primary/20 dark:to-primary/10"
+    class="relative w-full h-[120px] overflow-hidden bg-gradient-to-br from-primary/10 to-primary/5 border-b border-border-dark"
     @mouseenter="pauseAutoplay"
     @mouseleave="resumeAutoplay"
   >
-    <!-- 轮播内容 -->
-    <div class="relative">
-      <transition
-        :name="transitionDirection"
-        @before-enter="beforeEnter"
-        @after-enter="afterEnter"
+    <!-- 轮播内容 - 内部可滚动 -->
+    <transition
+      :name="transitionDirection"
+      mode="out-in"
+    >
+      <div
+        v-if="currentAnnouncement"
+        :key="currentAnnouncement.id"
+        class="h-full overflow-y-auto scrollbar-thin"
+        @click="handleClick(currentAnnouncement)"
       >
         <div
-          v-if="currentAnnouncement"
-          :key="currentAnnouncement.id"
-          class="p-4 md:p-6 cursor-pointer"
-          @click="handleClick(currentAnnouncement)"
+          class="p-4 md:px-8 cursor-pointer min-h-full flex items-center"
         >
-          <div class="flex items-start gap-4">
+          <div class="flex items-center gap-4 w-full">
             <!-- 封面图片 -->
             <div
               v-if="currentAnnouncement.cover_image_url"
-              class="w-24 h-24 md:w-32 md:h-32 rounded-lg overflow-hidden flex-shrink-0"
+              class="w-20 h-20 md:w-24 md:h-24 rounded-lg overflow-hidden flex-shrink-0 shadow-md"
             >
               <img
-                :src="currentAnnouncement.cover_image_url"
+                :src="getImageUrl(currentAnnouncement.cover_image_url)"
                 :alt="currentAnnouncement.title"
                 class="w-full h-full object-cover"
               />
@@ -34,7 +35,7 @@
             <!-- 内容 -->
             <div class="flex-1 min-w-0">
               <!-- 标签 -->
-              <div class="flex items-center gap-2 mb-2">
+              <div class="flex items-center gap-2 mb-1">
                 <span
                   class="text-xs px-2 py-0.5 rounded-full"
                   :class="priorityBadgeClasses[currentAnnouncement.priority]"
@@ -50,53 +51,53 @@
               </div>
 
               <!-- 标题 -->
-              <h3 class="text-base md:text-lg font-semibold text-gray-900 dark:text-white mb-1 line-clamp-2">
+              <h3 class="text-sm md:text-base font-semibold text-ink-950 dark:text-white mb-1 line-clamp-1">
                 {{ currentAnnouncement.title }}
               </h3>
 
               <!-- 内容预览 -->
               <p
-                class="text-sm text-gray-600 dark:text-gray-300 line-clamp-2"
+                class="text-xs md:text-sm text-ink-600 dark:text-white/80 line-clamp-2"
                 v-html="stripHtml(currentAnnouncement.content)"
               ></p>
             </div>
           </div>
         </div>
-      </transition>
-    </div>
+      </div>
+    </transition>
 
     <!-- 导航按钮 -->
     <template v-if="announcements.length > 1">
       <!-- 上一张 -->
       <button
         @click.stop="previous"
-        class="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-800 shadow-lg flex items-center justify-center transition-all opacity-0 hover:opacity-100 group-hover:opacity-100"
+        class="absolute left-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-800 shadow-md flex items-center justify-center transition-all z-10"
         aria-label="上一张"
       >
-        <span class="material-symbols-outlined !text-lg">chevron_left</span>
+        <span class="material-symbols-outlined !text-base text-gray-600 dark:text-gray-300">chevron_left</span>
       </button>
 
       <!-- 下一张 -->
       <button
         @click.stop="next"
-        class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-800 shadow-lg flex items-center justify-center transition-all opacity-0 hover:opacity-100 group-hover:opacity-100"
+        class="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-800 shadow-md flex items-center justify-center transition-all z-10"
         aria-label="下一张"
       >
-        <span class="material-symbols-outlined !text-lg">chevron_right</span>
+        <span class="material-symbols-outlined !text-base text-gray-600 dark:text-gray-300">chevron_right</span>
       </button>
     </template>
 
     <!-- 指示点 -->
     <div
       v-if="announcements.length > 1"
-      class="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5"
+      class="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5"
     >
       <button
         v-for="(announcement, index) in announcements"
         :key="announcement.id"
         @click.stop="goTo(index)"
-        class="w-2 h-2 rounded-full transition-all"
-        :class="currentIndex === index ? 'bg-primary w-6' : 'bg-white/50 hover:bg-white/70'"
+        class="w-1.5 h-1.5 rounded-full transition-all"
+        :class="currentIndex === index ? 'bg-primary w-5' : 'bg-white/50 hover:bg-white/70'"
         :aria-label="`幻灯片 ${index + 1}`"
       ></button>
     </div>
@@ -124,15 +125,15 @@ const transitionDirection = ref<'slide-left' | 'slide-right'>('slide-left')
 let autoplayTimer: number | null = null
 let isPaused = false
 
-// 优先级标签样式
+// 优先级标签样式 - 使用系统配色
 const priorityBadgeClasses = {
-  urgent: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
-  high: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
-  normal: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  low: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300',
+  urgent: 'bg-red-500/20 text-red-600 dark:text-red-300',
+  high: 'bg-orange-500/20 text-orange-600 dark:text-orange-300',
+  normal: 'bg-primary/20 text-primary dark:text-white/90',
+  low: 'bg-gray-500/20 text-gray-600 dark:text-gray-300',
 }
 
-// 优先级标签中文映射
+// 获取优先级标签
 function getPriorityLabel(priority: string): string {
   const labels: Record<string, string> = {
     urgent: '紧急',
@@ -145,19 +146,50 @@ function getPriorityLabel(priority: string): string {
 
 // 当前公告
 const currentAnnouncement = computed(() => {
-  return announcements.value[currentIndex.value] || null
+  console.log('[NotificationCarousel] Computing currentAnnouncement')
+  console.log('[NotificationCarousel] announcements:', announcements.value)
+  console.log('[NotificationCarousel] announcements.value.length:', announcements.value.length)
+  console.log('[NotificationCarousel] currentIndex:', currentIndex.value)
+
+  if (!announcements.value || announcements.value.length === 0) {
+    console.log('[NotificationCarousel] announcements is empty, returning null')
+    return null
+  }
+
+  if (currentIndex.value >= announcements.value.length) {
+    console.log('[NotificationCarousel] currentIndex out of bounds, resetting to 0')
+    currentIndex.value = 0
+    return null
+  }
+
+  const announcement = announcements.value[currentIndex.value]
+  console.log('[NotificationCarousel] announcements.value[currentIndex.value]:', announcement)
+  console.log('[NotificationCarousel] currentAnnouncement:', announcement)
+  return announcement
 })
 
 // 加载公告列表
 async function loadAnnouncements() {
   try {
+    console.log('[NotificationCarousel] Loading announcements...')
     const items = await notificationStore.fetchPublicAnnouncements(1, props.maxItems || 5)
-    // 只显示置顶和高优先级的公告
-    announcements.value = items.filter((a: any) =>
-      a.is_pinned || a.priority === 'high' || a.priority === 'urgent'
-    )
+    console.log('[NotificationCarousel] Fetched items type:', typeof items, Array.isArray(items))
+    console.log('[NotificationCarousel] Fetched items:', items)
+
+    // 显示所有已发布的公告（API已过滤is_published）
+    if (Array.isArray(items)) {
+      announcements.value = items
+    } else if (items && Array.isArray(items.items)) {
+      // 兼容不同的返回格式
+      announcements.value = items.items
+    } else {
+      announcements.value = []
+    }
+
+    console.log('[NotificationCarousel] Announcements to display:', announcements.value.length, announcements.value)
   } catch (error) {
-    console.error('加载公告失败:', error)
+    console.error('[NotificationCarousel] 加载公告失败:', error)
+    announcements.value = []
   }
 }
 
@@ -167,14 +199,14 @@ function next() {
   currentIndex.value = (currentIndex.value + 1) % announcements.value.length
 }
 
-// 上一张
+ // 上一张
 function previous() {
   transitionDirection.value = 'slide-right'
   currentIndex.value =
     currentIndex.value === 0
       ? announcements.value.length - 1
       : currentIndex.value - 1
-}
+  }
 
 // 跳转到指定幻灯片
 function goTo(index: number) {
@@ -201,13 +233,13 @@ function pauseAutoplay() {
   stopAutoplay()
 }
 
-// 恢复自动播放
+ // 恢复自动播放
 function resumeAutoplay() {
   isPaused = false
   startAutoplay()
 }
 
-// 开始自动播放
+ // 开始自动播放
 function startAutoplay() {
   if (!props.autoplay || announcements.value.length <= 1) return
 
@@ -232,16 +264,16 @@ function beforeEnter(el: HTMLElement) {
   el.style.opacity = '0'
 }
 
-function afterEnter(el: HTMLElement) {
+ function afterEnter(el: HTMLElement) {
   el.style.opacity = '1'
 }
 
-onMounted(() => {
+ onMounted(() => {
   loadAnnouncements()
   startAutoplay()
 })
 
-onUnmounted(() => {
+ onUnmounted(() => {
   stopAutoplay()
 })
 
@@ -257,9 +289,31 @@ function stripHtml(html: string): string {
   div.innerHTML = html
   return div.textContent || div.innerText || ''
 }
+
+// 获取图片完整 URL
+function getImageUrl(path: string | null): string {
+  if (!path) return ''
+  // 如果 path 以 /api/ 开头，需要拼接完整 URL
+  if (path.startsWith('/api/')) {
+    // 如果已经是完整URL，直接返回
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path
+    }
+    // 否则，拼接 API 基础 URL
+    return `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8888'}${path}`
+  }
+  return path
+}
 </script>
 
 <style scoped>
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -275,23 +329,41 @@ function stripHtml(html: string): string {
   transition: all 0.3s ease;
 }
 
-.slide-left-enter-from {
+ .slide-left-enter-from {
   opacity: 0;
   transform: translateX(20px);
 }
 
-.slide-left-leave-to {
+ .slide-left-leave-to {
   opacity: 0;
   transform: translateX(-20px);
 }
 
-.slide-right-enter-from {
+ .slide-right-enter-from {
   opacity: 0;
   transform: translateX(-20px);
 }
 
-.slide-right-leave-to {
+ .slide-right-leave-to {
   opacity: 0;
   transform: translateX(20px);
+}
+
+/* 自定义滚动条样式 */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+ .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 2px;
+}
+
+.scrollbar-thin:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
 }
 </style>
