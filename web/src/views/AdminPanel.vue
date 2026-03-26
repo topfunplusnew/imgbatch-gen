@@ -920,58 +920,6 @@
             </div>
           </section>
 
-          <!-- 操作按钮 -->
-          <section>
-            <h3 class="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-3">操作</h3>
-            <div class="grid grid-cols-2 gap-3">
-              <button
-                @click="openPointsModal"
-                class="px-4 py-3 bg-primary text-white rounded-xl font-medium hover:bg-primary/90 flex items-center justify-center gap-2"
-              >
-                <span class="material-symbols-outlined">stars</span>
-                调整积分
-              </button>
-              <button
-                @click="openBalanceModal"
-                class="px-4 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 flex items-center justify-center gap-2"
-              >
-                <span class="material-symbols-outlined">payments</span>
-                调整余额
-              </button>
-              <button
-                v-if="selectedUserDetail.status === 'active'"
-                @click="openBanModal"
-                class="px-4 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 flex items-center justify-center gap-2"
-              >
-                <span class="material-symbols-outlined">block</span>
-                封禁用户
-              </button>
-              <button
-                v-else
-                @click="unbanUser"
-                class="px-4 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 flex items-center justify-center gap-2"
-              >
-                <span class="material-symbols-outlined">check_circle</span>
-                解封用户
-              </button>
-              <button
-                v-if="selectedUserDetail.role !== 'admin'"
-                @click="setAdmin"
-                class="px-4 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 flex items-center justify-center gap-2"
-              >
-                <span class="material-symbols-outlined">admin_panel_settings</span>
-                设为管理员
-              </button>
-              <button
-                v-else
-                @click="removeAdmin"
-                class="px-4 py-3 bg-gray-600 text-white rounded-xl font-medium hover:bg-gray-700 flex items-center justify-center gap-2"
-              >
-                <span class="material-symbols-outlined">person_remove</span>
-                取消管理员
-              </button>
-            </div>
-          </section>
         </div>
       </div>
     </div>
