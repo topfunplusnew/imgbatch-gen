@@ -479,6 +479,8 @@ async def get_public_announcements(
     user_role = user.get("role", "user") if user else "guest"
     user_id = user.get("id") if user else None
 
+    print(f"[DEBUG] /public endpoint called - user_role: {user_role}, user_id: {user_id}")
+
     service = get_notification_service()
 
     # 使用 get_my_notifications 方法
@@ -488,6 +490,10 @@ async def get_public_announcements(
         page=page,
         page_size=page_size,
     )
+
+    print(f"[DEBUG] /public result: {result.get('total', 0)} items")
+    for item in result.get('items', []):
+        print(f"[DEBUG]   - {item.get('title')}: is_published={item.get('is_published')}, published_at={item.get('published_at')}, target_audience={item.get('target_audience')}")
 
     return result
 

@@ -1,5 +1,10 @@
 <template>
   <main class="flex-1 flex flex-col bg-background-dark min-h-screen overflow-y-auto">
+    <!-- 系统公告 - 页面顶部 -->
+    <div class="flex-shrink-0">
+      <NotificationCarousel ref="notificationCarouselRef" :autoplay="true" :autoplay-interval="5000" :max-items="3" />
+    </div>
+
     <div class="md:hidden sticky top-0 z-20 px-4 xs:px-6 py-3 bg-white/80 backdrop-blur-xl border-b border-border-dark flex items-center justify-between gap-3">
       <button
         @click="emit('toggleSidebar')"
@@ -11,7 +16,7 @@
     </div>
 
     <!-- Hero Section -->
-    <div class="flex-1 flex flex-col items-center justify-center px-4 xs:px-6 md:px-8 py-12 md:py-16 text-center">
+    <div class="flex-1 flex flex-col items-center justify-center px-4 xs:px-6 md:px-8 py-12 md:py-16 text-center bg-gradient-to-br from-primary/10 to-primary/5">
       <!-- Logo -->
       <div class="mb-8 md:mb-12">
         <div class="flex items-center justify-center mb-4">
@@ -21,11 +26,6 @@
         <p class="text-base md:text-lg text-ink-500 max-w-2xl mx-auto">
           强大的AI图像生成工具，支持多种模型和风格，轻松创建您想要的图像
         </p>
-      </div>
-
-      <!-- 通知轮播 -->
-      <div class="w-full mb-6">
-        <NotificationCarousel ref="notificationCarouselRef" :autoplay="true" :autoplay-interval="5000" :max-items="3" />
       </div>
 
       <!-- Quick Input Area -->
@@ -351,6 +351,11 @@ const startGeneration = () => {
   attachments.value.forEach(file => {
     generatorStore.addAttachment(file)
   })
+
+  // 设置自动发送标记
+  if (promptInput.value.trim() || generatorStore.attachments.length > 0) {
+    generatorStore.setPendingAutoSend(true)
+  }
 
   // Switch to chat view
   appStore.setCurrentView('chat')

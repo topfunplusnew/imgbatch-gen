@@ -115,18 +115,6 @@
               邀请码
             </button>
             <button
-              @click="appStore.setUserCenterTab('contact')"
-              :class="[
-                'w-full px-4 py-3 rounded-xl text-left font-medium transition-colors flex items-center gap-3',
-                activeTab === 'contact'
-                  ? 'bg-primary text-white'
-                  : 'text-ink-700 hover:bg-gray-50'
-              ]"
-            >
-              <span class="material-symbols-outlined !text-xl">contact_support</span>
-              联系我们
-            </button>
-            <button
               @click="appStore.setUserCenterTab('notifications')"
               :class="[
                 'w-full px-4 py-3 rounded-xl text-left font-medium transition-colors flex items-center gap-3',
@@ -812,42 +800,6 @@
                     <p class="text-sm text-gray-500">{{ formatDate(record.created_at) }}</p>
                   </div>
                   <span class="text-sm text-green-600 font-medium">+50 积分</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 联系我们标签页 -->
-          <div v-if="activeTab === 'contact'" class="space-y-6">
-            <div class="bg-white rounded-2xl shadow-sm p-6">
-              <h2 class="text-lg font-bold text-ink-950 mb-6">联系我们</h2>
-              <div class="space-y-6">
-                <div class="flex items-start gap-4">
-                  <div class="w-12 h-12 bg-primary-soft rounded-xl flex items-center justify-center shrink-0">
-                    <span class="material-symbols-outlined !text-2xl text-primary">email</span>
-                  </div>
-                  <div>
-                    <h3 class="font-semibold text-gray-900">邮箱</h3>
-                    <p class="text-gray-600">support@example.com</p>
-                  </div>
-                </div>
-                <div class="flex items-start gap-4">
-                  <div class="w-12 h-12 bg-primary-soft rounded-xl flex items-center justify-center shrink-0">
-                    <span class="material-symbols-outlined !text-2xl text-primary">chat</span>
-                  </div>
-                  <div>
-                    <h3 class="font-semibold text-gray-900">在线客服</h3>
-                    <p class="text-gray-600">工作日 9:00 - 18:00</p>
-                  </div>
-                </div>
-                <div class="flex items-start gap-4">
-                  <div class="w-12 h-12 bg-primary-soft rounded-xl flex items-center justify-center shrink-0">
-                    <span class="material-symbols-outlined !text-2xl text-primary">forum</span>
-                  </div>
-                  <div>
-                    <h3 class="font-semibold text-gray-900">用户社区</h3>
-                    <p class="text-gray-600">加入我们的用户交流群</p>
-                  </div>
                 </div>
               </div>
             </div>

@@ -217,7 +217,7 @@
 
               <!-- 桌面端表格 -->
               <table v-if="!loading && users.length > 0" class="w-full hidden md:table">
-                <thead class="bg-gray-50 border-b border-border-dark">
+                <thead class="bg-background-dark border-b border-border-dark">
                   <tr>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-ink-700">用户信息</th>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-ink-700">积分</th>
@@ -230,7 +230,7 @@
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-border-dark">
-                  <tr v-for="user in users" :key="user.id" class="hover:bg-gray-50 transition-colors">
+                  <tr v-for="user in users" :key="user.id" class="hover:bg-primary-soft transition-colors">
                     <td class="px-4 py-3">
                       <p class="font-medium text-ink-950">{{ user.username || '未设置' }}</p>
                       <p class="text-sm text-ink-500">{{ user.phone || '-' }}</p>
@@ -239,10 +239,10 @@
                       <p class="text-sm font-medium text-ink-950">{{ user.points.toLocaleString() }}</p>
                     </td>
                     <td class="px-4 py-3">
-                      <p class="text-sm font-medium text-purple-600">{{ (user.gift_points || 0).toLocaleString() }}</p>
+                      <p class="text-sm font-medium text-accent-purple-dark">{{ (user.gift_points || 0).toLocaleString() }}</p>
                     </td>
                     <td class="px-4 py-3">
-                      <p class="text-sm font-medium text-green-600">¥{{ (user.balance / 100).toFixed(2) }}</p>
+                      <p class="text-sm font-medium text-ink-950">¥{{ (user.balance / 100).toFixed(2) }}</p>
                     </td>
                     <td class="px-4 py-3">
                       <p class="text-sm text-ink-700">生成: {{ user.total_generated }}</p>
@@ -252,14 +252,14 @@
                       <div class="flex flex-col gap-1">
                         <span :class="[
                           'px-2 py-0.5 text-xs font-medium rounded-full inline-flex items-center gap-1 w-fit',
-                          user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          user.status === 'active' ? 'bg-primary/10 text-primary' : 'bg-red-100 text-red-600'
                         ]">
                           <span class="material-symbols-outlined !text-sm">
                             {{ user.status === 'active' ? 'check_circle' : 'block' }}
                           </span>
                           {{ user.status === 'active' ? '活跃' : '已封禁' }}
                         </span>
-                        <span v-if="user.role === 'admin'" class="px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700 inline-flex items-center gap-1 w-fit">
+                        <span v-if="user.role === 'admin'" class="px-2 py-0.5 text-xs font-medium rounded-full bg-accent-purple/10 text-accent-purple-dark inline-flex items-center gap-1 w-fit">
                           <span class="material-symbols-outlined !text-sm">admin_panel_settings</span>
                           管理员
                         </span>
@@ -269,79 +269,178 @@
                       {{ formatDate(user.created_at) }}
                     </td>
                     <td class="px-4 py-3">
-                      <button
-                        @click="viewUserDetail(user)"
-                        class="text-primary hover:underline text-sm font-medium"
-                      >
-                        查看详情
-                      </button>
+                      <div class="flex items-center gap-1 flex-wrap">
+                        <button
+                          @click="openPointsModalForUser(user)"
+                          class="text-xs px-2 py-1 bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors"
+                        >
+                          调整积分
+                        </button>
+                        <button
+                          @click="openBalanceModalForUser(user)"
+                          class="text-xs px-2 py-1 bg-primary/10 text-ink-700 rounded hover:bg-primary/20 transition-colors"
+                        >
+                          调整余额
+                        </button>
+                        <button
+                          v-if="user.status === 'active'"
+                          @click="openBanModalForUser(user)"
+                          class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
+                        >
+                          封禁
+                        </button>
+                        <button
+                          v-else
+                          @click="unbanUserDirect(user)"
+                          class="text-xs px-2 py-1 bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors"
+                        >
+                          解封
+                        </button>
+                        <button
+                          v-if="user.role !== 'admin'"
+                          @click="setAdminDirect(user)"
+                          class="text-xs px-2 py-1 bg-accent-purple/10 text-accent-purple-dark rounded hover:bg-accent-purple/20 transition-colors"
+                        >
+                          设为管理员
+                        </button>
+                        <button
+                          v-else
+                          @click="removeAdminDirect(user)"
+                          class="text-xs px-2 py-1 bg-primary/10 text-ink-500 rounded hover:bg-primary/20 transition-colors"
+                        >
+                          取消管理员
+                        </button>
+                        <button
+                          @click="viewUserDetail(user)"
+                          class="text-xs px-2 py-1 text-primary hover:underline"
+                        >
+                          详情
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 </tbody>
               </table>
 
               <!-- 移动端卡片布局 -->
-              <div v-if="!loading && users.length > 0" class="divide-y divide-gray-200 md:hidden">
+              <div v-if="!loading && users.length > 0" class="space-y-3 md:hidden">
                 <div
                   v-for="user in users"
                   :key="user.id"
-                  class="p-4 space-y-3"
+                  class="bg-white rounded-2xl border border-border-dark overflow-hidden"
                 >
-                  <!-- 用户基本信息 -->
-                  <div class="flex items-start gap-3">
-                    <div class="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary-deep flex items-center justify-center text-white font-bold text-lg shrink-0">
-                      {{ (user.username || 'U').charAt(0).toUpperCase() }}
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center gap-2 mb-1">
-                        <p class="font-semibold text-ink-950 text-sm truncate">{{ user.username || '未设置' }}</p>
-                        <span
-                          :class="[
-                            'px-2 py-0.5 text-[10px] font-medium rounded-full flex-shrink-0',
-                            user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                          ]"
-                        >
-                          {{ user.status === 'active' ? '活跃' : '已封禁' }}
-                        </span>
-                        <span v-if="user.role === 'admin'" class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-purple-100 text-purple-700 flex-shrink-0">
-                          管理员
-                        </span>
+                  <!-- 用户头部 -->
+                  <div class="p-4 bg-gradient-to-r from-background-dark to-white">
+                    <div class="flex items-center gap-3">
+                      <div class="w-11 h-11 rounded-full bg-primary flex items-center justify-center text-white font-bold text-base shrink-0 shadow-sm">
+                        {{ (user.username || 'U').charAt(0).toUpperCase() }}
                       </div>
-                      <p class="text-xs text-ink-500">{{ user.phone || '-' }}</p>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center flex-wrap gap-1.5">
+                          <p class="font-semibold text-ink-950 text-sm">{{ user.username || '未设置' }}</p>
+                          <span
+                            :class="[
+                              'px-1.5 py-0.5 text-[10px] font-medium rounded',
+                              user.status === 'active' ? 'bg-primary/10 text-primary' : 'bg-red-100 text-red-600'
+                            ]"
+                          >
+                            {{ user.status === 'active' ? '活跃' : '已封禁' }}
+                          </span>
+                          <span
+                            v-if="user.role === 'admin'"
+                            class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-accent-purple/10 text-accent-purple-dark"
+                          >
+                            管理员
+                          </span>
+                        </div>
+                        <p class="text-xs text-ink-500 mt-0.5">{{ user.phone || '-' }}</p>
+                      </div>
                     </div>
                   </div>
 
-                  <!-- 账户数据 -->
-                  <div class="grid grid-cols-3 gap-2 text-center">
-                    <div class="bg-gray-50 rounded-lg p-2">
-                      <p class="text-[10px] text-ink-500 mb-1">积分</p>
-                      <p class="text-sm font-semibold text-ink-950">{{ user.points.toLocaleString() }}</p>
+                  <!-- 账户数据网格 -->
+                  <div class="grid grid-cols-2 sm:grid-cols-3 gap-px bg-border-dark">
+                    <div class="bg-white p-3 text-center">
+                      <p class="text-[10px] text-ink-500 mb-0.5">积分</p>
+                      <p class="text-base font-semibold text-ink-950">{{ user.points.toLocaleString() }}</p>
                     </div>
-                    <div class="bg-purple-50 rounded-lg p-2">
-                      <p class="text-[10px] text-purple-600 mb-1">临时积分</p>
-                      <p class="text-sm font-semibold text-purple-700">{{ (user.gift_points || 0).toLocaleString() }}</p>
+                    <div class="bg-white p-3 text-center">
+                      <p class="text-[10px] text-accent-purple mb-0.5">临时积分</p>
+                      <p class="text-base font-semibold text-accent-purple-dark">{{ (user.gift_points || 0).toLocaleString() }}</p>
                     </div>
-                    <div class="bg-green-50 rounded-lg p-2">
-                      <p class="text-[10px] text-green-600 mb-1">余额</p>
-                      <p class="text-sm font-semibold text-green-700">¥{{ (user.balance / 100).toFixed(0) }}</p>
+                    <div class="bg-white p-3 text-center col-span-2 sm:col-span-1">
+                      <p class="text-[10px] text-ink-500 mb-0.5">余额</p>
+                      <p class="text-base font-semibold text-ink-950">¥{{ (user.balance / 100).toFixed(0) }}</p>
                     </div>
                   </div>
 
                   <!-- 统计信息 -->
-                  <div class="flex items-center gap-4 text-xs text-ink-700">
-                    <span>生成: {{ user.total_generated }}</span>
-                    <span>邀请: {{ user.invite_count }}</span>
-                    <span class="text-ink-500">{{ formatDate(user.created_at) }}</span>
+                  <div class="px-4 py-2.5 bg-background-dark flex items-center justify-between text-xs text-ink-500">
+                    <div class="flex items-center gap-3">
+                      <span class="flex items-center gap-1">
+                        <span class="material-symbols-outlined !text-sm">auto_awesome</span>
+                        {{ user.total_generated }}
+                      </span>
+                      <span class="flex items-center gap-1">
+                        <span class="material-symbols-outlined !text-sm">group</span>
+                        {{ user.invite_count }}
+                      </span>
+                    </div>
+                    <span>{{ formatDate(user.created_at) }}</span>
                   </div>
 
                   <!-- 操作按钮 -->
-                  <div class="flex gap-2">
-                    <button
-                      @click="viewUserDetail(user)"
-                      class="flex-1 px-3 py-2 text-sm font-medium text-primary bg-primary/5 hover:bg-primary/10 rounded-lg transition-colors min-h-[44px]"
-                    >
-                      查看详情
-                    </button>
+                  <div class="p-3 border-t border-border-dark">
+                    <div class="grid grid-cols-3 gap-2">
+                      <button
+                        @click="openPointsModalForUser(user)"
+                        class="px-2 py-2 text-xs font-medium text-primary bg-primary/5 hover:bg-primary/10 rounded-lg transition-colors"
+                      >
+                        调整积分
+                      </button>
+                      <button
+                        @click="openBalanceModalForUser(user)"
+                        class="px-2 py-2 text-xs font-medium text-ink-700 bg-primary/5 hover:bg-primary/10 rounded-lg transition-colors"
+                      >
+                        调整余额
+                      </button>
+                      <button
+                        v-if="user.status === 'active'"
+                        @click="openBanModalForUser(user)"
+                        class="px-2 py-2 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                      >
+                        封禁
+                      </button>
+                      <button
+                        v-else
+                        @click="unbanUserDirect(user)"
+                        class="px-2 py-2 text-xs font-medium text-primary bg-primary/5 hover:bg-primary/10 rounded-lg transition-colors"
+                      >
+                        解封
+                      </button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mt-2">
+                      <button
+                        v-if="user.role !== 'admin'"
+                        @click="setAdminDirect(user)"
+                        class="px-2 py-2 text-xs font-medium text-accent-purple-dark bg-accent-purple/10 hover:bg-accent-purple/20 rounded-lg transition-colors"
+                      >
+                        设为管理员
+                      </button>
+                      <button
+                        v-else
+                        @click="removeAdminDirect(user)"
+                        class="px-2 py-2 text-xs font-medium text-ink-500 bg-primary/5 hover:bg-primary/10 rounded-lg transition-colors"
+                      >
+                        取消管理员
+                      </button>
+                      <button
+                        @click="viewUserDetail(user)"
+                        class="px-2 py-2 text-xs font-medium text-primary hover:underline rounded-lg"
+                      >
+                        查看详情
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -436,7 +535,7 @@
 
             <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-border-dark">
               <table class="w-full">
-                <thead class="bg-gray-50 border-b border-border-dark">
+                <thead class="bg-background-dark border-b border-border-dark">
                   <tr>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-ink-700">提现单号</th>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-ink-700">用户信息</th>
@@ -454,7 +553,7 @@
                   <tr v-else-if="withdrawals.length === 0">
                     <td colspan="7" class="px-6 py-12 text-center text-ink-500">暂无提现记录</td>
                   </tr>
-                  <tr v-else v-for="withdrawal in withdrawals" :key="withdrawal.id" class="hover:bg-gray-50 transition-colors">
+                  <tr v-else v-for="withdrawal in withdrawals" :key="withdrawal.id" class="hover:bg-primary-soft transition-colors">
                     <td class="px-4 py-3">
                       <p class="text-sm font-medium text-ink-950">{{ withdrawal.withdrawal_id }}</p>
                     </td>
@@ -1287,6 +1386,87 @@ function openBalanceModal() {
 function openBanModal() {
   banForm.value = { reason: '' }
   showBanModal.value = true
+}
+
+// 从列表直接打开积分调整弹窗
+async function openPointsModalForUser(user) {
+  try {
+    const detail = await api.getAdminUserDetail(user.id)
+    selectedUserDetail.value = detail
+    selectedUser.value = user
+    pointsForm.value = { amount: 0, reason: '' }
+    showPointsModal.value = true
+  } catch (error) {
+    console.error('加载用户详情失败:', error)
+  }
+}
+
+// 从列表直接打开余额调整弹窗
+async function openBalanceModalForUser(user) {
+  try {
+    const detail = await api.getAdminUserDetail(user.id)
+    selectedUserDetail.value = detail
+    selectedUser.value = user
+    balanceForm.value = { amount: 0, reason: '' }
+    showBalanceModal.value = true
+  } catch (error) {
+    console.error('加载用户详情失败:', error)
+  }
+}
+
+// 从列表直接打开封禁弹窗
+async function openBanModalForUser(user) {
+  try {
+    const detail = await api.getAdminUserDetail(user.id)
+    selectedUserDetail.value = detail
+    selectedUser.value = user
+    banForm.value = { reason: '' }
+    showBanModal.value = true
+  } catch (error) {
+    console.error('加载用户详情失败:', error)
+  }
+}
+
+// 从列表直接解封用户
+async function unbanUserDirect(user) {
+  if (!confirm('确定要解封该用户吗？')) return
+
+  try {
+    await api.unbanUser(user.id)
+    showSuccess('用户已解封')
+    await loadUsers()
+  } catch (error) {
+    console.error('解封用户失败:', error)
+    alert('解封用户失败: ' + (error.response?.data?.detail || error.message))
+  }
+}
+
+// 从列表直接设置管理员
+async function setAdminDirect(user) {
+  if (!confirm('确定要将该用户设置为管理员吗？')) return
+
+  try {
+    await api.setAdmin(user.id)
+    showSuccess('已设置为管理员')
+    await loadUsers()
+  } catch (error) {
+    console.error('设置管理员失败:', error)
+    alert('设置管理员失败: ' + (error.response?.data?.detail || error.message))
+  }
+}
+
+// 从列表直接取消管理员
+async function removeAdminDirect(user) {
+  if (!confirm('确定要取消该用户的管理员权限吗？')) return
+
+  try {
+    await api.removeAdmin(user.id)
+    showSuccess('已取消管理员权限')
+    await loadUsers()
+  } catch (error) {
+    console.error('取消管理员失败:', error)
+    alert('取消管理员失败: ' + (error.response?.data?.detail || error.message))
+  }
 }
 
 // 显示成功提示

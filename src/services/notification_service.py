@@ -289,11 +289,18 @@ class NotificationService:
             # 查询条件：公告已发布且未过期，且目标受众包含该用户
             now = datetime.utcnow()
 
+            print(f"[DEBUG] get_my_notifications called - user_id: {user_id}, user_role: {user_role}")
+
             # 基础查询：已发布的公告
             announcement_conditions = [
                 Announcement.is_published == True,
-                Announcement.published_at <= now,
+                or_(
+                    Announcement.published_at.is_(None),
+                    Announcement.published_at <= now
+                ),
             ]
+
+            print(f"[DEBUG] Base conditions: is_published=True AND (published_at IS NULL OR published_at <= {now})")
 
             # 未过期条件
             announcement_conditions.append(
@@ -314,10 +321,14 @@ class NotificationService:
 
             announcement_conditions.append(or_(*audience_conditions))
 
+            print(f"[DEBUG] Audience conditions for role '{user_role}': {audience_conditions}")
+
             # 查询总数
             count_query = select(func.count(Announcement.id)).where(and_(*announcement_conditions))
             count_result = await session.execute(count_query)
             total = count_result.scalar() or 0
+
+            print(f"[DEBUG] Total count from query: {total}")
 
             # 查询列表
             query = select(Announcement).where(and_(*announcement_conditions))
