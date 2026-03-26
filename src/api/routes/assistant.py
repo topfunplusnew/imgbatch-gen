@@ -219,7 +219,7 @@ async def assistant_chat(
             )
             planned_user_messages = [message for message in planned_messages if message.role == "user"]
             planned_last_message = planned_user_messages[-1] if planned_user_messages else last_message
-            effective_chat_model = execution_plan.effective_model or request.model or _default_chat_execution_model()
+            effective_chat_model = execution_plan.effective_model or _default_chat_execution_model()
             intent = Intent(
                 type="chat",
                 confidence=execution_plan.confidence,

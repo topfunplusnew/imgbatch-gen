@@ -2,6 +2,7 @@
 
 import json
 import io
+import re
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, Request
@@ -52,11 +53,27 @@ async def _get_openai_client(api_key: str | None = None) -> AsyncOpenAI:
     )
 
 
+def _looks_like_jwt(token: str) -> bool:
+    parts = token.split(".")
+    if len(parts) != 3:
+        return False
+    return all(re.fullmatch(r"[A-Za-z0-9_-]+", part or "") for part in parts)
+
+
 def _extract_api_key(http_request: Request) -> str | None:
-    """从 HTTP Authorization header 提取 Bearer token（可选）"""
+    """提取模型平台 API Key，避免将站内 JWT 误当成上游令牌。"""
+    for header_name in ("x-model-api-key", "x-relay-api-key", "x-api-key"):
+        header_value = (http_request.headers.get(header_name) or "").strip()
+        if header_value:
+            return header_value
+
     auth = http_request.headers.get("Authorization") or http_request.headers.get("authorization")
     if auth and auth.startswith("Bearer "):
-        return auth[7:].strip() or None
+        token = auth[7:].strip()
+        if token and not _looks_like_jwt(token):
+            return token
+        if token:
+            logger.debug("Ignoring Authorization bearer token for upstream API key extraction because it looks like a JWT")
     return None
 
 
@@ -421,4 +438,3 @@ async def chat_completions(http_request: Request):
     except Exception as e:
         logger.error(f"对话请求失败: {e}")
         raise HTTPException(status_code=500, detail=f"对话失败: {str(e)}")
-

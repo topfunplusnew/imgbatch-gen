@@ -620,10 +620,18 @@ const handleImageModelSend = async () => {
 
       const apiConfig = (await import('@/store/useApiConfigStore')).useApiConfigStore()
       const baseURL = apiConfig.apiEndpoint || ''
+      const accessToken = localStorage.getItem('access_token')
+      const requestHeaders = {}
+      if (accessToken) {
+        requestHeaders.Authorization = `Bearer ${accessToken}`
+      }
+      if (apiConfig.apiKey) {
+        requestHeaders['X-Model-Api-Key'] = apiConfig.apiKey
+      }
 
       const res = await fetch(`${baseURL}/api/v1/generate-unified`, {
         method: 'POST',
-        headers: apiConfig.apiKey ? { Authorization: `Bearer ${apiConfig.apiKey}` } : {},
+        headers: requestHeaders,
         body: formData
       })
 

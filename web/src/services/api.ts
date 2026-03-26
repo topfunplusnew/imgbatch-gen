@@ -106,6 +106,21 @@ function ensureClientId(): string {
   return clientId
 }
 
+function buildModelAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {}
+  const token = localStorage.getItem('access_token')
+  const apiConfig = useApiConfigStore()
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+  if (apiConfig.apiKey) {
+    headers['X-Model-Api-Key'] = apiConfig.apiKey
+  }
+
+  return headers
+}
+
 // 创建axios实例
 const createApiClient = (): AxiosInstance => {
   const client = axios.create({
@@ -129,11 +144,9 @@ const createApiClient = (): AxiosInstance => {
         config.baseURL = apiConfig.apiEndpoint
       }
 
-      // 使用 JWT token（从 localStorage 读取，避免循环依赖）
-      const token = localStorage.getItem('access_token')
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
+      Object.entries(buildModelAuthHeaders()).forEach(([key, value]) => {
+        config.headers[key] = value
+      })
 
       // 添加请求日志（开发环境）
       if (import.meta.env.DEV) {
@@ -402,7 +415,7 @@ export const api = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(apiConfig.apiKey ? { Authorization: `Bearer ${apiConfig.apiKey}` } : {}),
+        ...buildModelAuthHeaders(),
       },
       body: JSON.stringify({ ...request, stream: true }),
       signal: controller.signal,
