@@ -234,16 +234,17 @@
           <div v-if="activeTab === 'balance'" class="space-y-6">
             <!-- 余额卡片 -->
             <div class="bg-gradient-to-br from-primary to-primary-deep rounded-2xl shadow-lg p-6 text-white">
-              <h2 class="text-lg font-semibold mb-6">账户余额</h2>
+              <h2 class="text-lg font-semibold mb-6">我的资产</h2>
               <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
-                  <p class="text-sm opacity-80 mb-1">账户余额</p>
+                  <p class="text-sm opacity-80 mb-1">账户余额（可提现）</p>
                   <p class="text-3xl font-bold">¥{{ ((accountInfo?.balance || 0) / 100).toFixed(2) }}</p>
+                  <p class="text-xs opacity-70 mt-1">来自分销佣金</p>
                 </div>
                 <div>
-                  <p class="text-sm opacity-80 mb-1">永久积分</p>
+                  <p class="text-sm opacity-80 mb-1">永久积分（生图专用）</p>
                   <p class="text-3xl font-bold">{{ accountInfo?.points || 0 }}</p>
-                  <p class="text-xs opacity-70 mt-1">签到、邀请获得</p>
+                  <p class="text-xs opacity-70 mt-1">充值获得，用于生图</p>
                 </div>
                 <div>
                   <p class="text-sm opacity-80 mb-1">临时积分</p>
@@ -252,6 +253,21 @@
                     {{ formatExpiryTime(accountInfo.gift_points_expiry) }} 过期
                   </p>
                   <p class="text-xs opacity-70">新用户赠送，每日清零</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- 说明卡片 -->
+            <div class="bg-blue-50 rounded-2xl p-4 border border-blue-200">
+              <div class="flex items-start gap-3">
+                <span class="material-symbols-outlined !text-xl text-blue-600">info</span>
+                <div class="text-sm text-blue-900">
+                  <p class="font-medium mb-1">积分说明</p>
+                  <ul class="space-y-1 text-blue-800">
+                    <li>• <strong>积分</strong>：用于生成图片，充值获得，1元=100积分</li>
+                    <li>• <strong>余额</strong>：来自分销佣金，可以提现</li>
+                    <li>• 邀请好友注册双方各得50积分，好友消费时你获得15%佣金（余额）</li>
+                  </ul>
                 </div>
               </div>
             </div>
@@ -297,7 +313,7 @@
                 <span class="material-symbols-outlined !text-6xl text-gray-300">receipt_long</span>
                 <p class="text-gray-500 mt-4">暂无充值记录</p>
                 <button
-                  @click="activeTab = 'balance'"
+                  @click="activeTab = 'balance'; loadRechargeOptions()"
                   class="mt-4 px-6 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary-strong"
                 >
                   立即充值
@@ -786,7 +802,7 @@
               <div v-if="inviteRecords.length === 0" class="text-center py-12">
                 <span class="material-symbols-outlined !text-6xl text-gray-300">person_add</span>
                 <p class="text-gray-500 mt-4">暂无邀请记录</p>
-                <p class="text-sm text-gray-400 mt-2">分享邀请码给朋友，双方都能获得积分奖励</p>
+                <p class="text-sm text-gray-400 mt-2">分享邀请码给朋友，双方各得50积分</p>
               </div>
 
               <div v-else class="space-y-4">
@@ -877,7 +893,13 @@
           <p class="text-gray-600 mb-4">¥{{ currentOrderAmount }}</p>
 
           <div class="bg-gray-100 p-4 rounded-xl inline-block mb-4">
-            <img v-if="qrCodeUrl" :src="qrCodeUrl" alt="支付二维码" class="w-48 h-48" />
+            <canvas
+              v-if="qrCodeUrl"
+              ref="qrCodeCanvas"
+              width="200"
+              height="200"
+              class="w-48 h-48"
+            ></canvas>
             <div v-else class="w-48 h-48 flex items-center justify-center">
               <span class="material-symbols-outlined !text-6xl text-gray-300 animate-spin">refresh</span>
             </div>
@@ -896,7 +918,7 @@
               @click="checkPaymentStatus"
               class="flex-1 py-2.5 bg-primary text-white rounded-lg hover:bg-primary-strong font-medium"
             >
-              已完成支付
+              我已支付
             </button>
           </div>
         </div>
@@ -1163,7 +1185,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useAppStore } from '@/store/useAppStore'
 import { useNotificationStore } from '@/store/useNotificationStore'
@@ -1171,6 +1193,7 @@ import { api } from '@/services/api'
 import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
 import { notification } from '@/utils/notification'
 import AnnouncementList from '@/components/AnnouncementList.vue'
+import QRCode from 'qrcode'
 
 const authStore = useAuthStore()
 const appStore = useAppStore()
@@ -1211,8 +1234,10 @@ const creatingOrder = ref(false)
 const currentOrderId = ref(null)
 const currentOrderAmount = ref(0)
 const qrCodeUrl = ref('')
+const qrCodeCanvas = ref(null)
 const pollingTimer = ref(null)
 const refreshInterval = ref(null)
+const checkingPayment = ref(false)
 
 // 签到相关
 const canCheckin = ref(true)
@@ -1277,6 +1302,50 @@ watch(activeTab, (newTab) => {
   // 切换到消费记录标签时，加载数据
   if (newTab === 'consumption' && authStore.consumptionRecords.length === 0) {
     loadConsumptionRecords()
+  }
+})
+
+// 生成支付二维码
+watch([qrCodeUrl, showPaymentModal], async ([newUrl, showModal]) => {
+  console.log('二维码生成触发:', { showModal, newUrl, canvas: qrCodeCanvas.value })
+
+  if (showModal && newUrl) {
+    await nextTick()
+    console.log('等待DOM更新完成...')
+
+    // 等待一小段时间确保canvas已渲染
+    setTimeout(async () => {
+      if (!qrCodeCanvas.value) {
+        console.error('Canvas 元素未找到')
+        notification.error('二维码容器加载失败')
+        return
+      }
+
+      try {
+        console.log('开始生成二维码:', newUrl)
+        console.log('Canvas 元素:', qrCodeCanvas.value)
+
+        // 先清空canvas
+        const ctx = qrCodeCanvas.value.getContext('2d')
+        ctx.clearRect(0, 0, 200, 200)
+
+        // 生成二维码
+        await QRCode.toCanvas(qrCodeCanvas.value, newUrl, {
+          width: 200,
+          margin: 2,
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF'
+          }
+        })
+        console.log('二维码生成成功')
+      } catch (error) {
+        console.error('生成二维码失败:', error)
+        console.error('错误详情:', error.message, error.stack)
+        // 失败时显示错误信息
+        notification.error('二维码生成失败: ' + (error.message || '未知错误'))
+      }
+    }, 100)
   }
 })
 
@@ -1435,6 +1504,8 @@ async function handleTabChange(tab) {
   // 按需加载数据
   if (tab === 'recharge' && orders.value.length === 0) {
     await loadOrders()
+  } else if (tab === 'balance' && rechargeOptions.value.length === 0) {
+    await loadRechargeOptions()
   } else if (tab === 'generation' && generationRecords.value.length === 0) {
     await loadGenerationHistory()
   } else if (tab === 'download' && downloadRecords.value.length === 0) {
@@ -1509,7 +1580,7 @@ function startPolling() {
   stopPolling()
   pollingTimer.value = window.setInterval(async () => {
     await checkPaymentStatus()
-  }, 3000)
+  }, 1000)  // 改为每1秒查询一次
 }
 
 // 停止轮询
@@ -1541,6 +1612,21 @@ function stopAutoRefresh() {
   if (refreshInterval.value) {
     clearInterval(refreshInterval.value)
     refreshInterval.value = null
+  }
+}
+
+// 我已经支付 - 立即查询支付状态
+async function handleIHavePaid() {
+  if (!currentOrderId.value) return
+
+  checkingPayment.value = true
+  try {
+    await checkPaymentStatus()
+    notification.info('正在查询支付状态...')
+  } catch (error) {
+    notification.error('查询失败，请重试')
+  } finally {
+    checkingPayment.value = false
   }
 }
 

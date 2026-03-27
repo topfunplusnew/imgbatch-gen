@@ -3,12 +3,9 @@
     <div class="w-full max-w-md">
       <!-- Logo和标题 -->
       <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary-soft mb-4">
-          <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
+        <div class="inline-flex items-center justify-center w-[70%] h-auto mb-4">
+          <img src="/photo/logo.png" alt="Logo" class="w-full h-auto object-contain rounded-xl" />
         </div>
-        <h1 class="text-2xl font-bold text-ink-950">智能体生图</h1>
         <p class="text-ink-500 mt-2">{{ isLoginMode ? '欢迎回来' : '创建新账户' }}</p>
       </div>
 
