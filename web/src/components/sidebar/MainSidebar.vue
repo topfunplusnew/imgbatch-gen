@@ -2,8 +2,7 @@
   <aside :class="asideClass">
     <nav v-if="!hideLogo" class="px-3 xs:px-4 md:px-4 pt-4 pb-3 space-y-1 shrink-0">
       <div :class="['flex items-center mb-4', props.mobileDrawer ? 'justify-between' : 'justify-center']">
-        <img src="/photo/logo.png" alt="Logo" class="w-8 h-8 rounded-lg object-cover shrink-0" />
-        <span :class="menuTitleClass">一悟学舍</span>
+        <img src="/photo/logo.png" alt="Logo" class="w-[80%] h-auto object-contain" style="aspect-ratio: 240/160;" />
         <button
           v-if="props.mobileDrawer"
           @click="emit('requestClose')"
@@ -22,7 +21,9 @@
         :class="[getMenuItemClass(item), menuItemButtonClass]"
         @click="handleMenuClick(item)"
       >
-        <span class="material-symbols-outlined text-[20px] xs:text-[22px] md:text-[24px]">{{ item.icon }}</span>
+        <component v-if="item.iconComponent" :is="item.iconComponent" />
+        <span v-else-if="item.iconClass" :class="['k-icon', item.iconClass, 'icon']" style="font-family: 'Material Symbols Outlined';">{{ item.icon }}</span>
+        <span v-else class="material-symbols-outlined text-[20px] xs:text-[22px] md:text-[24px]">{{ item.icon }}</span>
         <span :class="menuItemLabelClass">{{ item.text }}</span>
       </button>
 
@@ -282,6 +283,7 @@ import CaseCard from '../cases/CaseCard.vue'
 import { useAppStore } from '@/store/useAppStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import UserMenuDropdown from '../layout/UserMenuDropdown.vue'
+import AIGenerateIcon from '../icons/AIGenerateIcon.vue'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
@@ -352,8 +354,8 @@ defineExpose({
 
 // Navigation menu items
 const menuItems = [
-  { icon: 'smart_toy', text: '首页', value: 'landing' },
-  { icon: 'auto_awesome', text: 'AI图片生成', value: 'generate', active: true },
+  { icon: 'home', iconClass: 'k-shouye1', text: '首页', value: 'landing' },
+  { iconComponent: AIGenerateIcon, text: 'AI图片生成', value: 'generate', active: true },
   { icon: 'view_module', text: '模板库', action: 'templates' },
   { icon: 'history', text: '历史记录', action: 'history' },
 ]

@@ -16,22 +16,21 @@
     </div>
 
     <!-- Hero Section -->
-    <div class="flex-1 flex flex-col items-center justify-center px-4 xs:px-6 md:px-8 py-12 md:py-16 text-center bg-gradient-to-br from-primary/10 to-primary/5">
+    <div class="px-4 xs:px-6 md:px-8 pt-8 md:pt-12 pb-8 md:pb-12">
       <!-- Logo -->
-      <div class="mb-8 md:mb-12">
-        <div class="flex items-center justify-center mb-4">
-          <img src="/photo/logo.png" alt="Logo" class="w-16 h-16 rounded-full mr-4 object-cover" />
-          <h1 class="text-3xl md:text-4xl font-bold text-ink-950">一悟学舍</h1>
+      <div class="text-center mb-6 md:mb-8">
+        <div class="flex items-center justify-center mb-3 w-[50%] mx-auto">
+          <img src="/photo/logo.png" alt="Logo" class="w-full h-auto object-contain" />
         </div>
-        <p class="text-base md:text-lg text-ink-500 max-w-2xl mx-auto">
+        <p class="text-sm md:text-base text-ink-500 max-w-2xl mx-auto">
           强大的AI图像生成工具，支持多种模型和风格，轻松创建您想要的图像
         </p>
       </div>
 
       <!-- Quick Input Area -->
-      <div class="w-full">
+      <div class="w-full max-w-3xl mx-auto">
         <div
-          class="bg-white rounded-xl shadow-lg border border-border-dark p-4 md:p-6"
+          class="bg-white rounded-xl shadow-lg border border-border-dark p-4"
           @mouseenter="handleInputFocus"
           @mouseleave="handleInputBlur">
           <!-- Quick input with file attachment -->
@@ -44,12 +43,15 @@
               @change="handleFileSelect"
               class="hidden">
 
-            <button
-              @click="triggerFileSelect"
-              class="flex items-center gap-2 px-4 py-2 bg-primary-soft text-primary rounded-lg hover:bg-primary/20 transition-colors">
-              <span class="material-symbols-outlined !text-xl">attach_file</span>
-              <span class="text-sm font-medium">上传文件</span>
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                @click="triggerFileSelect"
+                class="flex items-center justify-center size-[24px] rounded-[8px] text-[20px] text-gray-600 hover:bg-gray-100 transition-colors"
+                title="上传文件">
+                <span class="material-symbols-outlined !text-xl">attach_file</span>
+              </button>
+              <span class="text-sm text-gray-600">上传文件</span>
+            </div>
           </div>
 
           <!-- File attachments preview -->
@@ -78,22 +80,23 @@
             @focus="handleInputFocus"
             @blur="handleInputBlur"
             class="w-full bg-gray-50 border border-border-dark rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
-            rows="3"
+            rows="2"
             placeholder="描述您想要创建的图像，或点击上传参考文件..."
           ></textarea>
 
           <!-- Parameter Controls & Start Button Row -->
-          <div class="flex items-center gap-2 xs:gap-3 mt-4">
+          <div class="flex items-center gap-2 mt-3 flex-wrap xs:flex-nowrap">
             <ModelDropdown class="shrink-0" />
+            <div class="hidden xs:block w-px h-6 bg-border-dark mx-1"></div>
             <RatioDropdown class="shrink-0" />
             <ResolutionDropdown class="shrink-0" />
             <div class="flex-1 min-w-0"></div>
             <button
               @click="startGeneration"
               :disabled="!promptInput.trim() && attachments.length === 0"
-              class="flex items-center gap-2 px-4 xs:px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary-strong disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shrink-0">
+              class="flex items-center gap-2 px-3 xs:px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-strong disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shrink-0">
               <span class="material-symbols-outlined !text-xl">auto_awesome</span>
-              <span class="font-medium hidden sm:inline">开始生成</span>
+              <span class="font-medium hidden xs:inline">开始生成</span>
             </button>
           </div>
 
@@ -109,15 +112,38 @@
     <div class="px-4 xs:px-6 md:px-8 pb-8 md:pb-12">
       <div class="w-full">
         <!-- Header with view all button -->
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <h3 class="text-lg font-semibold text-ink-950">模板分类</h3>
-            <p class="text-sm text-ink-500">按分类浏览精选模板</p>
-          </div>
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-ink-950">模板分类</h3>
           <button
             @click="openTemplates"
             class="text-sm text-primary hover:text-primary-strong font-medium">
             查看全部 →
+          </button>
+        </div>
+
+        <!-- Category Filter Buttons -->
+        <div class="flex items-center gap-2 mb-6 flex-wrap">
+          <button
+            @click="selectedCategory = null"
+            :class="[
+              'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+              selectedCategory === null
+                ? 'bg-primary text-white'
+                : 'bg-white text-ink-700 border border-border-dark hover:bg-primary/5'
+            ]">
+            全部
+          </button>
+          <button
+            v-for="category in categories"
+            :key="category"
+            @click="selectedCategory = category"
+            :class="[
+              'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+              selectedCategory === category
+                ? 'bg-primary text-white'
+                : 'bg-white text-ink-700 border border-border-dark hover:bg-primary/5'
+            ]">
+            {{ category }}
           </button>
         </div>
 
@@ -130,11 +156,13 @@
         <div v-else class="space-y-8">
           <!-- All Templates Group -->
           <div class="category-group">
-            <h4 class="text-base font-semibold text-ink-950 mb-4">全部模板</h4>
+            <h4 class="text-base font-semibold text-ink-950 mb-4">
+              {{ selectedCategory || '全部模板' }}
+            </h4>
             <!-- Horizontal scroll cards -->
-            <div v-if="cases.length > 0" class="flex gap-4 overflow-x-auto pb-4 scrollbar-hide scroll-smooth -mx-4 px-4">
+            <div v-if="filteredCases.length > 0" class="flex gap-4 overflow-x-auto pb-4 scrollbar-hide scroll-smooth -mx-4 px-4">
               <div
-                v-for="caseItem in cases.slice(0, 10)"
+                v-for="caseItem in filteredCases.slice(0, 10)"
                 :key="caseItem.id"
                 @click="selectTemplate(caseItem)"
                 class="flex-shrink-0 w-48 xs:w-56 group relative rounded-lg overflow-hidden border border-border-dark hover:border-primary/50 hover:shadow-lg transition-all duration-200 bg-white cursor-pointer"
@@ -161,43 +189,10 @@
             </div>
             <el-empty v-else description="暂无模板" :image-size="60" />
           </div>
-
-          <!-- Individual Category Groups -->
-          <div
-            v-for="category in categories"
-            :key="category"
-            class="category-group"
-          >
-            <h4 class="text-base font-semibold text-ink-950 mb-4">{{ category }}</h4>
-            <!-- Horizontal scroll cards for this category -->
-            <div v-if="getCasesByCategory(category).length > 0" class="flex gap-4 overflow-x-auto pb-4 scrollbar-hide scroll-smooth -mx-4 px-4">
-              <div
-                v-for="caseItem in getCasesByCategory(category)"
-                :key="caseItem.id"
-                @click="selectTemplate(caseItem)"
-                class="flex-shrink-0 w-48 xs:w-56 group relative rounded-lg overflow-hidden border border-border-dark hover:border-primary/50 hover:shadow-lg transition-all duration-200 bg-white cursor-pointer"
-              >
-                <div class="aspect-video relative">
-                  <img
-                    :src="resolveImageSrc(caseItem.thumbnail_url, caseItem.image_url)"
-                    :alt="caseItem.title"
-                    class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    @error="handleImageFallback"
-                  >
-                  <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                </div>
-                <div class="p-3">
-                  <h5 class="text-sm font-medium text-ink-950 line-clamp-1 mb-1">{{ caseItem.title }}</h5>
-                  <p class="text-xs text-ink-500 line-clamp-2">{{ caseItem.description }}</p>
-                </div>
-              </div>
-            </div>
-            <el-empty v-else description="暂无模板" :image-size="60" />
-          </div>
         </div>
 
         <!-- Empty state -->
-        <div v-if="cases.length === 0 && !loading" class="text-center py-12">
+        <div v-if="filteredCases.length === 0 && !loading" class="text-center py-12">
           <span class="material-symbols-outlined !text-6xl text-ink-300 mb-4 block">search_off</span>
           <p class="text-sm text-ink-500">暂无模板</p>
         </div>
@@ -228,6 +223,7 @@ const fileInputRef = ref(null)
 const notificationCarouselRef = ref(null)
 const attachments = ref([])
 const hasStartedTyping = ref(false)
+const selectedCategory = ref(null)
 
 // Get categories from caseStore
 const categories = computed(() => caseStore.categories || [])
@@ -236,10 +232,13 @@ const categories = computed(() => caseStore.categories || [])
 const cases = computed(() => caseStore.cases || [])
 const loading = computed(() => caseStore.loading || false)
 
-// Get cases by category
-const getCasesByCategory = (category) => {
-  return cases.value.filter(c => c.category === category).slice(0, 10)
-}
+// Filtered cases based on selected category
+const filteredCases = computed(() => {
+  if (!selectedCategory.value) {
+    return cases.value
+  }
+  return cases.value.filter(c => c.category === selectedCategory.value)
+})
 
 // Select template and switch to generate view
 const selectTemplate = (caseItem) => {

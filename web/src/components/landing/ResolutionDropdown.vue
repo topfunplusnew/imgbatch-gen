@@ -1,10 +1,16 @@
 <template>
-  <div>
+  <div class="relative">
     <button
       @click="isOpen = true"
-      class="flex items-center justify-center p-2 bg-white border border-border-dark rounded-lg hover:border-primary/50 transition-colors"
+      class="card-popup-btn flex items-center gap-1 xs:gap-1.5 px-2 py-2 xs:px-2.5 bg-white border border-border-dark rounded-lg hover:border-primary/50 transition-colors"
       :title="currentResolutionLabel">
-      <span class="material-symbols-outlined !text-xl text-primary">high_quality</span>
+      <div class="btn-icon flex items-center justify-center">
+        <span class="material-symbols-outlined !text-lg text-primary">high_quality</span>
+      </div>
+      <div class="btn-label text-xs xs:text-sm font-medium text-gray-800 hidden xs:inline">{{ currentQuality?.label || '2K' }}</div>
+      <span class="material-symbols-outlined !text-xl text-gray-500 arrow transition-transform duration-200 hidden xs:inline" :class="{ 'rotate-180': isOpen }">
+        expand_more
+      </span>
     </button>
 
     <!-- Teleport Modal -->
@@ -130,6 +136,10 @@ const currentResolutionLabel = computed(() => {
 
   // Otherwise show actual dimensions
   return `${generatorStore.width}×${generatorStore.height}`
+})
+
+const currentQuality = computed(() => {
+  return qualityOptions.find(q => q.value === generatorStore.quality)
 })
 
 const getMaxDim = (qualityValue) => {

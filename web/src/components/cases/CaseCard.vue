@@ -1,27 +1,40 @@
 <template>
-  <div class="case-card group relative overflow-hidden rounded-lg border border-border-dark bg-white transition-all duration-200 hover:border-primary/50 hover:shadow-md">
-    <div class="flex items-center gap-2 p-2 xs:p-2.5">
-      <div class="flex min-w-0 flex-1 items-center">
-        <h3 class="line-clamp-1 text-xs font-semibold leading-tight text-gray-900 xs:text-sm">
-          {{ caseData.title }}
-        </h3>
-      </div>
-
-      <div class="flex shrink-0 items-center border-l border-gray-200 pl-1">
-        <button
-          class="flex min-h-[40px] min-w-[40px] items-center justify-center rounded p-1.5 text-gray-500 transition-colors hover:bg-primary/5 hover:text-primary xs:min-h-[44px] xs:min-w-[44px] xs:p-2"
-          title="查看详情"
-          @click="viewDetails"
-        >
-          <span class="material-symbols-outlined !text-base xs:!text-lg">more_horiz</span>
-        </button>
-      </div>
+  <div
+    class="item group relative flex items-center gap-2 p-2 rounded-lg border border-border-dark bg-white transition-all duration-200 hover:border-primary/50 hover:bg-primary/5 cursor-pointer"
+    @click="viewDetails"
+  >
+    <!-- Cover Image -->
+    <div class="cover shrink-0 w-10 h-10 xs:w-12 xs:h-12 rounded overflow-hidden bg-gray-100 flex items-center justify-center">
+      <img
+        v-if="caseData.thumbnail_url || caseData.image_url"
+        :src="resolveImageSrc(caseData.thumbnail_url, caseData.image_url)"
+        :alt="caseData.title"
+        class="w-full h-full object-cover"
+        @error="handleImageError"
+      />
+      <span v-else class="material-symbols-outlined !text-xl text-gray-400">image</span>
     </div>
+
+    <!-- Title -->
+    <div class="text flex-1 min-w-0">
+      <h3 class="line-clamp-1 text-xs font-medium text-gray-900 xs:text-sm">
+        {{ caseData.title }}
+      </h3>
+      <p v-if="caseData.category" class="text-[10px] text-gray-500 mt-0.5">
+        {{ caseData.category }}
+      </p>
+    </div>
+
+    <!-- Arrow -->
+    <span class="material-symbols-outlined arrow absolute right-2 text-gray-400 group-hover:text-primary transition-colors !text-lg">
+      chevron_right
+    </span>
   </div>
 </template>
 
 <script setup>
 import { useAppStore } from '@/store/useAppStore'
+import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
 
 const emit = defineEmits(['requestClose'])
 
@@ -42,11 +55,19 @@ const viewDetails = () => {
     console.error('Error in viewDetails:', error)
   }
 }
+
+const handleImageError = (event) => {
+  handleImageFallback(event)
+}
 </script>
 
 <style scoped>
-.case-card {
+.item {
   width: 100%;
+}
+
+.cover {
+  aspect-ratio: 1;
 }
 
 .line-clamp-1 {

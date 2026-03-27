@@ -1,10 +1,16 @@
 <template>
-  <div>
+  <div class="relative">
     <button
       @click="isOpen = true"
-      class="flex items-center justify-center p-2 bg-white border border-border-dark rounded-lg hover:border-primary/50 transition-colors"
+      class="card-popup-btn flex items-center gap-1 xs:gap-1.5 px-2 py-2 xs:px-2.5 bg-white border border-border-dark rounded-lg hover:border-primary/50 transition-colors"
       :title="currentRatioLabel">
-      <span class="material-symbols-outlined !text-xl text-primary">crop_free</span>
+      <div class="btn-icon flex items-center justify-center">
+        <span class="material-symbols-outlined !text-lg text-primary">crop_free</span>
+      </div>
+      <div class="btn-label text-xs xs:text-sm font-medium text-gray-800 hidden xs:inline">{{ currentRatio?.desc || '自适应' }}</div>
+      <span class="material-symbols-outlined !text-xl text-gray-500 arrow transition-transform duration-200 hidden xs:inline" :class="{ 'rotate-180': isOpen }">
+        expand_more
+      </span>
     </button>
 
     <!-- Teleport Modal -->
@@ -114,6 +120,10 @@ const currentRatioLabel = computed(() => {
   }
   const current = ratioOptions.find(r => r.value === selectedRatio.value)
   return current ? `${current.label} ${current.desc}` : '选择比例'
+})
+
+const currentRatio = computed(() => {
+  return ratioOptions.find(r => r.value === selectedRatio.value)
 })
 
 const getRatioBoxStyle = (ratio) => {
