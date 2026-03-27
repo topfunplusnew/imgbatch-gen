@@ -282,18 +282,18 @@ class PaymentService:
                 bonus = recharge_option.get("bonus", 0)
                 total_points = points + bonus
 
-                # 添加交易记录（同时更新账户余额和积分）
+                # 添加交易记录（只增加积分，不增加余额）
                 await account_service.db_manager.add_transaction(
                     user_id=order.user_id,
                     transaction_type="recharge",
-                    amount=order.amount,  # 充值金额
+                    amount=0,  # 不增加余额，充值只送积分
                     points_change=total_points,  # 获得积分
-                    description=f"充值 - {recharge_option.get('name', '余额充值')}",
+                    description=f"充值 - {recharge_option.get('name', '积分充值')}",
                     related_order_id=order.order_id,
                 )
 
                 logger.info(
-                    f"充值发放: user={order.user_id}, amount={order.amount}, points={total_points}"
+                    f"充值发放: user={order.user_id}, points={total_points}, balance_change=0"
                 )
 
         elif order.order_type == "subscription":
@@ -349,6 +349,23 @@ class WeChatPayService:
             logger.error(f"读取商户私钥失败: {e}")
             raise ValueError(f"读取商户私钥失败: {e}")
 
+    def _load_public_key(self) -> str:
+        """加载微信支付平台公钥"""
+        if not self.public_key:
+            return ""
+
+        # 如果直接配置了公钥内容，直接返回
+        if self.public_key.startswith('-----BEGIN PUBLIC KEY-----'):
+            return self.public_key
+
+        # 否则作为文件路径读取
+        try:
+            with open(self.public_key, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception as e:
+            logger.error(f"读取平台公钥失败: {e}")
+            raise ValueError(f"读取平台公钥失败: {e}")
+
     def _is_configured(self) -> bool:
         """检查是否配置完整（平台公钥模式）"""
         return all([
@@ -379,7 +396,7 @@ class WeChatPayService:
             logger=logger,
             partner_mode=False,
             # 平台公钥模式参数
-            public_key=self.public_key,
+            public_key=self._load_public_key(),
             public_key_id=self.public_key_id,
         )
 
@@ -600,7 +617,7 @@ class WeChatPayService:
                 logger=logger,
                 partner_mode=False,
                 # 平台公钥模式参数
-                public_key=self.public_key,
+                public_key=self._load_public_key(),
                 public_key_id=self.public_key_id,
             )
 

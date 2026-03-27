@@ -19,7 +19,7 @@
     <div class="px-4 xs:px-6 md:px-8 pt-8 md:pt-12 pb-8 md:pb-12">
       <!-- Logo -->
       <div class="text-center mb-6 md:mb-8">
-        <div class="flex items-center justify-center mb-3 w-[50%] mx-auto">
+        <div class="flex items-center justify-center mb-3 w-[40%] mx-auto">
           <img src="/photo/logo.png" alt="Logo" class="w-full h-auto object-contain" />
         </div>
         <p class="text-sm md:text-base text-ink-500 max-w-2xl mx-auto">
@@ -28,7 +28,7 @@
       </div>
 
       <!-- Quick Input Area -->
-      <div class="w-full max-w-3xl mx-auto">
+      <div class="w-full max-w-[85%] mx-auto min-w-[320px]">
         <div
           class="bg-white rounded-xl shadow-lg border border-border-dark p-4"
           @mouseenter="handleInputFocus"
@@ -80,7 +80,7 @@
             @focus="handleInputFocus"
             @blur="handleInputBlur"
             class="w-full bg-gray-50 border border-border-dark rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
-            rows="2"
+            rows="9"
             placeholder="描述您想要创建的图像，或点击上传参考文件..."
           ></textarea>
 
@@ -189,12 +189,6 @@
             </div>
             <el-empty v-else description="暂无模板" :image-size="60" />
           </div>
-        </div>
-
-        <!-- Empty state -->
-        <div v-if="filteredCases.length === 0 && !loading" class="text-center py-12">
-          <span class="material-symbols-outlined !text-6xl text-ink-300 mb-4 block">search_off</span>
-          <p class="text-sm text-ink-500">暂无模板</p>
         </div>
       </div>
     </div>

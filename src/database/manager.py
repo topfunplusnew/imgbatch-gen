@@ -1114,14 +1114,21 @@ class DatabaseManager:
             )
             session.add(transaction)
 
-            # 更新账户
-            account.balance = balance_after
-            account.points = points_after
+            # 更新账户 - 使用显式UPDATE语句确保变更被持久化
+            from sqlalchemy import update
+            await session.execute(
+                update(Account)
+                .where(Account.user_id == user_id)
+                .values(
+                    balance=balance_after,
+                    points=points_after
+                )
+            )
 
             await session.flush()
             await session.commit()
             await session.refresh(transaction)
-            logger.info(f"添加交易记录: {transaction.id}, type={transaction_type}, amount={amount}")
+            logger.info(f"添加交易记录: {transaction.id}, type={transaction_type}, amount={amount}, points_after={points_after}")
             return transaction
 
     async def get_user_transactions(

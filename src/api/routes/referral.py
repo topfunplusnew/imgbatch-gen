@@ -76,7 +76,7 @@ async def apply_invite_code(
     使用邀请码
 
     - 只能在注册时使用一次
-    - 邀请人将获得50积分奖励
+    - 双方各获得50积分（不可提现）
     """
     referral_service = get_referral_service()
 

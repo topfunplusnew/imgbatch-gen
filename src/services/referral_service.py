@@ -9,28 +9,50 @@ from ..database import get_db_manager, Account, User
 
 
 class ReferralService:
-    """邀请服务"""
+    """邀请服务（分销系统）"""
 
     def __init__(self):
         self.db_manager = get_db_manager()
-        self.reward_points = 50  # 邀请奖励50积分
+        self.register_reward_points = 50  # 注册奖励50积分（不可提现）
+        self.commission_rate = 15  # 默认佣金比例15%（计入余额，可提现）
 
-    def _generate_invite_code(self) -> str:
-        """生成8位邀请码（大写字母+数字）"""
-        return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    async def _generate_invite_code(self) -> str:
+        """
+        生成唯一的8位邀请码（大写字母+数字）
+
+        通过循环检测确保生成的邀请码在数据库中不存在
+        """
+        import asyncio
+
+        max_attempts = 10  # 最大尝试次数
+        for attempt in range(max_attempts):
+            # 生成8位随机码
+            code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+
+            # 检查是否已存在
+            existing = await self.db_manager.get_account_by_invite_code(code)
+            if not existing:
+                logger.info(f"生成唯一邀请码: {code} (尝试 {attempt + 1}次)")
+                return code
+
+            # 如果存在，记录并重试
+            logger.warning(f"邀请码冲突: {code} 已存在，重新生成...")
+
+        # 如果10次都失败了，抛出异常
+        raise RuntimeError("无法生成唯一邀请码，请稍后重试")
 
     async def get_my_invite_code(self, user_id: str) -> str:
         """
         获取我的邀请码
 
-        如果没有邀请码，则自动生成一个
+        如果没有邀请码，则自动生成一个唯一的邀请码
         """
         account = await self.db_manager.get_account_by_user(user_id)
         if not account:
             raise ValueError("账户不存在")
 
         if not account.invite_code:
-            account.invite_code = self._generate_invite_code()
+            account.invite_code = await self._generate_invite_code()
             await self.db_manager.update_account(account)
             logger.info(f"用户 {user_id} 生成邀请码: {account.invite_code}")
 
@@ -40,7 +62,8 @@ class ReferralService:
         """
         使用邀请码（新用户注册时调用）
 
-        给邀请人奖励50积分
+        - 邀请人获得50积分（不可提现）
+        - 新用户也获得50积分（不可提现）
         """
         # 查找邀请人
         inviter_account = await self.db_manager.get_account_by_invite_code(invite_code)
@@ -63,28 +86,42 @@ class ReferralService:
         await self.db_manager.update_account(account)
 
         # 给邀请人奖励积分
-        inviter_account.points += self.reward_points
+        inviter_account.points += self.register_reward_points
         inviter_account.total_invite_count += 1
         await self.db_manager.update_account(inviter_account)
 
-        # 记录交易
+        # 记录邀请人奖励交易（积分）
         await self.db_manager.add_transaction(
             user_id=inviter_account.user_id,
             transaction_type="gift",
-            points_change=self.reward_points,
-            amount=0,
-            description=f"邀请奖励（用户 {user_id} 使用您的邀请码）",
+            points_change=self.register_reward_points,
+            amount=0,  # 不增加余额
+            description=f"邀请注册奖励（用户 {user_id} 使用您的邀请码）",
+        )
+
+        # 给新用户也奖励积分
+        account.points += self.register_reward_points
+        await self.db_manager.update_account(account)
+
+        # 记录新用户奖励交易（积分）
+        await self.db_manager.add_transaction(
+            user_id=account.user_id,
+            transaction_type="gift",
+            points_change=self.register_reward_points,
+            amount=0,  # 不增加余额
+            description=f"使用邀请码注册奖励",
         )
 
         logger.info(
             f"用户 {user_id} 使用邀请码 {invite_code}，"
-            f"邀请人 {inviter_account.user_id} 获得 {self.reward_points} 积分"
+            f"邀请人 {inviter_account.user_id} 获得 {self.register_reward_points} 积分，"
+            f"新用户获得 {self.register_reward_points} 积分"
         )
 
         return {
             "success": True,
             "inviter_id": inviter_account.user_id,
-            "reward_points": self.reward_points,
+            "reward_points": self.register_reward_points,
         }
 
     async def get_invite_records(self, user_id: str) -> List[Dict[str, Any]]:
@@ -139,7 +176,7 @@ class ReferralService:
             actual_invite_count = result.scalar() or 0
 
         # 计算累计奖励积分
-        total_reward = actual_invite_count * self.reward_points
+        total_reward = actual_invite_count * self.register_reward_points
 
         return {
             "invite_code": account.invite_code or "",

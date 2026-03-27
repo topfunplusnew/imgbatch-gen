@@ -84,7 +84,7 @@
     }
   },
   "recharge_options": {
-    "description": "充值选项，20元起充",
+    "description": "充值选项，20元起充，1元=100积分",
     "options": [
       {
         "id": "recharge_1",
@@ -127,6 +127,14 @@
         "description": "200元 = 26000积分（赠送6000）"
       }
     ]
+  },
+  "referral_config": {
+    "description": "分销配置",
+    "register_reward_points": 50,
+    "register_reward_both": true,
+    "commission_rate": 15,
+    "commission_min_rate": 10,
+    "commission_max_rate": 20
   },
   "subscription_plans": {
     "description": "订阅套餐配置(暂时未启用，保留扩展)",

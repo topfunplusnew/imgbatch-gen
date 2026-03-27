@@ -244,6 +244,13 @@ class AccountService:
             f"points={cost_info['points_used']}, amount={cost_info['amount']}"
         )
 
+        # 处理分销佣金（如果用户有邀请人）
+        await self._process_referral_commission(
+            user_id=user_id,
+            consumed_amount=cost_info["amount"],
+            request_id=request_id
+        )
+
         return record
 
     async def record_generation_failure(
@@ -333,6 +340,75 @@ class AccountService:
     ) -> List[ConsumptionRecord]:
         """获取消费记录"""
         return await self.db_manager.get_user_consumption_records(user_id, limit, offset)
+
+    async def _process_referral_commission(
+        self,
+        user_id: str,
+        consumed_amount: int,
+        request_id: str
+    ):
+        """
+        处理分销佣金
+
+        当用户消费时，如果该用户有邀请人，则给邀请人返佣金（余额）
+
+        Args:
+            user_id: 消费用户ID
+            consumed_amount: 消费金额（分）
+            request_id: 请求ID
+        """
+        if consumed_amount <= 0:
+            return
+
+        # 获取用户账户信息
+        account = await self.get_or_create_account(user_id)
+
+        # 如果没有邀请人，不返佣
+        if not account.inviter_id:
+            return
+
+        # 获取佣金配置
+        import json
+        from pathlib import Path
+        config_path = Path(__file__).parent.parent / "config" / "billing_config.json"
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+                referral_config = config.get("referral_config", {})
+                commission_rate = referral_config.get("commission_rate", 15)  # 默认15%
+        except Exception as e:
+            logger.warning(f"加载分销配置失败: {e}")
+            commission_rate = 15
+
+        # 计算佣金（单位：分）
+        commission_amount = int(consumed_amount * commission_rate / 100)
+
+        if commission_amount <= 0:
+            return
+
+        # 给邀请人增加余额
+        inviter_account = await self.db_manager.get_account_by_user(account.inviter_id)
+        if not inviter_account:
+            logger.warning(f"邀请人账户不存在: {account.inviter_id}")
+            return
+
+        inviter_account.balance += commission_amount
+        await self.db_manager.update_account(inviter_account)
+
+        # 记录交易（增加余额）
+        await self.db_manager.add_transaction(
+            user_id=inviter_account.user_id,
+            transaction_type="commission",
+            points_change=0,  # 不增加积分
+            amount=commission_amount,  # 增加余额（单位：分）
+            description=f"分销佣金（用户 {user_id} 消费 ¥{consumed_amount/100:.2f}，获得 {commission_rate}% 佣金）",
+            related_request_id=request_id,
+        )
+
+        logger.info(
+            f"分销佣金: 用户 {user_id} 消费 ¥{consumed_amount/100:.2f}，"
+            f"邀请人 {inviter_account.user_id} 获得 ¥{commission_amount/100:.2f} 余额"
+        )
 
 
 # 全局服务实例

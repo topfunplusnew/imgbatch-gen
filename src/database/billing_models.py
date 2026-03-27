@@ -90,7 +90,7 @@ class Transaction(BaseModel):
     user_id = Column(String(100), ForeignKey("users.id"), nullable=False, index=True, comment="用户ID")
 
     # 交易基本信息
-    transaction_type = Column(String(50), nullable=False, comment="交易类型: recharge, consumption, refund, subscription, gift, system_adjust")
+    transaction_type = Column(String(50), nullable=False, comment="交易类型: recharge, consumption, refund, subscription, gift, commission, system_adjust")
     amount = Column(Integer, default=0, comment="金额变化(分，正为增加，负为减少)")
     points_change = Column(Integer, default=0, comment="积分变化(正为增加，负为减少)")
 

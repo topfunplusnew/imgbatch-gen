@@ -312,6 +312,37 @@ async def get_order_status(
     if order.user_id != user["id"]:
         raise HTTPException(status_code=403, detail="无权访问此订单")
 
+    # 如果订单还是pending状态，主动查询微信支付状态
+    if order.status == "pending" and order.payment_method == "wechat":
+        try:
+            logger.info(f"主动查询微信订单状态: order={order_id}")
+            wechat_service = get_wechat_pay_service()
+            status_result = await wechat_service.query_order(order_id=order_id)
+            trade_state = status_result.get("trade_state")
+
+            logger.info(f"微信订单状态: order={order_id}, state={trade_state}")
+
+            # 如果支付成功，更新订单状态
+            if trade_state == "SUCCESS":
+                transaction_id = status_result.get("transaction_id")
+                amount_info = status_result.get("amount", {})
+                paid_amount = amount_info.get("total") if isinstance(amount_info, dict) else None
+
+                success = await payment_service.handle_payment_success(
+                    order_id=order_id,
+                    transaction_id=transaction_id,
+                    notify_data=status_result,
+                    paid_amount=paid_amount,
+                )
+
+                if success:
+                    # 重新加载订单信息
+                    order = await payment_service.get_order(order_id)
+                    logger.info(f"订单状态已更新: order={order_id}, status=paid")
+        except Exception as e:
+            logger.error(f"查询微信订单状态失败: {e}")
+            # 即使查询失败，也返回当前数据库状态
+
     return {
         "order_id": order.order_id,
         "status": order.status,

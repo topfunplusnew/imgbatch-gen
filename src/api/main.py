@@ -189,6 +189,36 @@ async def lifespan(app: FastAPI):
             f"清理间隔: {settings.cleanup_interval_hours}小时"
         )
 
+        # 注册支付相关定时任务
+        logger.info("准备注册支付定时任务...")
+        try:
+            from ..tasks.payment_tasks import poll_pending_orders, check_expired_orders
+            logger.info("成功导入支付任务模块")
+
+            # 轮询pending订单（每1分钟）
+            logger.info("注册轮询pending订单任务...")
+            app.state.scheduler.schedule_periodic(
+                name="poll_pending_orders",
+                interval_seconds=60,  # 1分钟
+                coroutine_func=poll_pending_orders,
+            )
+            logger.info("轮询任务注册成功（每1分钟执行一次）")
+
+            # 检查过期订单（每小时）
+            logger.info("注册过期订单检查任务...")
+            app.state.scheduler.schedule_periodic(
+                name="check_expired_orders",
+                interval_seconds=3600,  # 1小时
+                coroutine_func=check_expired_orders,
+            )
+            logger.info("过期订单检查任务注册成功")
+
+            logger.info("所有支付定时任务已注册")
+        except Exception as e:
+            import traceback
+            logger.error(f"支付定时任务注册失败: {str(e)}")
+            logger.error(f"错误详情: {traceback.format_exc()}")
+
         # 如果配置了启动时清理
         if settings.cleanup_on_startup:
             logger.info("执行启动时清理...")
