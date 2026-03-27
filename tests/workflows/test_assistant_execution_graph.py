@@ -249,6 +249,113 @@ async def test_plan_assistant_execution_caps_pdf_page_matching_to_available_page
 
 
 @pytest.mark.asyncio
+async def test_plan_assistant_execution_uses_chat_model_for_word_attachment_chat(monkeypatch):
+    async def fake_load_attachment_descriptors(files, db_manager, api_key=None):
+        return [
+            AttachmentDescriptor(
+                name="requirements.docx",
+                kind="docx",
+                source="http://example.com/requirements.docx",
+                text_excerpt="[Section 1]\n品牌主色是森林绿。\n\n[Section 2]\n首页需要突出新品活动。",
+                page_excerpts=["品牌主色是森林绿。", "首页需要突出新品活动。"],
+            )
+        ]
+
+    async def fake_build_attachment_route(user_instruction, attachments, api_key=None, model_hint=None):
+        return AttachmentRouteDecision(
+            route="chat",
+            confidence=0.94,
+            reasoning="The request asks for understanding the uploaded Word document.",
+            source="langgraph",
+        )
+
+    monkeypatch.setattr(graph, "_load_attachment_descriptors", fake_load_attachment_descriptors)
+    monkeypatch.setattr(graph, "build_attachment_route", fake_build_attachment_route)
+
+    plan = await graph.plan_assistant_execution(
+        messages=[{"role": "user", "content": "这个 Word 里讲了什么？"}],
+        files=["file-1"],
+        user_instruction="这个 Word 里讲了什么？",
+        request_model="gpt-4o-mini",
+        request_model_type="chat",
+        requested_count=1,
+        db_manager=object(),
+        app_state=SimpleNamespace(model_registry=None),
+        api_key="test-key",
+    )
+
+    expected_chat_model = (
+        settings.assistant_text_model
+        or settings.langchain_pdf_prompt_model
+        or settings.openai_model
+        or "gpt-4o-mini"
+    )
+
+    assert plan.mode == "chat"
+    assert plan.intent_type == "chat"
+    assert plan.effective_model == expected_chat_model
+    assert "[Attachment: requirements.docx]" in str(plan.messages[-1]["content"])
+    assert "森林绿" in str(plan.messages[-1]["content"])
+
+
+@pytest.mark.asyncio
+async def test_plan_assistant_execution_builds_word_section_matched_prompts(monkeypatch):
+    async def fake_load_attachment_descriptors(files, db_manager, api_key=None):
+        return [
+            AttachmentDescriptor(
+                name="requirements.docx",
+                kind="docx",
+                source="http://example.com/requirements.docx",
+                text_excerpt="[Section 1]\n品牌主色是森林绿。\n\n[Section 2]\n首页需要突出新品活动。\n\n[Section 3]\n落地页强调会员权益。",
+                page_excerpts=["品牌主色是森林绿。", "首页需要突出新品活动。", "落地页强调会员权益。"],
+            )
+        ]
+
+    async def fake_build_attachment_route(user_instruction, attachments, api_key=None, model_hint=None):
+        return AttachmentRouteDecision(
+            route="image",
+            confidence=0.92,
+            reasoning="The request explicitly asks to generate images from the uploaded Word document.",
+            source="langgraph",
+        )
+
+    async def fake_build_text_attachment_prompt(user_instruction, attachments, api_key=None):
+        primary = attachments[0]
+        return TextAttachmentPromptResult(
+            prompt=f"Prompt for {primary.name}: {primary.text_excerpt}",
+            summary=primary.text_excerpt or "",
+            source="test",
+        )
+
+    monkeypatch.setattr(graph, "_load_attachment_descriptors", fake_load_attachment_descriptors)
+    monkeypatch.setattr(graph, "build_attachment_route", fake_build_attachment_route)
+    monkeypatch.setattr(graph, "build_text_attachment_prompt", fake_build_text_attachment_prompt)
+
+    plan = await graph.plan_assistant_execution(
+        messages=[{"role": "user", "content": "根据这个 Word 生成 2 张图"}],
+        files=["file-1"],
+        user_instruction="根据这个 Word 生成 2 张图",
+        request_model="gpt-image-1",
+        request_model_type="image",
+        requested_count=2,
+        db_manager=object(),
+        app_state=SimpleNamespace(model_registry=None),
+        api_key="test-key",
+    )
+
+    assert plan.mode == "image"
+    assert plan.intent_type == "batch_generate"
+    assert plan.batch_count == 2
+    assert plan.metadata["word_section_match_enabled"] is True
+    assert plan.metadata["word_total_sections"] == 3
+    assert plan.metadata["word_section_match_count"] == 2
+    assert len(plan.metadata["_batch_prompts"]) == 2
+    assert "森林绿" in plan.metadata["_batch_prompts"][0]
+    assert "新品活动" in plan.metadata["_batch_prompts"][1]
+    assert "会员权益" not in plan.metadata["_batch_prompts"][0]
+
+
+@pytest.mark.asyncio
 async def test_plan_assistant_execution_uses_context_for_referential_image_follow_up(monkeypatch):
     async def fake_load_attachment_descriptors(files, db_manager, api_key=None):
         return []

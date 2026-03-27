@@ -8,6 +8,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from ..config.settings import settings
+from ..utils.config_helper import get_relay_config, normalize_openai_base_url
 
 try:
     from langchain_openai import ChatOpenAI
@@ -53,25 +54,31 @@ class AttachmentRouteState(TypedDict, total=False):
     prompt_result: Dict[str, Any]
 
 
-def _has_llm_credentials(api_key: Optional[str] = None) -> bool:
-    return bool((api_key or "").strip())
-
-
 def _get_default_planner_model() -> str:
     return settings.assistant_planner_model or settings.langchain_pdf_prompt_model or settings.assistant_text_model or "gpt-4o-mini"
 
 
-def _build_model(api_key: Optional[str] = None) -> "ChatOpenAI":
+async def _build_model(api_key: Optional[str] = None) -> "ChatOpenAI":
     if not LANGCHAIN_MULTIMODAL_AVAILABLE or ChatOpenAI is None:
         raise RuntimeError("LangChain/LangGraph is not installed.")
 
-    base_url = settings.openai_base_url or settings.relay_base_url or None
-    if base_url and not base_url.rstrip("/").endswith("/v1"):
-        base_url = base_url.rstrip("/") + "/v1"
-
     key = (api_key or "").strip()
     if not key:
+        base_url, key = await get_relay_config()
+        base_url = normalize_openai_base_url(base_url)
+    else:
+        base_url = normalize_openai_base_url(settings.openai_base_url or settings.relay_base_url)
+
+    if not key:
         raise RuntimeError("Missing API key for attachment workflow.")
+
+    masked_key = f"{key[:4]}...{key[-4:]}" if len(key) > 8 else "***"
+    logger.info(
+        "Attachment workflow ChatOpenAI client: base_url={}, api_key={}, model={}",
+        base_url,
+        masked_key,
+        _get_default_planner_model(),
+    )
 
     return ChatOpenAI(
         model=_get_default_planner_model(),
@@ -170,7 +177,7 @@ async def _route_request_node(state: AttachmentRouteState) -> Dict[str, object]:
             ).model_dump()
         }
 
-    llm = _build_model(state.get("api_key"))
+    llm = await _build_model(state.get("api_key"))
     structured = llm.with_structured_output(AttachmentRouteDecision, method="function_calling")
     attachment_lines = []
     for attachment in attachments:
@@ -212,7 +219,7 @@ async def _build_prompt_node(state: AttachmentRouteState) -> Dict[str, object]:
     if not LANGCHAIN_MULTIMODAL_AVAILABLE:
         return {"prompt_result": _fallback_prompt(state.get("user_instruction", ""), text_attachments).model_dump()}
 
-    llm = _build_model(state.get("api_key"))
+    llm = await _build_model(state.get("api_key"))
     structured = llm.with_structured_output(TextAttachmentPromptResult, method="function_calling")
     attachment_lines = []
     for attachment in text_attachments:
@@ -271,7 +278,7 @@ async def build_attachment_route(
     api_key: Optional[str] = None,
     model_hint: Optional[str] = None,
 ) -> AttachmentRouteDecision:
-    if _ATTACHMENT_ROUTE_GRAPH is None or not _has_llm_credentials(api_key):
+    if _ATTACHMENT_ROUTE_GRAPH is None:
         return _fallback_route(user_instruction, attachments, model_hint)
     try:
         result = await _ATTACHMENT_ROUTE_GRAPH.ainvoke(
@@ -293,7 +300,7 @@ async def build_text_attachment_prompt(
     attachments: List[AttachmentDescriptor],
     api_key: Optional[str] = None,
 ) -> TextAttachmentPromptResult:
-    if _ATTACHMENT_PROMPT_GRAPH is None or not _has_llm_credentials(api_key):
+    if _ATTACHMENT_PROMPT_GRAPH is None:
         return _fallback_prompt(user_instruction, attachments)
     try:
         result = await _ATTACHMENT_PROMPT_GRAPH.ainvoke(

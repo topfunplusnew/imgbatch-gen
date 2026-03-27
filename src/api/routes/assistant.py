@@ -640,16 +640,26 @@ async def handle_batch_generate(message: ChatMessage, intent: Intent, task_manag
         return ChatResponse(
             message=ChatMessage(
                 role="assistant",
-                content=f"正在为您批量生成 {count} 张图像...（批次ID: {batch_task.batch_id}）",
+                content=f"已创建 {count} 个生图任务，正在排队处理...（批次ID: {batch_task.batch_id}）",
                 metadata={
                     "batch_id": batch_task.batch_id,
-                    "total_count": count
+                    "total_count": count,
+                    "stage": batch_task.stage.value,
+                    "stage_label": batch_task.stage_label,
+                    "stage_message": batch_task.stage_message,
                 }
             ),
             intent=intent,
             batch_id=batch_task.batch_id,
             requires_action=True,
-            metadata={"status": "processing", "total_count": count}
+            metadata={
+                "status": "processing",
+                "total_count": count,
+                "stage": batch_task.stage.value,
+                "stage_label": batch_task.stage_label,
+                "stage_message": batch_task.stage_message,
+                "status_detail": batch_task.status_detail.model_dump(),
+            }
         )
 
     except Exception as e:

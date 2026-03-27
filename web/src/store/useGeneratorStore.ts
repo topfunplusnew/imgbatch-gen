@@ -3,6 +3,262 @@ import { useHistoryStore } from './useHistoryStore'
 import { api } from '@/services/api'
 import { mockGenerateImage, mockGetTaskStatus, isMockMode } from '@/utils/mockApi'
 
+const ACTIVE_TASK_STATUSES = new Set(['pending', 'processing', 'running'])
+const FAILED_TASK_STATUSES = new Set(['failed', 'error', 'cancelled', 'canceled'])
+const TERMINAL_TASK_STATUSES = new Set(['completed', ...FAILED_TASK_STATUSES])
+
+const STAGE_LABEL_MAP: Record<string, string> = {
+    request_received: '请求已接收',
+    queued: '排队中',
+    extracting_prompt: '提示词提取中',
+    semantic_understanding: '语义理解中',
+    generating_images: '生图请求中',
+    validating_images: '结果校验中',
+    saving_images: '图片保存中',
+    recording_result: '结果记录中',
+    retrying: '重试等待中',
+    completed: '已完成',
+    failed: '失败',
+}
+
+const FALLBACK_STAGE_ORDER = [
+    'generating_images',
+    'saving_images',
+    'validating_images',
+    'recording_result',
+    'semantic_understanding',
+    'extracting_prompt',
+    'retrying',
+    'queued',
+    'request_received',
+    'completed',
+    'failed',
+]
+
+const SINGLE_TASK_STAGE_ORDER = [
+    'request_received',
+    'queued',
+    'extracting_prompt',
+    'semantic_understanding',
+    'generating_images',
+    'validating_images',
+    'saving_images',
+    'recording_result',
+    'completed',
+]
+
+const STAGE_PROGRESS_MAP: Record<string, number> = {
+    request_received: 6,
+    queued: 12,
+    extracting_prompt: 24,
+    semantic_understanding: 40,
+    generating_images: 72,
+    validating_images: 86,
+    saving_images: 93,
+    recording_result: 97,
+    retrying: 46,
+    completed: 100,
+    failed: 100,
+}
+
+function clampPercent(value: number) {
+    return Math.max(0, Math.min(100, Math.round(value)))
+}
+
+function normalizeProgressPercent(value: any): number | null {
+    const num = Number(value)
+    if (!Number.isFinite(num)) return null
+    if (num <= 1) return clampPercent(num * 100)
+    return clampPercent(num)
+}
+
+function getStageProgressPercent(stage?: string) {
+    return STAGE_PROGRESS_MAP[String(stage || '').toLowerCase()] ?? 12
+}
+
+function getSingleTaskStageIndex(stage?: string) {
+    const normalizedStage = String(stage || '').toLowerCase()
+    const index = SINGLE_TASK_STAGE_ORDER.indexOf(normalizedStage)
+    return index >= 0 ? index + 1 : null
+}
+
+function getStageLabel(stage?: string) {
+    if (!stage) return '处理中'
+    return STAGE_LABEL_MAP[stage] || stage
+}
+
+function getTaskStageMessage(task: any, fallbackMessage: string) {
+    return task?.stage_message || task?.status_detail?.current_stage_message || fallbackMessage
+}
+
+function normalizeTaskStageHistory(events: any[]) {
+    if (!Array.isArray(events)) return []
+
+    return events
+        .slice(-4)
+        .map((event) => {
+            const stage = String(event?.stage || '').trim()
+            const status = String(event?.status || '').toLowerCase()
+            return {
+                stage,
+                label: event?.label || getStageLabel(stage),
+                message: event?.message || getStageLabel(stage),
+                status,
+                progressPercent: normalizeProgressPercent(event?.progress) ?? getStageProgressPercent(stage),
+                attempt: Number.isFinite(event?.attempt) ? Number(event.attempt) : 0,
+                timestamp: event?.timestamp || '',
+            }
+        })
+        .filter((event) => event.stage || event.message)
+}
+
+function buildTaskProgressPayload(task: any, fallbackMessage: string) {
+    const stage = String(task?.stage || '').trim() || 'queued'
+    const history = normalizeTaskStageHistory(task?.stage_history)
+    const latestHistory = history[history.length - 1]
+    const taskStatus = String(task?.status || '').toLowerCase()
+    const progressPercent = taskStatus === 'completed'
+        ? 100
+        : (
+            normalizeProgressPercent(task?.progress)
+            ?? latestHistory?.progressPercent
+            ?? getStageProgressPercent(stage)
+        )
+    const attempt = Number.isFinite(task?.attempt)
+        ? Number(task.attempt)
+        : (latestHistory?.attempt || 0)
+
+    return {
+        stage,
+        stageLabel: task?.stage_label || latestHistory?.label || getStageLabel(stage),
+        stageMessage: getTaskStageMessage(task, fallbackMessage),
+        progressPercent,
+        attempt,
+        stageIndex: getSingleTaskStageIndex(stage),
+        totalStages: SINGLE_TASK_STAGE_ORDER.length,
+        updatedAt: task?.updated_at || latestHistory?.timestamp || '',
+        history,
+    }
+}
+
+function buildInitialTaskProgressPayload(metadata: any, fallbackMessage: string) {
+    const stage = String(metadata?.stage || 'request_received').trim() || 'request_received'
+    return {
+        stage,
+        stageLabel: metadata?.stage_label || getStageLabel(stage),
+        stageMessage: metadata?.stage_message || fallbackMessage,
+        progressPercent: normalizeProgressPercent(metadata?.progress_percent ?? metadata?.progress) ?? getStageProgressPercent(stage),
+        attempt: Number.isFinite(metadata?.attempt) ? Number(metadata.attempt) : 0,
+        stageIndex: getSingleTaskStageIndex(stage),
+        totalStages: SINGLE_TASK_STAGE_ORDER.length,
+        updatedAt: metadata?.updated_at || '',
+        history: [],
+    }
+}
+
+function buildStageOverviewFromTasks(tasks: any[]) {
+    const stageCounter = new Map<string, { label: string; count: number }>()
+
+    tasks.forEach((task) => {
+        const stage = String(task?.stage || '').trim()
+        if (!stage) return
+        const current = stageCounter.get(stage) || {
+            label: task?.stage_label || getStageLabel(stage),
+            count: 0,
+        }
+        current.count += 1
+        stageCounter.set(stage, current)
+    })
+
+    return FALLBACK_STAGE_ORDER
+        .map((stage) => {
+            const current = stageCounter.get(stage)
+            if (!current || current.count <= 0) return null
+            return {
+                stage,
+                label: current.label,
+                count: current.count,
+            }
+        })
+        .filter(Boolean)
+}
+
+function normalizeBatchStatusDetail(batchTask: any, fallbackTotal: number) {
+    const tasks = Array.isArray(batchTask?.tasks) ? batchTask.tasks : []
+    const detail = batchTask?.status_detail || {}
+    const completedTasks = Number.isFinite(detail.completed_tasks) ? detail.completed_tasks : (
+        Number.isFinite(batchTask?.completed) ? Number(batchTask.completed) : tasks.filter((task) => String(task?.status || '').toLowerCase() === 'completed').length
+    )
+    const failedTasks = Number.isFinite(detail.failed_tasks) ? detail.failed_tasks : (
+        Number.isFinite(batchTask?.failed) ? Number(batchTask.failed) : tasks.filter((task) => FAILED_TASK_STATUSES.has(String(task?.status || '').toLowerCase())).length
+    )
+    const totalTasks = Number.isFinite(batchTask?.total) && Number(batchTask.total) > 0
+        ? Number(batchTask.total)
+        : (fallbackTotal || tasks.length || 1)
+    const runningTasks = Number.isFinite(detail.running_tasks) ? detail.running_tasks : (
+        Number.isFinite(batchTask?.running) ? Number(batchTask.running) : tasks.filter((task) => String(task?.status || '').toLowerCase() === 'running').length
+    )
+    const pendingTasks = Number.isFinite(detail.pending_tasks) ? detail.pending_tasks : Math.max(
+        totalTasks - completedTasks - failedTasks - runningTasks,
+        0
+    )
+    const stageOverview = Array.isArray(detail.stage_overview) && detail.stage_overview.length > 0
+        ? detail.stage_overview
+        : buildStageOverviewFromTasks(tasks)
+    const currentStage = detail.current_stage || batchTask?.stage || stageOverview[0]?.stage || 'queued'
+    const currentStageLabel = detail.current_stage_label || batchTask?.stage_label || getStageLabel(currentStage)
+    const progressFromTasks = tasks.reduce((totalProgress, task) => {
+        const taskStatus = String(task?.status || '').toLowerCase()
+        if (taskStatus === 'completed' || FAILED_TASK_STATUSES.has(taskStatus)) {
+            return totalProgress + 1
+        }
+        const normalized = normalizeProgressPercent(task?.progress)
+        if (normalized !== null) return totalProgress + normalized / 100
+        return totalProgress + (getStageProgressPercent(task?.stage) / 100)
+    }, 0)
+    const progressPercent = Number.isFinite(detail.progress_percent)
+        ? clampPercent(Number(detail.progress_percent))
+        : clampPercent(progressFromTasks / Math.max(totalTasks, 1) * 100)
+    const currentStageMessage = detail.current_stage_message
+        || batchTask?.stage_message
+        || `${currentStageLabel}，已完成 ${completedTasks}/${totalTasks}`
+
+    return {
+        currentStage,
+        currentStageLabel,
+        currentStageMessage,
+        progressPercent,
+        totalTasks,
+        completedTasks,
+        failedTasks,
+        runningTasks,
+        pendingTasks,
+        stageOverview,
+    }
+}
+
+function buildBatchProgressPayload(batchTask: any, images: any[], fallbackTotal: number) {
+    const statusDetail = normalizeBatchStatusDetail(batchTask, fallbackTotal)
+    return {
+        completed: statusDetail.completedTasks,
+        total: statusDetail.totalTasks,
+        images,
+        stage: statusDetail.currentStage,
+        stageLabel: statusDetail.currentStageLabel,
+        stageMessage: statusDetail.currentStageMessage,
+        progressPercent: statusDetail.progressPercent,
+        running: statusDetail.runningTasks,
+        pending: statusDetail.pendingTasks,
+        failed: statusDetail.failedTasks,
+        stageOverview: statusDetail.stageOverview,
+    }
+}
+
+function buildBatchProcessingContent(batchTask: any, fallbackTotal: number) {
+    const statusDetail = normalizeBatchStatusDetail(batchTask, fallbackTotal)
+    return statusDetail.currentStageMessage
+}
+
 export const useGeneratorStore = defineStore('generator', {
     state: () => ({
         model: 'Stable Diffusion XL v1.0',
@@ -522,13 +778,16 @@ export const useGeneratorStore = defineStore('generator', {
 
                     console.log(`任务状态更新 [${taskId}]:`, task.status)
 
+                    const taskStatus = String(task?.status || '').toLowerCase()
+
                     // 更新消息内容
-                    if (task.status === 'processing') {
+                    if (ACTIVE_TASK_STATUSES.has(taskStatus)) {
                         this.updateMessage(messageId, {
-                            content: `正在生成图像... (${attempts + 1}/${maxAttempts})`,
-                            status: 'processing'
+                            content: getTaskStageMessage(task, `正在生成图像... (${attempts + 1}/${maxAttempts})`),
+                            status: 'processing',
+                            generationProgress: buildTaskProgressPayload(task, `正在生成图像... (${attempts + 1}/${maxAttempts})`)
                         })
-                    } else if (task.status === 'completed') {
+                    } else if (taskStatus === 'completed') {
                         // 任务完成，显示结果
                         let images = []
 
@@ -559,7 +818,8 @@ export const useGeneratorStore = defineStore('generator', {
                         this.updateMessage(messageId, {
                             content: '图像生成完成！',
                             status: 'completed',
-                            images: images
+                            images: images,
+                            generationProgress: buildTaskProgressPayload(task, '图像生成完成！')
                         })
                         console.log('任务完成，图片数据:', this.messages.find(m => m.id === messageId)?.images)
 
@@ -585,11 +845,12 @@ export const useGeneratorStore = defineStore('generator', {
 
                         this.activePollingTasks.delete(taskId)
                         return true
-                    } else if (task.status === 'failed') {
+                    } else if (FAILED_TASK_STATUSES.has(taskStatus)) {
                         // 任务失败
                         this.updateMessage(messageId, {
                             content: `生成失败: ${task.error || '未知错误'}`,
-                            status: 'error'
+                            status: 'error',
+                            generationProgress: buildTaskProgressPayload(task, `生成失败: ${task.error || '未知错误'}`)
                         })
                         this.activePollingTasks.delete(taskId)
                         return false
@@ -613,9 +874,16 @@ export const useGeneratorStore = defineStore('generator', {
 
             // 超时
             if (this.currentSessionId === sessionWhenStarted) {
+                const currentMessage = this.messages.find(m => m.id === messageId)
                 this.updateMessage(messageId, {
                     content: '生成超时，请稍后手动查看任务状态',
-                    status: 'timeout'
+                    status: 'timeout',
+                    generationProgress: currentMessage?.generationProgress
+                        ? {
+                            ...currentMessage.generationProgress,
+                            stageMessage: '生成超时，请稍后手动查看任务状态'
+                        }
+                        : buildInitialTaskProgressPayload({}, '生成超时，请稍后手动查看任务状态')
                 })
             }
             this.activePollingTasks.delete(taskId)
@@ -750,18 +1018,16 @@ export const useGeneratorStore = defineStore('generator', {
 
                     // 更新消息内容
                     const currentCompleted = results.filter(r => r).length
+                    const batchProgress = buildBatchProgressPayload(batchTask, results, totalCount)
                     this.updateMessage(messageId, {
-                        content: `正在批量生成... (${currentCompleted}/${totalCount})`,
+                        content: buildBatchProcessingContent(batchTask, totalCount),
                         status: 'processing',
-                        batchProgress: {
-                            completed: currentCompleted,
-                            total: totalCount,
-                            images: results
-                        }
+                        batchProgress
                     })
 
                     // 检查是否全部完成
-                    if (currentCompleted >= totalCount) {
+                    const batchStatus = String(batchTask?.status || '').toLowerCase()
+                    if (currentCompleted >= totalCount || (TERMINAL_TASK_STATUSES.has(batchStatus) && currentCompleted > 0)) {
                         // 全部完成
                         const finalImages = results.map((url, i) => ({
                             url: url || `https://picsum.photos/1024/1024?random=${Date.now()}_${i}`,
@@ -769,9 +1035,10 @@ export const useGeneratorStore = defineStore('generator', {
                         }))
                         console.log('批量任务全部完成，图片数据:', finalImages)
                         this.updateMessage(messageId, {
-                            content: `批量生成完成！共 ${totalCount} 张图片`,
+                            content: `批量生成完成！共 ${finalImages.length} 张图片`,
                             status: 'completed',
-                            images: finalImages
+                            images: finalImages,
+                            batchProgress: buildBatchProgressPayload(batchTask, finalImages, totalCount)
                         })
 
                         // 更新历史记录中的消息
@@ -795,6 +1062,16 @@ export const useGeneratorStore = defineStore('generator', {
                         return true
                     }
 
+                    if (FAILED_TASK_STATUSES.has(batchStatus) && currentCompleted === 0) {
+                        this.updateMessage(messageId, {
+                            content: buildBatchProcessingContent(batchTask, totalCount),
+                            status: 'error',
+                            batchProgress,
+                        })
+                        this.activePollingTasks.delete(batchId)
+                        return false
+                    }
+
                     // 等待一段时间后再次检查
                     await new Promise(resolve => setTimeout(resolve, interval))
                     attempts++
@@ -813,13 +1090,20 @@ export const useGeneratorStore = defineStore('generator', {
 
             // 超时
             if (this.currentSessionId === sessionWhenStarted) {
+                const currentMessage = this.messages.find(m => m.id === messageId)
                 this.updateMessage(messageId, {
                     content: `批量生成超时，已完成 ${results.filter(r => r).length}/${totalCount}`,
                     status: 'timeout',
                     images: results.map((url, i) => ({
                         url: url || `https://via.placeholder.com/400x300?text=Image+${i+1}`,
                         alt: `图片 ${i + 1}`
-                    }))
+                    })),
+                    batchProgress: currentMessage?.batchProgress
+                        ? {
+                            ...currentMessage.batchProgress,
+                            stageMessage: `轮询超时，已完成 ${results.filter(r => r).length}/${totalCount}`
+                        }
+                        : undefined
                 })
             }
             this.activePollingTasks.delete(batchId)
@@ -957,23 +1241,17 @@ export const useGeneratorStore = defineStore('generator', {
 
                     const progressTotal = totalCount || tasks.length || 1
                     const orderedImages = buildOrderedImages(tasks)
-                    const processingContent = failedTaskCount > 0
-                        ? `正在批量生成... (${completedTaskCount}/${progressTotal})，失败 ${failedTaskCount}`
-                        : `正在批量生成... (${completedTaskCount}/${progressTotal})`
+                    const batchProgress = buildBatchProgressPayload(batchTask, orderedImages, progressTotal)
 
                     this.updateMessage(messageId, {
-                        content: processingContent,
+                        content: buildBatchProcessingContent(batchTask, progressTotal),
                         status: 'processing',
                         images: orderedImages,
-                        batchProgress: {
-                            completed: completedTaskCount,
-                            total: progressTotal,
-                            images: orderedImages
-                        }
+                        batchProgress
                     })
 
                     const batchStatus = String(batchTask?.status || '').toLowerCase()
-                    const isBatchTerminal = ['completed', 'failed', 'error', 'cancelled', 'canceled'].includes(batchStatus)
+                    const isBatchTerminal = TERMINAL_TASK_STATUSES.has(batchStatus)
                     const isAllTaskTerminal = totalCount > 0
                         ? terminalTaskCount >= totalCount
                         : (tasks.length > 0 && terminalTaskCount >= tasks.length)
@@ -988,11 +1266,7 @@ export const useGeneratorStore = defineStore('generator', {
                             content: finalContent,
                             status: finalStatus,
                             images: orderedImages,
-                            batchProgress: {
-                                completed: completedTaskCount,
-                                total: progressTotal,
-                                images: orderedImages
-                            }
+                            batchProgress: buildBatchProgressPayload(batchTask, orderedImages, progressTotal)
                         })
 
                         if (this.sessionSavedToHistory) {
@@ -1032,16 +1306,32 @@ export const useGeneratorStore = defineStore('generator', {
                 const timeoutImages = Array.from(completedTaskImages.values()).reduce((all, taskImages) => {
                     return all.concat(taskImages)
                 }, [] as any[])
+                const currentMessage = this.messages.find(m => m.id === messageId)
 
                 this.updateMessage(messageId, {
                     content: `批量生成超时，已返回 ${timeoutImages.length} 张图片`,
                     status: 'timeout',
                     images: timeoutImages,
-                    batchProgress: {
-                        completed: timeoutImages.length,
-                        total: totalCount || timeoutImages.length || 1,
-                        images: timeoutImages
-                    }
+                    batchProgress: currentMessage?.batchProgress
+                        ? {
+                            ...currentMessage.batchProgress,
+                            completed: Math.max(Number(currentMessage.batchProgress.completed || 0), timeoutImages.length),
+                            images: timeoutImages,
+                            stageMessage: `轮询超时，已返回 ${timeoutImages.length} 张图片`
+                        }
+                        : {
+                            completed: timeoutImages.length,
+                            total: totalCount || timeoutImages.length || 1,
+                            images: timeoutImages,
+                            stage: 'queued',
+                            stageLabel: '轮询超时',
+                            stageMessage: `轮询超时，已返回 ${timeoutImages.length} 张图片`,
+                            progressPercent: normalizeProgressPercent(timeoutImages.length / Math.max(totalCount || timeoutImages.length || 1, 1)) || 0,
+                            running: 0,
+                            pending: Math.max((totalCount || timeoutImages.length || 1) - timeoutImages.length, 0),
+                            failed: 0,
+                            stageOverview: [],
+                        }
                 })
             }
 
@@ -1209,7 +1499,8 @@ export const useGeneratorStore = defineStore('generator', {
                         this.updateMessage(messageId, {
                             content: response.message.content,
                             taskId: response.task_id,
-                            status: 'processing'
+                            status: 'processing',
+                            generationProgress: buildInitialTaskProgressPayload(response.metadata, response.message.content)
                         })
                         this.pollTaskStatus(response.task_id, messageId, 900, 2000)
                         return { success: true, taskId: response.task_id }
@@ -1220,7 +1511,20 @@ export const useGeneratorStore = defineStore('generator', {
                             content: response.message.content,
                             batchId: response.batch_id,
                             status: 'processing',
-                            batchCount: totalCount
+                            batchCount: totalCount,
+                            batchProgress: {
+                                completed: 0,
+                                total: totalCount,
+                                images: [],
+                                stage: response.metadata?.stage || 'queued',
+                                stageLabel: response.metadata?.stage_label || '排队中',
+                                stageMessage: response.metadata?.stage_message || response.message.content,
+                                progressPercent: response.metadata?.status_detail?.progress_percent || 0,
+                                running: response.metadata?.status_detail?.running_tasks || 0,
+                                pending: response.metadata?.status_detail?.pending_tasks || totalCount,
+                                failed: response.metadata?.status_detail?.failed_tasks || 0,
+                                stageOverview: response.metadata?.status_detail?.stage_overview || [],
+                            }
                         })
                         this.pollBatchStatusIncremental(response.batch_id, messageId, totalCount, 900, 2000)
                         return { success: true, batchId: response.batch_id }

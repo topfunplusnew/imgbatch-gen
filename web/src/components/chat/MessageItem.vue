@@ -157,18 +157,108 @@
             </div>
           </div>
 
-        <!-- 批量进度 -->
-        <div v-if="msg.batchProgress" class="mt-3">
-          <div class="h-2 bg-border-dark rounded-full overflow-hidden">
+        <transition name="status-card">
+          <div v-if="progressCard" class="mt-3">
             <div
-              :style="{ width: (msg.batchProgress.completed / msg.batchProgress.total * 100) + '%' }"
-              class="h-full bg-primary transition-all duration-300">
+              class="status-card relative overflow-hidden rounded-[1.25rem] border px-3 py-3 sm:px-4"
+              :class="statusCardThemeClass"
+            >
+              <div v-if="isProgressActive" class="status-card__ambient"></div>
+
+              <div class="relative flex items-start gap-3">
+                <div class="status-card__badge" :class="statusBadgeThemeClass">
+                  <span
+                    class="material-symbols-outlined !text-lg"
+                    :class="{ 'status-card__icon-spin': isProgressActive }"
+                  >
+                    {{ progressCard.icon }}
+                  </span>
+                </div>
+
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-sm font-semibold text-ink-950">{{ progressCard.title }}</span>
+                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="statusTagThemeClass">
+                      {{ progressCard.tag }}
+                    </span>
+                    <div v-if="isProgressActive" class="loading-dots" aria-hidden="true">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                  </div>
+
+                  <p class="mt-1 text-xs leading-relaxed text-ink-500 sm:text-sm">
+                    {{ progressCard.message }}
+                  </p>
+
+                  <div class="mt-3">
+                    <div class="status-card__progress-track">
+                      <div
+                        class="status-card__progress-fill"
+                        :class="progressFillThemeClass"
+                        :style="{ width: `${progressCard.percent}%` }"
+                      >
+                        <span v-if="isProgressActive" class="status-card__progress-shine"></span>
+                      </div>
+                    </div>
+                    <div class="mt-2 flex items-center justify-between text-[11px] font-medium text-ink-500">
+                      <span>{{ progressCard.caption }}</span>
+                      <span class="text-ink-700">{{ progressCard.percent }}%</span>
+                    </div>
+                  </div>
+
+                  <div v-if="progressStatChips.length > 0" class="mt-3 flex flex-wrap gap-2">
+                    <div
+                      v-for="chip in progressStatChips"
+                      :key="chip.label"
+                      class="status-chip"
+                    >
+                      <span class="text-[10px] uppercase tracking-[0.12em] text-ink-400">{{ chip.label }}</span>
+                      <span class="text-xs font-semibold text-ink-700">{{ chip.value }}</span>
+                    </div>
+                  </div>
+
+                  <div v-if="progressStagePills.length > 0" class="mt-3 flex flex-wrap gap-2">
+                    <div
+                      v-for="item in progressStagePills"
+                      :key="`${item.stage}-${item.countText}`"
+                      class="stage-pill"
+                      :class="{
+                        'stage-pill--active': item.isActive,
+                        'stage-pill--done': item.isDone,
+                        'stage-pill--error': item.isError
+                      }"
+                    >
+                      <span class="material-symbols-outlined !text-sm">{{ item.icon }}</span>
+                      <span class="font-medium">{{ item.label }}</span>
+                      <span v-if="item.countText">{{ item.countText }}</span>
+                    </div>
+                  </div>
+
+                  <div v-if="progressTimeline.length > 0" class="mt-3 space-y-2">
+                    <div
+                      v-for="event in progressTimeline"
+                      :key="`${event.stage}-${event.timestamp || event.label}`"
+                      class="timeline-item"
+                      :class="{ 'timeline-item--active': event.isActive }"
+                    >
+                      <span class="timeline-item__dot"></span>
+                      <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span class="text-xs font-semibold text-ink-700">{{ event.label }}</span>
+                          <span class="text-[10px] text-ink-400">{{ event.progressPercent }}%</span>
+                          <span v-if="event.timestamp" class="text-[10px] text-ink-400">{{ event.timestamp }}</span>
+                        </div>
+                        <p class="mt-0.5 text-[11px] leading-relaxed text-ink-500">{{ event.message }}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="text-xs text-ink-500 mt-1">
-            {{ msg.batchProgress.completed }} / {{ msg.batchProgress.total }} 完成
-          </div>
-        </div>
+        </transition>
       </div>
 
       <!-- 单张图片 -->
@@ -382,6 +472,161 @@ const previewableAttachmentImages = computed(() =>
     }))
     .filter((image) => image.url)
 )
+const generationProgress = computed(() => props.msg?.generationProgress || null)
+const batchProgressPercent = computed(() => {
+  const explicitPercent = Number(props.msg?.batchProgress?.progressPercent)
+  if (Number.isFinite(explicitPercent)) {
+    return Math.max(0, Math.min(100, Math.round(explicitPercent)))
+  }
+  const total = Number(props.msg?.batchProgress?.total || 0)
+  const completed = Number(props.msg?.batchProgress?.completed || 0)
+  if (!Number.isFinite(total) || total <= 0) return 0
+  return Math.max(0, Math.min(100, Math.round(completed / total * 100)))
+})
+const normalizedBatchStageOverview = computed(() =>
+  Array.isArray(props.msg?.batchProgress?.stageOverview)
+    ? props.msg.batchProgress.stageOverview.filter((item) => item && item.count > 0)
+    : []
+)
+const progressCard = computed(() => {
+  if (props.msg.role !== 'assistant') return null
+
+  if (props.msg?.batchProgress) {
+    const batchProgress = props.msg.batchProgress
+    const total = Number(batchProgress.total || 0)
+    const completed = Number(batchProgress.completed || 0)
+    return {
+      mode: 'batch',
+      stage: String(batchProgress.stage || ''),
+      title: batchProgress.stageLabel || '批量任务处理中',
+      message: batchProgress.stageMessage || props.msg.content || '正在处理批量生图任务',
+      percent: batchProgressPercent.value,
+      icon: getStageIcon(batchProgress.stage),
+      caption: total > 0 ? `已完成 ${completed}/${total}` : '等待进度回传',
+      tag: resolveProgressTag('batch'),
+    }
+  }
+
+  if (generationProgress.value) {
+    const currentProgress = generationProgress.value
+    const totalStages = Number(currentProgress.totalStages || 0)
+    const stageIndex = Number(currentProgress.stageIndex || 0)
+    const percent = Number.isFinite(Number(currentProgress.progressPercent))
+      ? Math.max(0, Math.min(100, Math.round(Number(currentProgress.progressPercent))))
+      : 0
+
+    return {
+      mode: 'single',
+      stage: String(currentProgress.stage || ''),
+      title: currentProgress.stageLabel || '图像任务处理中',
+      message: currentProgress.stageMessage || props.msg.content || '正在生成图像',
+      percent,
+      icon: getStageIcon(currentProgress.stage),
+      caption: totalStages > 0 && stageIndex > 0
+        ? `当前处于第 ${stageIndex}/${totalStages} 个阶段`
+        : '等待任务状态更新',
+      tag: resolveProgressTag('single'),
+    }
+  }
+
+  return null
+})
+const isProgressActive = computed(() => {
+  if (!progressCard.value) return false
+  const messageStatus = String(props.msg?.status || '').toLowerCase()
+  if (['completed', 'error', 'timeout'].includes(messageStatus)) return false
+  const stage = String(progressCard.value.stage || '').toLowerCase()
+  return !['completed', 'failed', 'timeout', 'cancelled', 'canceled'].includes(stage)
+})
+const progressStatChips = computed(() => {
+  if (!progressCard.value) return []
+
+  if (progressCard.value.mode === 'batch') {
+    const total = Number(props.msg?.batchProgress?.total || 0)
+    const completed = Number(props.msg?.batchProgress?.completed || 0)
+    const running = Number(props.msg?.batchProgress?.running || 0)
+    const pending = Number(props.msg?.batchProgress?.pending || 0)
+    const failed = Number(props.msg?.batchProgress?.failed || 0)
+    const returnedImages = Array.isArray(props.msg?.images) ? props.msg.images.length : 0
+
+    return [
+      total > 0 ? { label: '完成', value: `${completed}/${total}` } : null,
+      { label: '已返回', value: `${returnedImages} 张` },
+      running > 0 ? { label: '进行中', value: `${running} 个` } : null,
+      pending > 0 ? { label: '待处理', value: `${pending} 个` } : null,
+      failed > 0 ? { label: '失败', value: `${failed} 个` } : null,
+    ].filter(Boolean)
+  }
+
+  const currentProgress = generationProgress.value || {}
+  const stageIndex = Number(currentProgress.stageIndex || 0)
+  const totalStages = Number(currentProgress.totalStages || 0)
+  const attempt = Number(currentProgress.attempt || 0)
+  const outputCount = Array.isArray(props.msg?.images) ? props.msg.images.length : 0
+
+  return [
+    stageIndex > 0 && totalStages > 0 ? { label: '阶段', value: `${stageIndex}/${totalStages}` } : null,
+    { label: '尝试', value: attempt > 0 ? `第 ${attempt} 次` : '首轮' },
+    currentProgress.updatedAt ? { label: '更新', value: formatProgressTime(currentProgress.updatedAt) } : null,
+    outputCount > 0 ? { label: '结果', value: `${outputCount} 张` } : null,
+  ].filter(Boolean)
+})
+const progressStagePills = computed(() => {
+  if (!progressCard.value || progressCard.value.mode !== 'batch') return []
+
+  return normalizedBatchStageOverview.value.map((item) => {
+    const stage = String(item.stage || '')
+    return {
+      stage,
+      label: item.label || '处理中',
+      icon: getStageIcon(stage),
+      countText: `${item.count} 个`,
+      isActive: stage === String(props.msg?.batchProgress?.stage || ''),
+      isDone: stage === 'completed',
+      isError: stage === 'failed',
+    }
+  })
+})
+const progressTimeline = computed(() => {
+  if (!progressCard.value || progressCard.value.mode !== 'single') return []
+
+  const history = Array.isArray(generationProgress.value?.history)
+    ? generationProgress.value.history.slice(-3)
+    : []
+
+  return history.map((event, index) => ({
+    ...event,
+    timestamp: formatProgressTime(event?.timestamp),
+    progressPercent: Number.isFinite(Number(event?.progressPercent))
+      ? Math.max(0, Math.min(100, Math.round(Number(event.progressPercent))))
+      : 0,
+    isActive: isProgressActive.value && index === history.length - 1,
+  }))
+})
+const statusCardThemeClass = computed(() => {
+  const messageStatus = String(props.msg?.status || '').toLowerCase()
+  if (['error', 'timeout'].includes(messageStatus)) return 'status-card--error'
+  if (messageStatus === 'completed') return 'status-card--success'
+  return 'status-card--active'
+})
+const statusBadgeThemeClass = computed(() => {
+  const messageStatus = String(props.msg?.status || '').toLowerCase()
+  if (['error', 'timeout'].includes(messageStatus)) return 'status-card__badge--error'
+  if (messageStatus === 'completed') return 'status-card__badge--success'
+  return 'status-card__badge--active'
+})
+const statusTagThemeClass = computed(() => {
+  const messageStatus = String(props.msg?.status || '').toLowerCase()
+  if (['error', 'timeout'].includes(messageStatus)) return 'bg-red-500/10 text-red-600'
+  if (messageStatus === 'completed') return 'bg-emerald-500/10 text-emerald-700'
+  return 'bg-primary/10 text-primary'
+})
+const progressFillThemeClass = computed(() => {
+  const messageStatus = String(props.msg?.status || '').toLowerCase()
+  if (['error', 'timeout'].includes(messageStatus)) return 'status-card__progress-fill--error'
+  if (messageStatus === 'completed') return 'status-card__progress-fill--success'
+  return 'status-card__progress-fill--active'
+})
 
 function getAttachmentName(file) {
   return file?.name || file?.filename || file?.original_filename || '附件'
@@ -411,6 +656,45 @@ function formatBytes(bytes) {
 
 function formatAttachmentSize(file) {
   return formatBytes(getAttachmentSize(file))
+}
+
+function getStageIcon(stage) {
+  const icons = {
+    request_received: 'schedule',
+    queued: 'hourglass_top',
+    extracting_prompt: 'notes',
+    semantic_understanding: 'psychology',
+    generating_images: 'imagesmode',
+    validating_images: 'fact_check',
+    saving_images: 'save',
+    recording_result: 'database',
+    retrying: 'refresh',
+    completed: 'check_circle',
+    failed: 'error',
+  }
+  return icons[String(stage || '').toLowerCase()] || 'sync'
+}
+
+function formatProgressTime(value) {
+  if (!value) return ''
+  try {
+    return new Date(value).toLocaleTimeString('zh-CN', {
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  } catch {
+    return ''
+  }
+}
+
+function resolveProgressTag(mode) {
+  const messageStatus = String(props.msg?.status || '').toLowerCase()
+  if (messageStatus === 'completed') {
+    return mode === 'batch' ? '批量完成' : '生成完成'
+  }
+  if (messageStatus === 'timeout') return '轮询超时'
+  if (messageStatus === 'error') return '任务异常'
+  return mode === 'batch' ? '批量任务' : '单张任务'
 }
 
 function isImageAttachment(file) {
@@ -581,7 +865,9 @@ async function retryMessage() {
     // 如果有任务ID，重新查询任务状态
     if (props.msg.taskId) {
       await api.getTaskStatus(props.msg.taskId).then(response => {
-        if (response.status === 'completed') {
+        const responseStatus = String(response.status || '').toLowerCase()
+
+        if (responseStatus === 'completed') {
           // 任务已完成，更新消息
           props.msg.status = 'completed'
           props.msg.content = '图像生成完成！'
@@ -605,18 +891,21 @@ async function retryMessage() {
             }))
           }
           props.msg.images = images
-        } else if (response.status === 'failed') {
+        } else if (['failed', 'error', 'cancelled', 'canceled'].includes(responseStatus)) {
           props.msg.status = 'error'
           props.msg.content = `生成失败: ${response.error || '未知错误'}`
-        } else if (response.status === 'processing') {
+        } else if (['processing', 'running', 'pending'].includes(responseStatus)) {
           props.msg.status = 'processing'
-          props.msg.content = '任务处理中...'
+          props.msg.content = response.stage_message || '任务处理中...'
+          generatorStore.pollTaskStatus(props.msg.taskId, props.msg.id, 900, 2000)
         }
       })
     } else if (props.msg.batchId) {
       // 批量任务重试
       await api.getBatchTaskStatus(props.msg.batchId).then(response => {
-        if (response.status === 'completed') {
+        const responseStatus = String(response.status || '').toLowerCase()
+
+        if (responseStatus === 'completed') {
           props.msg.status = 'completed'
           props.msg.content = `批量生成完成！共 ${props.msg.images?.length || response.tasks?.filter(t => t.status === 'completed').length || 0} 张图片`
           // 更新图片列表
@@ -628,12 +917,14 @@ async function retryMessage() {
           } else if (response.images) {
             props.msg.images = response.images
           }
-        } else if (response.status === 'failed') {
+        } else if (['failed', 'error', 'cancelled', 'canceled'].includes(responseStatus)) {
           props.msg.status = 'error'
           props.msg.content = `批量生成失败: ${response.error || '未知错误'}`
-        } else if (response.status === 'processing') {
+        } else if (['processing', 'running', 'pending'].includes(responseStatus)) {
           props.msg.status = 'processing'
-          props.msg.content = '任务处理中...'
+          props.msg.content = response.stage_message || response.status_detail?.current_stage_message || '任务处理中...'
+          const totalCount = Number(props.msg?.batchProgress?.total || response.total || response.tasks?.length || 1)
+          generatorStore.pollBatchStatusIncremental(props.msg.batchId, props.msg.id, totalCount, 900, 2000)
         }
       })
     } else {
@@ -930,6 +1221,233 @@ onUnmounted(() => {
 .markdown-body :deep(td) { border: 1px solid rgba(16, 19, 18, 0.08); padding: 0.4em 0.8em; }
 .markdown-body :deep(th) { background: rgba(16, 19, 18, 0.04); }
 
+.status-card {
+  backdrop-filter: blur(14px);
+  box-shadow: 0 18px 40px rgba(16, 19, 18, 0.08);
+}
+
+.status-card--active {
+  border-color: rgba(0, 187, 111, 0.16);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(0, 187, 111, 0.06) 62%, rgba(226, 255, 242, 0.92) 100%);
+}
+
+.status-card--success {
+  border-color: rgba(16, 185, 129, 0.18);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(209, 250, 229, 0.9) 100%);
+}
+
+.status-card--error {
+  border-color: rgba(239, 68, 68, 0.18);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(254, 242, 242, 0.94) 100%);
+}
+
+.status-card__ambient {
+  position: absolute;
+  left: -3rem;
+  top: -3rem;
+  width: 14rem;
+  height: 14rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(0, 187, 111, 0.18) 0%, rgba(0, 187, 111, 0) 70%);
+  animation: status-orbit 5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.status-card__badge {
+  position: relative;
+  display: flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.status-card__badge::after {
+  content: '';
+  position: absolute;
+  inset: -0.3rem;
+  border-radius: 1.15rem;
+}
+
+.status-card__badge--active {
+  color: #00a86b;
+  background: linear-gradient(145deg, rgba(0, 187, 111, 0.14), rgba(255, 255, 255, 0.9));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 10px 24px rgba(0, 187, 111, 0.16);
+}
+
+.status-card__badge--active::after {
+  border: 1px solid rgba(0, 187, 111, 0.2);
+  animation: status-pulse-ring 1.8s ease-out infinite;
+}
+
+.status-card__badge--success {
+  color: #047857;
+  background: linear-gradient(145deg, rgba(16, 185, 129, 0.14), rgba(255, 255, 255, 0.9));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 10px 24px rgba(16, 185, 129, 0.14);
+}
+
+.status-card__badge--error {
+  color: #dc2626;
+  background: linear-gradient(145deg, rgba(239, 68, 68, 0.14), rgba(255, 255, 255, 0.92));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 10px 24px rgba(239, 68, 68, 0.12);
+}
+
+.status-card__icon-spin {
+  animation: status-spin 2.2s linear infinite;
+}
+
+.status-card__progress-track {
+  position: relative;
+  height: 0.75rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 1px 2px rgba(16, 19, 18, 0.08);
+}
+
+.status-card__progress-track::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.55) 50%, transparent 100%);
+  transform: translateX(-100%);
+  animation: track-shimmer 2.6s linear infinite;
+}
+
+.status-card__progress-fill {
+  position: relative;
+  height: 100%;
+  min-width: 0.9rem;
+  border-radius: inherit;
+  overflow: hidden;
+  transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.status-card__progress-fill::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.2) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.2) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 22px 22px;
+  animation: progress-stripes 1.2s linear infinite;
+}
+
+.status-card__progress-fill--active {
+  background: linear-gradient(90deg, #00b26d 0%, #00cf85 52%, #8ef3c7 100%);
+}
+
+.status-card__progress-fill--success {
+  background: linear-gradient(90deg, #059669 0%, #10b981 55%, #6ee7b7 100%);
+}
+
+.status-card__progress-fill--error {
+  background: linear-gradient(90deg, #ef4444 0%, #fb7185 55%, #fca5a5 100%);
+}
+
+.status-card__progress-shine {
+  position: absolute;
+  inset: 0 auto 0 -2.5rem;
+  width: 2.5rem;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0));
+  animation: fill-shine 1.8s linear infinite;
+}
+
+.status-chip {
+  display: flex;
+  min-width: 4.5rem;
+  flex-direction: column;
+  gap: 0.2rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(16, 19, 18, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.55rem 0.7rem;
+}
+
+.stage-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid rgba(16, 19, 18, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+  padding: 0.38rem 0.65rem;
+  font-size: 0.7rem;
+  color: rgba(16, 19, 18, 0.68);
+  transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease, color 220ms ease;
+}
+
+.stage-pill--active {
+  color: #007c4a;
+  border-color: rgba(0, 187, 111, 0.22);
+  box-shadow: 0 10px 22px rgba(0, 187, 111, 0.12);
+  transform: translateY(-1px);
+}
+
+.stage-pill--done {
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.18);
+}
+
+.stage-pill--error {
+  color: #dc2626;
+  border-color: rgba(239, 68, 68, 0.18);
+}
+
+.timeline-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
+
+.timeline-item__dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-top: 0.35rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: rgba(0, 187, 111, 0.22);
+  box-shadow: 0 0 0 0.35rem rgba(0, 187, 111, 0.08);
+}
+
+.timeline-item--active .timeline-item__dot {
+  background: #00b26d;
+  animation: timeline-pulse 1.45s ease-out infinite;
+}
+
+.loading-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+}
+
+.loading-dots span {
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: #00b26d;
+  animation: loading-dots 1.1s ease-in-out infinite;
+}
+
+.loading-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.loading-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
 /* Thinking animation dots */
 @keyframes thinking-bounce {
   0%, 80%, 100% {
@@ -949,4 +1467,94 @@ onUnmounted(() => {
 .thinking-dot:nth-child(1) { animation-delay: 0s; }
 .thinking-dot:nth-child(2) { animation-delay: 0.15s; }
 .thinking-dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes status-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes track-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(200%); }
+}
+
+@keyframes progress-stripes {
+  from { background-position: 0 0; }
+  to { background-position: 22px 0; }
+}
+
+@keyframes fill-shine {
+  from { transform: translateX(0); }
+  to { transform: translateX(220px); }
+}
+
+@keyframes status-orbit {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(0.95);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate3d(1.6rem, 1rem, 0) scale(1.05);
+    opacity: 1;
+  }
+}
+
+@keyframes status-pulse-ring {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.18);
+    opacity: 0;
+  }
+}
+
+@keyframes timeline-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 178, 109, 0.2);
+  }
+  70% {
+    box-shadow: 0 0 0 0.55rem rgba(0, 178, 109, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 178, 109, 0);
+  }
+}
+
+@keyframes loading-dots {
+  0%, 80%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  40% {
+    transform: translateY(-0.2rem);
+    opacity: 1;
+  }
+}
+
+.status-card-enter-active,
+.status-card-leave-active {
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.status-card-enter-from,
+.status-card-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-card__ambient,
+  .status-card__badge--active::after,
+  .status-card__icon-spin,
+  .status-card__progress-track::before,
+  .status-card__progress-fill::before,
+  .status-card__progress-shine,
+  .timeline-item--active .timeline-item__dot,
+  .loading-dots span,
+  .thinking-dot {
+    animation: none !important;
+  }
+}
 </style>

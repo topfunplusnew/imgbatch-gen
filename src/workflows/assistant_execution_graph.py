@@ -558,10 +558,86 @@ async def _extract_pdf_excerpt_bundle(file_bytes: bytes, api_key: Optional[str])
     return _combine_pdf_page_excerpts(page_excerpts), page_excerpts
 
 
-def _extract_docx_excerpt(file_bytes: bytes) -> str:
+def _is_doc_heading(text: str, style_name: str) -> bool:
+    stripped = (text or "").strip()
+    normalized_style = (style_name or "").strip().lower()
+    if not stripped:
+        return False
+    if "heading" in normalized_style:
+        return True
+
+    heading_patterns = (
+        r"^第[一二三四五六七八九十百千0-9]+[章节部分篇条]",
+        r"^[0-9]+(?:\.[0-9]+){0,3}[、.)． ]",
+        r"^[一二三四五六七八九十]+[、.．)]",
+    )
+    return any(re.match(pattern, stripped) for pattern in heading_patterns)
+
+
+def _extract_docx_section_excerpts(file_bytes: bytes) -> List[str]:
     document = Document(io.BytesIO(file_bytes))
-    text = "\n".join(paragraph.text for paragraph in document.paragraphs if paragraph.text.strip())
-    return _trim_attachment_text(text)
+    max_sections = max(1, min(12, settings.assistant_pdf_ocr_max_pages or 6))
+    section_char_limit = min(1800, max(600, (settings.assistant_attachment_text_limit or 12000) // 4))
+
+    sections: List[str] = []
+    current_lines: List[str] = []
+    current_chars = 0
+
+    def flush_current() -> None:
+        nonlocal current_lines, current_chars
+        if not current_lines:
+            return
+        sections.append(
+            _trim_attachment_text(
+                "\n".join(current_lines),
+                limit=section_char_limit,
+            )
+        )
+        current_lines = []
+        current_chars = 0
+
+    for paragraph in document.paragraphs:
+        text = (paragraph.text or "").strip()
+        if not text:
+            continue
+
+        style_name = getattr(getattr(paragraph, "style", None), "name", "") or ""
+        is_heading = _is_doc_heading(text, style_name)
+
+        if is_heading and current_lines:
+            flush_current()
+
+        projected_chars = current_chars + len(text) + (1 if current_lines else 0)
+        if current_lines and projected_chars > section_char_limit and len(sections) + 1 < max_sections:
+            flush_current()
+
+        current_lines.append(text)
+        current_chars += len(text) + (1 if len(current_lines) > 1 else 0)
+
+    flush_current()
+
+    if not sections:
+        return []
+    return sections[:max_sections]
+
+
+def _combine_docx_section_excerpts(section_excerpts: List[str]) -> str:
+    combined_sections = [
+        f"[Section {section_index}]\n{section_excerpt}"
+        for section_index, section_excerpt in enumerate(section_excerpts, start=1)
+        if (section_excerpt or "").strip()
+    ]
+    if not combined_sections:
+        return ""
+    return _trim_attachment_text(
+        "\n\n".join(combined_sections),
+        limit=settings.assistant_attachment_text_limit or 12000,
+    )
+
+
+def _extract_docx_excerpt_bundle(file_bytes: bytes) -> tuple[str, List[str]]:
+    section_excerpts = _extract_docx_section_excerpts(file_bytes)
+    return _combine_docx_section_excerpts(section_excerpts), section_excerpts
 
 
 async def _extract_image_excerpt(file_bytes: bytes, extension: str, api_key: Optional[str]) -> str:
@@ -586,12 +662,10 @@ async def _extract_attachment_excerpt(
     if extension not in {"docx", "doc", "jpg", "jpeg", "png", "gif", "webp", "bmp"}:
         return ""
 
-    if extension == "docx":
+    if extension in {"docx", "doc"}:
         file_bytes = await _download_file_bytes(url)
-        return _extract_docx_excerpt(file_bytes)
-    if extension == "doc":
-        logger.warning("Legacy .doc extraction is not supported yet: {}", url)
-        return ""
+        excerpt, _ = _extract_docx_excerpt_bundle(file_bytes)
+        return excerpt
     if extension in {"jpg", "jpeg", "png", "gif", "webp", "bmp"}:
         file_bytes = await _download_file_bytes(url)
         return await _extract_image_excerpt(file_bytes, extension, api_key)
@@ -622,15 +696,11 @@ async def _load_attachment_descriptors(
         if extension in {"pdf", "docx", "doc"}:
             page_excerpts: Optional[List[str]] = None
             try:
+                file_bytes = await _download_file_bytes(resolved["url"])
                 if extension == "pdf":
-                    file_bytes = await _download_file_bytes(resolved["url"])
                     excerpt, page_excerpts = await _extract_pdf_excerpt_bundle(file_bytes, api_key)
                 else:
-                    excerpt = await _extract_attachment_excerpt(
-                        url=resolved["url"],
-                        extension=extension,
-                        api_key=api_key,
-                    )
+                    excerpt, page_excerpts = _extract_docx_excerpt_bundle(file_bytes)
             except Exception as exc:
                 logger.warning(
                     "Failed to extract text from attachment {} ({}): {}",
@@ -1254,10 +1324,44 @@ def _flatten_pdf_page_items(attachments: List[AttachmentDescriptor]) -> List[Dic
     return page_items
 
 
+def _flatten_word_section_items(attachments: List[AttachmentDescriptor]) -> List[Dict[str, Any]]:
+    section_items: List[Dict[str, Any]] = []
+    for attachment in attachments:
+        if attachment.kind not in {"docx", "doc"}:
+            continue
+
+        section_excerpts = list(attachment.page_excerpts or [])
+        if not section_excerpts and attachment.text_excerpt:
+            section_excerpts = [attachment.text_excerpt]
+
+        for section_number, section_excerpt in enumerate(section_excerpts, start=1):
+            section_items.append(
+                {
+                    "attachment_name": attachment.name,
+                    "section_number": section_number,
+                    "section_excerpt": (section_excerpt or "").strip(),
+                    "kind": attachment.kind,
+                }
+            )
+    return section_items
+
+
 def _build_shared_non_pdf_grounding(attachments: List[AttachmentDescriptor]) -> str:
     blocks: List[str] = []
     for attachment in attachments:
         if attachment.kind == "pdf":
+            continue
+        excerpt = (attachment.text_excerpt or "").strip()
+        if not excerpt:
+            continue
+        blocks.append(f"[Attachment: {attachment.name}]\n{_trim_attachment_text(excerpt, limit=1600)}")
+    return "\n\n".join(blocks)
+
+
+def _build_shared_non_word_grounding(attachments: List[AttachmentDescriptor]) -> str:
+    blocks: List[str] = []
+    for attachment in attachments:
+        if attachment.kind in {"docx", "doc"}:
             continue
         excerpt = (attachment.text_excerpt or "").strip()
         if not excerpt:
@@ -1353,6 +1457,94 @@ async def _build_pdf_page_matched_prompts(
     return prompts
 
 
+async def _build_word_section_matched_prompts(
+    *,
+    user_instruction: str,
+    attachments: List[AttachmentDescriptor],
+    requested_count: int,
+    api_key: Optional[str],
+) -> List[str]:
+    section_items = _flatten_word_section_items(attachments)
+    if not section_items:
+        return []
+
+    target_count = min(max(1, requested_count), len(section_items))
+    shared_text_attachments = [
+        AttachmentDescriptor(
+            name=attachment.name,
+            kind=attachment.kind,
+            source=attachment.source,
+            text_excerpt=attachment.text_excerpt,
+        )
+        for attachment in attachments
+        if attachment.kind not in {"docx", "doc"} and attachment.text_excerpt
+    ]
+    shared_grounding = _build_shared_non_word_grounding(attachments)
+
+    prompts: List[str] = []
+    for section_item in section_items[:target_count]:
+        attachment_name = str(section_item["attachment_name"])
+        section_number = int(section_item["section_number"])
+        section_excerpt = str(section_item.get("section_excerpt") or "").strip()
+        section_kind = str(section_item.get("kind") or "docx")
+        section_fallback_excerpt = (
+            section_excerpt
+            or f"第 {section_number} 个章节没有提取到可用文本，请尽量依据该章节的标题、结构或关键信息生成对应图像。"
+        )
+        section_instruction = (
+            f"{user_instruction or 'Generate one image based on the uploaded Word document section.'}\n\n"
+            f"Generate exactly one image that corresponds only to section {section_number} of the Word document "
+            f"\"{attachment_name}\". Do not mix content from other sections."
+        )
+        section_attachment = AttachmentDescriptor(
+            name=f"{attachment_name} - Section {section_number}",
+            kind=section_kind,
+            text_excerpt=section_fallback_excerpt,
+        )
+
+        try:
+            prompt_result = await build_text_attachment_prompt(
+                section_instruction,
+                [section_attachment, *shared_text_attachments],
+                api_key=api_key,
+            )
+            base_prompt = prompt_result.prompt
+        except Exception as exc:
+            logger.warning(
+                "Failed to build section-matched Word prompt for {} section {}: {}",
+                attachment_name,
+                section_number,
+                exc,
+            )
+            base_prompt = section_instruction
+
+        prompt_sections = [
+            (base_prompt or section_instruction).strip(),
+            (
+                f"Must correspond only to section {section_number} of the Word document "
+                f"\"{attachment_name}\". Do not use content from other sections."
+            ),
+            (
+                "Primary grounding content from the matched Word document section (must be reflected in the image):\n"
+                f"[Attachment: {attachment_name} | Section {section_number}]\n"
+                f"{_trim_attachment_text(section_fallback_excerpt, limit=1600)}"
+            ),
+        ]
+        if shared_grounding:
+            prompt_sections.append(
+                "Shared grounding from other uploaded files:\n"
+                f"{shared_grounding}"
+            )
+        prompts.append(
+            _trim_attachment_text(
+                "\n\n".join(section for section in prompt_sections if section),
+                limit=settings.assistant_attachment_text_limit or 12000,
+            )
+        )
+
+    return prompts
+
+
 async def _build_chat_plan(
     *,
     messages: List[Dict[str, Any]],
@@ -1403,9 +1595,22 @@ async def _build_image_plan(
         requested_count=requested_batch_count,
         api_key=api_key,
     )
+    word_section_items = _flatten_word_section_items(attachments)
+    word_section_prompts: List[str] = []
+    if not pdf_page_prompts:
+        word_section_prompts = await _build_word_section_matched_prompts(
+            user_instruction=contextual_user_instruction,
+            attachments=attachments,
+            requested_count=requested_batch_count,
+            api_key=api_key,
+        )
     if pdf_page_prompts:
         final_prompt = pdf_page_prompts[0]
         effective_batch_count = len(pdf_page_prompts)
+        effective_intent_type = "batch_generate" if effective_batch_count > 1 else "single_generate"
+    elif word_section_prompts:
+        final_prompt = word_section_prompts[0]
+        effective_batch_count = len(word_section_prompts)
         effective_intent_type = "batch_generate" if effective_batch_count > 1 else "single_generate"
     else:
         final_prompt = await _build_image_prompt_from_attachments(
@@ -1440,7 +1645,11 @@ async def _build_image_plan(
             "pdf_page_match_enabled": bool(pdf_page_prompts),
             "pdf_total_pages": len(pdf_page_items),
             "pdf_page_match_count": len(pdf_page_prompts),
+            "word_section_match_enabled": bool(word_section_prompts),
+            "word_total_sections": len(word_section_items),
+            "word_section_match_count": len(word_section_prompts),
             **({"_batch_prompts": pdf_page_prompts} if len(pdf_page_prompts) > 1 else {}),
+            **({"_batch_prompts": word_section_prompts} if not pdf_page_prompts and len(word_section_prompts) > 1 else {}),
         },
     )
 

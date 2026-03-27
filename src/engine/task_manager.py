@@ -6,7 +6,7 @@ from typing import Dict, Optional, List, Any
 from datetime import datetime
 from loguru import logger
 
-from ..models.task import ImageTask, TaskStatus, BatchTask
+from ..models.task import BatchTask, ImageTask, TaskStage, TaskStatus
 from ..models.image import ImageParams
 from ..config.settings import settings
 from .queue import TaskQueue
@@ -147,6 +147,11 @@ class TaskManager:
     
     async def submit_task(self, task: ImageTask, priority: int = 0):
         """提交任务到队列"""
+        task.set_stage(
+            TaskStage.QUEUED,
+            message="任务已进入队列，等待工作线程处理。",
+            progress=0.02,
+        )
         await self.queue.put(task, priority=priority)
         logger.info(f"提交任务 {task.task_id} 到队列")
     
@@ -189,12 +194,16 @@ class TaskManager:
         for task in tasks:
             await self.submit_task(task)
 
+        batch_task.update_progress()
         logger.info(f"创建批量任务 {batch_id}，包含 {len(tasks)} 个子任务")
         return batch_task
     
     def get_batch_task(self, batch_id: str) -> Optional[BatchTask]:
         """获取批量任务"""
-        return self.batch_tasks.get(batch_id)
+        batch_task = self.batch_tasks.get(batch_id)
+        if batch_task:
+            batch_task.update_progress()
+        return batch_task
     
     def list_tasks(self, status: Optional[TaskStatus] = None) -> List[ImageTask]:
         """列出任务"""
@@ -202,4 +211,3 @@ class TaskManager:
         if status:
             tasks = [t for t in tasks if t.status == status]
         return tasks
-

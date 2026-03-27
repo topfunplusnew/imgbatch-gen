@@ -5,7 +5,7 @@ from typing import Optional, List
 from datetime import datetime
 from loguru import logger
 
-from ..models.task import ImageTask, TaskStatus
+from ..models.task import ImageTask, TaskStage, TaskStatus
 from ..models.image import ImageParams
 from ..providers import get_provider
 from ..storage import MetadataManager
@@ -40,7 +40,11 @@ class Worker:
         """处理任务（带重试机制）"""
         # 更新任务状态为运行中
         task.update_status(TaskStatus.RUNNING)
-        task.progress = 0.0
+        task.set_stage(
+            TaskStage.QUEUED,
+            message="工作线程已接手任务，准备开始处理。",
+            progress=0.03,
+        )
 
         # 获取重试配置
         max_retries = getattr(settings, 'max_generation_retries', 2)
@@ -53,46 +57,84 @@ class Worker:
         for attempt in range(1, max_attempts + 1):
             try:
                 logger.info(f"Worker {self.worker_id} 尝试 #{attempt}/{max_attempts} 处理任务 {task.task_id}")
+                task.attempt = attempt
 
                 # 1. 参数提取（如果需要）- 只在第一次尝试时执行
                 if attempt == 1 and not task.params.prompt:
+                    task.set_stage(
+                        TaskStage.EXTRACTING_PROMPT,
+                        message="正在从输入中提取可执行提示词。",
+                        progress=0.08,
+                        attempt=attempt,
+                    )
                     task = await self._extract_prompt(task)
-                    task.progress = 0.1
 
                 # 2. 语义匹配增强参数 - 只在第一次尝试时执行
                 if attempt == 1:
+                    task.set_stage(
+                        TaskStage.SEMANTIC_UNDERSTANDING,
+                        message="正在进行语义理解与参数增强。",
+                        progress=0.18,
+                        attempt=attempt,
+                    )
                     task = await self._enhance_params(task)
-                    task.progress = 0.2
 
                 # 3. 获取Provider并生成图片（使用管理员统一配置）
                 provider = await get_provider(
                     task.params.provider or settings.default_image_provider
                 )
 
+                provider_name = task.params.provider or settings.default_image_provider or "default"
+                task.set_stage(
+                    TaskStage.GENERATING_IMAGES,
+                    message=f"正在调用 {provider_name} 执行生图请求。",
+                    progress=0.35,
+                    attempt=attempt,
+                )
+
                 # 生成图片（provider内部已有重试机制）
                 images = await provider.generate(task.params)
-                task.progress = 0.5
+                task.set_stage(
+                    TaskStage.VALIDATING_IMAGES,
+                    message="生图请求已返回，正在校验图片结果。",
+                    progress=0.62,
+                    attempt=attempt,
+                )
 
                 # 4. 验证图片数据有效性
                 if not self._validate_image_results(images):
                     raise ValueError("未获取到有效的图片数据")
 
-                task.progress = 0.7
-
                 # 5. 保存图片到存储
+                task.set_stage(
+                    TaskStage.SAVING_IMAGES,
+                    message="图片校验通过，正在保存图片到存储。",
+                    progress=0.78,
+                    attempt=attempt,
+                )
                 results = await self._save_images(task, images)
                 if not results:
                     raise ValueError("保存图片失败")
 
                 task.result = results
                 task.images = [{"url": img.url, "alt": f"生成的图像"} for img in results]
-                task.progress = 0.9
 
                 # 6. 处理成功：扣费并记录
+                task.set_stage(
+                    TaskStage.RECORDING_RESULT,
+                    message="图片已保存，正在记录结果和更新关联数据。",
+                    progress=0.92,
+                    attempt=attempt,
+                )
                 await self._handle_success(task, results)
 
                 task.update_status(TaskStatus.COMPLETED)
-                task.progress = 1.0
+                task.set_stage(
+                    TaskStage.COMPLETED,
+                    message=f"任务已完成，共生成 {len(results)} 张图片。",
+                    progress=1.0,
+                    attempt=attempt,
+                )
 
                 # 7. 保存到数据库
                 await self._save_to_database(task, results)
@@ -128,6 +170,12 @@ class Worker:
                 logger.warning(
                     f"任务 {task.task_id} 第 {attempt} 次尝试失败 ({error_type.value})，"
                     f"{delay}秒后重试: {str(e)[:200]}"
+                )
+                task.set_stage(
+                    TaskStage.RETRYING,
+                    message=f"当前尝试失败，{delay:.1f} 秒后准备第 {attempt + 1} 次重试。",
+                    progress=max(task.progress, 0.1),
+                    attempt=attempt,
                 )
                 await asyncio.sleep(delay)
 
@@ -279,7 +327,12 @@ class Worker:
 
         task.update_status(TaskStatus.FAILED)
         task.error = f"尝试{attempt}次后失败: {str(error)}"
-        task.progress = 0.0
+        task.set_stage(
+            TaskStage.FAILED,
+            message=f"任务失败：{str(error)}",
+            progress=task.progress if task.progress > 0 else 0.0,
+            attempt=attempt,
+        )
 
         # 记录失败（不扣费）
         user_id = task.user_id
@@ -351,4 +404,3 @@ class Worker:
             logger.info(f"任务 {task.task_id} 已保存到数据库")
         except Exception as e:
             logger.error(f"保存任务 {task.task_id} 到数据库失败: {str(e)}")
-

@@ -7,12 +7,68 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResp
 import { useApiConfigStore } from '@/store/useApiConfigStore'
 
 // API响应类型定义
+export interface TaskStageEvent {
+  stage: string
+  label: string
+  message: string
+  status: string
+  progress: number
+  attempt: number
+  timestamp: string
+}
+
 export interface ImageTask {
   task_id: string
-  status: 'pending' | 'processing' | 'completed' | 'failed'
+  status: 'pending' | 'processing' | 'running' | 'completed' | 'failed' | 'cancelled'
   params?: any
   result?: any
+  images?: any[]
   error?: string
+  progress?: number
+  stage?: string
+  stage_label?: string
+  stage_message?: string
+  attempt?: number
+  updated_at?: string
+  stage_history?: TaskStageEvent[]
+  metadata?: Record<string, any>
+}
+
+export interface BatchStageOverviewItem {
+  stage: string
+  label: string
+  count: number
+}
+
+export interface BatchStatusDetail {
+  current_stage: string
+  current_stage_label: string
+  current_stage_message: string
+  progress_percent: number
+  pending_tasks: number
+  running_tasks: number
+  completed_tasks: number
+  failed_tasks: number
+  stage_overview: BatchStageOverviewItem[]
+}
+
+export interface BatchTaskStatus {
+  batch_id: string
+  status: 'pending' | 'processing' | 'running' | 'completed' | 'failed' | 'cancelled'
+  tasks?: ImageTask[]
+  total: number
+  completed: number
+  failed: number
+  pending?: number
+  running?: number
+  progress?: number
+  stage?: string
+  stage_label?: string
+  stage_message?: string
+  status_detail?: BatchStatusDetail
+  created_at?: string
+  completed_at?: string
+  updated_at?: string
 }
 
 export interface ChatMessage {
@@ -371,7 +427,7 @@ export const api = {
   /**
    * 查询批量任务状态
    */
-  async getBatchTaskStatus(batchId: string): Promise<any> {
+  async getBatchTaskStatus(batchId: string): Promise<BatchTaskStatus> {
     const response = await apiClient.get(`/api/v1/batch/${batchId}`)
     return response.data
   },

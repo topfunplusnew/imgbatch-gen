@@ -138,7 +138,53 @@
           <!-- Bottom Action Bar -->
           <div class="flex items-center justify-end px-3 py-2 border-t border-gray-100 bg-gray-50/50">
             <!-- Right side buttons -->
-            <div class="flex items-center gap-1">
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              <div
+                class="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-1.5 py-1 shadow-sm"
+                title="生图数量"
+              >
+                <span class="hidden lg:inline-flex items-center gap-1 px-1 text-[11px] font-semibold text-gray-500">
+                  <span class="material-symbols-outlined !text-sm text-accent-purple">imagesmode</span>
+                  生图数量
+                </span>
+                <button
+                  @click="changeBatchSize(-1)"
+                  :disabled="normalizedBatchSize <= MIN_BATCH_SIZE"
+                  class="flex h-7 w-7 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="减少生图数量"
+                >
+                  <span class="material-symbols-outlined !text-base">remove</span>
+                </button>
+                <div class="min-w-[44px] text-center">
+                  <div class="text-sm font-semibold leading-none text-gray-800">{{ normalizedBatchSize }}</div>
+                  <div class="mt-0.5 text-[10px] leading-none text-gray-400">张</div>
+                </div>
+                <button
+                  @click="changeBatchSize(1)"
+                  :disabled="normalizedBatchSize >= MAX_BATCH_SIZE"
+                  class="flex h-7 w-7 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="增加生图数量"
+                >
+                  <span class="material-symbols-outlined !text-base">add</span>
+                </button>
+              </div>
+
+              <div class="hidden md:flex items-center gap-1">
+                <button
+                  v-for="preset in batchSizePresets"
+                  :key="preset"
+                  @click="setBatchSize(preset)"
+                  :class="[
+                    'rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
+                    normalizedBatchSize === preset
+                      ? 'bg-accent-purple/10 text-accent-purple'
+                      : 'bg-white text-gray-500 hover:bg-gray-200 hover:text-gray-700'
+                  ]"
+                >
+                  {{ preset }}张
+                </button>
+              </div>
+
               <!-- Purchase button -->
               <button
                 @click="goToRecharge"
@@ -223,6 +269,37 @@ const currentModelDisplay = computed(() => {
   }
   return generatorStore.model || '选择模型';
 });
+
+const MIN_BATCH_SIZE = 1;
+const MAX_BATCH_SIZE = 50;
+const batchSizePresets = [1, 4, 8];
+
+const normalizeBatchSize = (value) => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return MIN_BATCH_SIZE;
+  return Math.min(MAX_BATCH_SIZE, Math.max(MIN_BATCH_SIZE, Math.round(numericValue)));
+};
+
+const normalizedBatchSize = computed(() => normalizeBatchSize(generatorStore.batchSize));
+
+const setBatchSize = (value) => {
+  generatorStore.setBatchSize(normalizeBatchSize(value));
+};
+
+const changeBatchSize = (delta) => {
+  setBatchSize(normalizedBatchSize.value + delta);
+};
+
+watch(
+  () => generatorStore.batchSize,
+  (value) => {
+    const normalizedValue = normalizeBatchSize(value);
+    if (normalizedValue !== value) {
+      generatorStore.setBatchSize(normalizedValue);
+    }
+  },
+  { immediate: true }
+);
 
 // 聚焦时清除案例详情
 const handleFocus = () => {
@@ -733,10 +810,37 @@ const handleImageModelSend = async () => {
 
       if (intent.type === 'single_generate' && response.task_id) {
         // 单图生成
+        const initialStage = response.metadata?.stage || 'request_received'
+        const initialStageIndex = ({
+          request_received: 1,
+          queued: 2,
+          extracting_prompt: 3,
+          semantic_understanding: 4,
+          generating_images: 5,
+          validating_images: 6,
+          saving_images: 7,
+          recording_result: 8,
+          completed: 9
+        })[initialStage] || 1
+        const initialProgressValue = Number(response.metadata?.progress_percent ?? response.metadata?.progress)
+        const initialProgressPercent = Number.isFinite(initialProgressValue)
+          ? Math.max(0, Math.min(100, Math.round(initialProgressValue <= 1 ? initialProgressValue * 100 : initialProgressValue)))
+          : (initialStage === 'request_received' ? 6 : 12)
         generatorStore.updateMessage(assistantMessage.id, {
           content: response.message.content,
           taskId: response.task_id,
-          status: 'processing'
+          status: 'processing',
+          generationProgress: {
+            stage: initialStage,
+            stageLabel: response.metadata?.stage_label || '请求已接收',
+            stageMessage: response.metadata?.stage_message || response.message.content,
+            progressPercent: initialProgressPercent,
+            attempt: Number.isFinite(response.metadata?.attempt) ? Number(response.metadata.attempt) : 0,
+            stageIndex: initialStageIndex,
+            totalStages: 9,
+            updatedAt: response.metadata?.updated_at || '',
+            history: []
+          }
         })
 
         notification.info('生成任务已创建', `任务ID: ${response.task_id}`)
@@ -756,7 +860,20 @@ const handleImageModelSend = async () => {
           content: response.message.content,
           batchId: response.batch_id,
           status: 'processing',
-          batchCount: totalCount
+          batchCount: totalCount,
+          batchProgress: {
+            completed: 0,
+            total: totalCount,
+            images: [],
+            stage: response.metadata?.stage || 'queued',
+            stageLabel: response.metadata?.stage_label || '排队中',
+            stageMessage: response.metadata?.stage_message || response.message.content,
+            progressPercent: response.metadata?.status_detail?.progress_percent || 0,
+            running: response.metadata?.status_detail?.running_tasks || 0,
+            pending: response.metadata?.status_detail?.pending_tasks || totalCount,
+            failed: response.metadata?.status_detail?.failed_tasks || 0,
+            stageOverview: response.metadata?.status_detail?.stage_overview || [],
+          }
         })
 
         notification.info('批量任务已创建', `共 ${totalCount} 张图片`)

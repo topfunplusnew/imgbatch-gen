@@ -192,18 +192,6 @@
             </div>
           </div>
 
-          <!-- 批量数量 -->
-          <div class="space-y-2">
-            <label class="text-xs font-bold text-slate-500 uppercase">批量生成数量</label>
-            <input
-              type="number"
-              v-model.number="generatorStore.batchSize"
-              min="1"
-              max="50"
-              placeholder="输入数量"
-              class="w-full bg-white border border-border-dark rounded-xl text-sm py-2.5 px-4 focus:ring-1 focus:ring-primary">
-          </div>
-
           <!-- 负面提示词 -->
           <div class="space-y-2">
             <label class="text-xs font-bold text-slate-500 uppercase">负面提示词</label>
@@ -262,7 +250,7 @@
           <strong class="text-ink-950">图像质量：</strong>标准（快速）、高清（更好质量）、超清（最佳质量）
         </div>
         <div>
-          <strong class="text-ink-950">批量数量：</strong>一次性生成多张图像，数量1-50张
+          <strong class="text-ink-950">生图数量：</strong>可在聊天框底部“购买”左侧快捷调整，支持 1-50 张
         </div>
         <div>
           <strong class="text-ink-950">负面提示词：</strong>描述你不希望出现在图像中的内容
