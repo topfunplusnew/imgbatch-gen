@@ -48,7 +48,7 @@ async def poll_pending_orders():
                 logger.info(f"轮询查询: order={order.order_id}")
 
                 # 调用微信支付查询接口
-                status = wechat_service.query_order(out_trade_no=order.order_id)
+                status = await wechat_service.query_order(order_id=order.order_id)
 
                 trade_state = status.get('trade_state')
                 transaction_id = status.get('transaction_id')
@@ -126,29 +126,5 @@ async def check_expired_orders():
 
 # ==================== 任务注册 ====================
 
-def register_payment_tasks(scheduler):
-    """
-    注册支付相关定时任务
-
-    Args:
-        scheduler: APScheduler实例
-    """
-    # 轮询pending订单（每5分钟）
-    scheduler.add_job(
-        poll_pending_orders,
-        'interval',
-        minutes=5,
-        id='poll_pending_orders',
-        replace_existing=True,
-    )
-
-    # 检查过期订单（每小时）
-    scheduler.add_job(
-        check_expired_orders,
-        'interval',
-        hours=1,
-        id='check_expired_orders',
-        replace_existing=True,
-    )
-
-    logger.info("支付定时任务已注册")
+# 注意：这些任务现在由 BackgroundScheduler 调度，不再需要 APScheduler
+# 请在 src/api/main.py 中注册这些任务
