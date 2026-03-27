@@ -829,11 +829,36 @@ export const api = {
   },
 
   /**
+   * 创建H5支付订单（手机网页支付）
+   */
+  async createH5RechargeOrder(rechargeOptionId: string, clientIp: string): Promise<{
+    order_id: string
+    user_id: string
+    order_type: string
+    amount: number
+    amount_yuan: number
+    payment_method: string
+    status: string
+    subject: string
+    created_at: string
+    expire_time: string | null
+    qr_code_url: string | null
+    pay_url: string | null
+  }> {
+    const response = await apiClient.post('/api/v1/payment/create-h5', {
+      recharge_option_id: rechargeOptionId,
+      client_ip: clientIp
+    })
+    return response.data
+  },
+
+  /**
    * 获取支付二维码
    */
   async getPaymentQrcode(orderId: string): Promise<{
     order_id: string
     qr_code_url: string
+    pay_url: string | null
     amount: number
     amount_yuan: number
     status: string

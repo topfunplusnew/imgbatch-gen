@@ -1,6 +1,7 @@
 """支付API路由"""
 
 from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from loguru import logger
@@ -120,38 +121,42 @@ async def create_payment_order(
     # 调用支付接口
     qr_code_url = None
     pay_url = None
+    prepay_id = None
 
-    if body.payment_method == "wechat":
-        wechat_service = get_wechat_pay_service()
-        result = await wechat_service.create_native_pay(
-            order_id=order.order_id,
-            amount=order.amount,
-            subject=order.subject,
-        )
-        qr_code_url = result.get("code_url")
-        order.prepay_id = result.get("prepay_id")
-        order.qr_code_url = qr_code_url
+    try:
+        if body.payment_method == "wechat":
+            wechat_service = get_wechat_pay_service()
+            result = await wechat_service.create_native_pay(
+                order_id=order.order_id,
+                amount=order.amount,
+                subject=order.subject,
+            )
+            qr_code_url = result.get("code_url")
+            prepay_id = result.get("prepay_id")
 
-    elif body.payment_method == "alipay":
-        alipay_service = get_alipay_service()
-        result = await alipay_service.create_trade_precreate(
-            order_id=order.order_id,
-            amount=order.amount,
-            subject=order.subject,
-        )
-        qr_code_url = result.get("qr_code_url")
-        order.qr_code_url = qr_code_url
+        elif body.payment_method == "alipay":
+            alipay_service = get_alipay_service()
+            result = await alipay_service.create_trade_precreate(
+                order_id=order.order_id,
+                amount=order.amount,
+                subject=order.subject,
+            )
+            qr_code_url = result.get("qr_code_url")
 
-    # 更新订单
-    async with payment_service.db_manager.get_session() as session:
-        from sqlalchemy import select
-        from ...database import PaymentOrder
-        stmt = select(PaymentOrder).where(PaymentOrder.order_id == order.order_id)
-        result = await session.execute(stmt)
-        db_order = result.scalar_one_or_none()
-        if db_order:
-            db_order.qr_code_url = qr_code_url
-            await session.commit()
+        # 更新订单支付信息
+        if qr_code_url or prepay_id:
+            await payment_service.update_order_payment_info(
+                order_id=order.order_id,
+                qr_code_url=qr_code_url,
+                prepay_id=prepay_id,
+                pay_url=pay_url,
+            )
+
+    except Exception as e:
+        # 支付网关调用失败，取消订单
+        logger.error(f"创建支付订单失败: {order.order_id}, error={str(e)}")
+        await payment_service.cancel_order(order.order_id)
+        raise HTTPException(status_code=500, detail=f"创建支付订单失败: {str(e)}")
 
     return OrderResponse(
         order_id=order.order_id,
@@ -209,27 +214,32 @@ async def create_h5_payment_order(
         body=f"充值 {selected_option['amount_yuan']} 元，获得 {selected_option['points']} 积分",
     )
 
-    # 调用微信H5支付接口
-    wechat_service = get_wechat_pay_service()
-    result = await wechat_service.create_h5_pay(
-        order_id=order.order_id,
-        amount=order.amount,
-        subject=order.subject,
-        client_ip=body.client_ip,
-    )
-    h5_url = result.get("h5_url")
+    h5_url = None
 
-    # 更新订单
-    async with payment_service.db_manager.get_session() as session:
-        from sqlalchemy import select
-        from ...database import PaymentOrder
-        stmt = select(PaymentOrder).where(PaymentOrder.order_id == order.order_id)
-        db_result = await session.execute(stmt)
-        db_order = db_result.scalar_one_or_none()
-        if db_order:
-            db_order.pay_url = h5_url
-            db_order.payment_channel = "h5"
-            await session.commit()
+    try:
+        # 调用微信H5支付接口
+        wechat_service = get_wechat_pay_service()
+        result = await wechat_service.create_h5_pay(
+            order_id=order.order_id,
+            amount=order.amount,
+            subject=order.subject,
+            client_ip=body.client_ip,
+        )
+        h5_url = result.get("h5_url")
+
+        # 更新订单支付信息
+        if h5_url:
+            await payment_service.update_order_payment_info(
+                order_id=order.order_id,
+                pay_url=h5_url,
+                payment_channel="h5",
+            )
+
+    except Exception as e:
+        # 支付网关调用失败，取消订单
+        logger.error(f"创建H5支付订单失败: {order.order_id}, error={str(e)}")
+        await payment_service.cancel_order(order.order_id)
+        raise HTTPException(status_code=500, detail=f"创建H5支付订单失败: {str(e)}")
 
     return OrderResponse(
         order_id=order.order_id,
@@ -507,7 +517,3 @@ async def alipay_pay_callback(request: Request):
             return "fail"
 
     return "success"
-
-
-# 导入Response用于微信回调
-from fastapi.responses import Response

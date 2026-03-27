@@ -124,14 +124,16 @@ class Settings(BaseSettings):
     smtp_from: Optional[str] = "lrb1015@126.com"
     smtp_use_tls: bool = True
 
-    wechat_appid: Optional[str] = None
-    wechat_mch_id: Optional[str] = None
-    wechat_api_key: Optional[str] = None  # APIv3密钥
-    wechat_cert_serial_no: Optional[str] = None  # 商户证书序列号
-    wechat_cert_path: Optional[str] = None  # 商户证书路径（可选）
+    wechat_appid: Optional[str] = None  # 应用ID
+    wechat_mch_id: Optional[str] = None  # 商户号
+    wechat_api_key: Optional[str] = None  # APIv3密钥（32位）
+    wechat_cert_serial_no: Optional[str] = None  # 商户API证书序列号
     wechat_key_path: Optional[str] = None  # 商户私钥文件路径
     wechat_notify_url: Optional[str] = None  # 支付回调URL
-    wechat_cert_dir: Optional[str] = None  # 证书缓存目录（可选，自动下载证书模式）
+
+    # 平台公钥模式（2024年9月后新账户使用）
+    wechat_public_key: Optional[str] = None  # 微信支付平台公钥内容
+    wechat_public_key_id: Optional[str] = None  # 微信支付平台公钥ID
 
     alipay_app_id: Optional[str] = None
     alipay_private_key: Optional[str] = None

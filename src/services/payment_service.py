@@ -89,6 +89,51 @@ class PaymentService:
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
+    async def update_order_payment_info(
+        self,
+        order_id: str,
+        qr_code_url: Optional[str] = None,
+        prepay_id: Optional[str] = None,
+        pay_url: Optional[str] = None,
+        payment_channel: Optional[str] = None,
+    ) -> Optional[PaymentOrder]:
+        """
+        更新订单支付信息（二维码URL、预支付ID等）
+
+        Args:
+            order_id: 订单号
+            qr_code_url: 支付二维码URL
+            prepay_id: 预支付ID
+            pay_url: 支付跳转URL（H5支付用）
+            payment_channel: 支付渠道
+
+        Returns:
+            更新后的订单，订单不存在返回None
+        """
+        async with self.db_manager.get_session() as session:
+            from sqlalchemy import select
+            stmt = select(PaymentOrder).where(PaymentOrder.order_id == order_id)
+            result = await session.execute(stmt)
+            order = result.scalar_one_or_none()
+
+            if not order:
+                return None
+
+            if qr_code_url is not None:
+                order.qr_code_url = qr_code_url
+            if prepay_id is not None:
+                order.prepay_id = prepay_id
+            if pay_url is not None:
+                order.pay_url = pay_url
+            if payment_channel is not None:
+                order.payment_channel = payment_channel
+
+            await session.commit()
+            await session.refresh(order)
+
+            logger.info(f"更新订单支付信息: {order_id}")
+            return order
+
     async def get_user_orders(
         self, user_id: str, limit: int = 50, offset: int = 0
     ) -> List[PaymentOrder]:
@@ -161,6 +206,7 @@ class PaymentService:
         order_id: str,
         transaction_id: str,
         notify_data: Optional[Dict[str, Any]] = None,
+        paid_amount: Optional[int] = None,  # 支付金额（分），用于校验
     ) -> bool:
         """
         处理支付成功回调
@@ -169,6 +215,7 @@ class PaymentService:
             order_id: 订单号
             transaction_id: 第三方交易ID
             notify_data: 回调原始数据
+            paid_amount: 实际支付金额（分），用于安全校验
 
         Returns:
             是否处理成功
@@ -178,9 +225,23 @@ class PaymentService:
             logger.warning(f"订单不存在: {order_id}")
             return False
 
+        # 幂等性检查：订单已支付
         if order.status == "paid":
             logger.info(f"订单已处理，跳过: {order_id}")
             return True
+
+        # 状态检查：订单必须是待支付状态
+        if order.status != "pending":
+            logger.warning(f"订单状态异常，无法处理: {order_id}, status={order.status}")
+            return False
+
+        # 金额校验：确保支付金额与订单金额一致
+        if paid_amount is not None and paid_amount != order.amount:
+            logger.error(
+                f"金额不匹配! order={order_id}, "
+                f"order_amount={order.amount}, paid_amount={paid_amount}"
+            )
+            return False
 
         # 更新订单状态
         order = await self.update_order_status(order_id, "paid", transaction_id, notify_data)
@@ -257,13 +318,72 @@ class PaymentService:
 
 # 微信支付相关
 class WeChatPayService:
-    """微信支付服务"""
+    """微信支付服务 - 使用 wechatpayv3 异步 SDK（平台公钥模式）"""
 
     def __init__(self):
-        self.appid = settings.wechat_appid if hasattr(settings, 'wechat_appid') else ""
-        self.mch_id = settings.wechat_mch_id if hasattr(settings, 'wechat_mch_id') else ""
-        self.api_key = settings.wechat_api_key if hasattr(settings, 'wechat_api_key') else ""
-        self.notify_url = settings.wechat_notify_url if hasattr(settings, 'wechat_notify_url') else ""
+        self.appid = settings.wechat_appid or ""
+        self.mch_id = settings.wechat_mch_id or ""
+        self.api_key = settings.wechat_api_key or ""  # APIv3密钥
+        self.cert_serial_no = settings.wechat_cert_serial_no or ""  # 商户证书序列号
+        self.key_path = settings.wechat_key_path or ""  # 商户私钥路径
+        self.notify_url = settings.wechat_notify_url or ""
+        # 平台公钥模式
+        self.public_key = settings.wechat_public_key or ""  # 微信支付平台公钥
+        self.public_key_id = settings.wechat_public_key_id or ""  # 微信支付平台公钥ID
+        self._private_key = None
+
+    def _load_private_key(self) -> str:
+        """加载商户私钥"""
+        if self._private_key:
+            return self._private_key
+
+        if not self.key_path:
+            raise ValueError("微信支付商户私钥路径未配置 (wechat_key_path)")
+
+        # 同步读取私钥文件
+        try:
+            with open(self.key_path, 'r', encoding='utf-8') as f:
+                self._private_key = f.read()
+            return self._private_key
+        except Exception as e:
+            logger.error(f"读取商户私钥失败: {e}")
+            raise ValueError(f"读取商户私钥失败: {e}")
+
+    def _is_configured(self) -> bool:
+        """检查是否配置完整（平台公钥模式）"""
+        return all([
+            self.appid,
+            self.mch_id,
+            self.api_key,
+            self.cert_serial_no,
+            self.key_path,
+            self.public_key,
+            self.public_key_id,
+        ])
+
+    async def _create_client(self):
+        """创建微信支付客户端（异步版本 - 平台公钥模式）"""
+        from wechatpayv3.async_ import AsyncWeChatPay, WeChatPayType
+
+        private_key = self._load_private_key()
+
+        # 创建异步客户端（平台公钥模式）
+        client = AsyncWeChatPay(
+            wechatpay_type=WeChatPayType.NATIVE,
+            mchid=self.mch_id,
+            private_key=private_key,
+            cert_serial_no=self.cert_serial_no,
+            apiv3_key=self.api_key,
+            appid=self.appid,
+            notify_url=self.notify_url,
+            logger=logger,
+            partner_mode=False,
+            # 平台公钥模式参数
+            public_key=self.public_key,
+            public_key_id=self.public_key_id,
+        )
+
+        return client
 
     async def create_native_pay(
         self, order_id: str, amount: int, subject: str
@@ -279,21 +399,228 @@ class WeChatPayService:
         Returns:
             {"code_url": "二维码链接", "prepay_id": "预支付ID"}
         """
-        # TODO: 调用微信支付API
-        # 开发环境返回模拟数据
-        logger.info(f"[模拟] 创建微信Native支付: order={order_id}, amount={amount}")
+        from wechatpayv3.async_ import WeChatPayType
+        import json
 
-        mock_code_url = f"weixin://wxpay/bizpayurl?pr={mock_random_string()}"
+        if not self._is_configured():
+            # 配置不完整，使用模拟模式
+            logger.info(f"[模拟] 创建微信Native支付: order={order_id}, amount={amount}")
+            return {
+                "code_url": f"weixin://wxpay/bizpayurl?pr={mock_random_string()}",
+                "prepay_id": f"wx{mock_random_string(32)}",
+            }
 
-        return {
-            "code_url": mock_code_url,
-            "prepay_id": f"wx{mock_random_string(32)}",
-        }
+        try:
+            async with await self._create_client() as client:
+                code, message = await client.pay(
+                    description=subject,
+                    out_trade_no=order_id,
+                    amount={'total': amount, 'currency': 'CNY'},
+                    pay_type=WeChatPayType.NATIVE,
+                )
 
-    def verify_notify(self, data: Dict[str, Any]) -> bool:
-        """验证微信支付回调签名"""
-        # TODO: 实现签名验证
-        return True
+                if code == 200:
+                    data = json.loads(message) if isinstance(message, str) else message
+                    code_url = data.get('code_url', '')
+                    logger.info(f"微信Native支付创建成功: order={order_id}, code_url={code_url[:50]}...")
+                    return {
+                        "code_url": code_url,
+                        "prepay_id": data.get('prepay_id', ''),
+                    }
+                else:
+                    logger.error(f"微信Native支付创建失败: code={code}, message={message}")
+                    raise Exception(f"微信支付下单失败: {message}")
+
+        except Exception as e:
+            logger.error(f"创建微信Native支付异常: {e}")
+            raise
+
+    async def create_h5_pay(
+        self, order_id: str, amount: int, subject: str, client_ip: str
+    ) -> Dict[str, Any]:
+        """
+        创建微信H5支付（手机网页支付）
+
+        Args:
+            order_id: 订单号
+            amount: 金额（分）
+            subject: 商品描述
+            client_ip: 客户端IP地址
+
+        Returns:
+            {"h5_url": "支付跳转链接"}
+        """
+        from wechatpayv3.async_ import WeChatPayType
+        import json
+
+        if not self._is_configured():
+            # 配置不完整，使用模拟模式
+            logger.info(f"[模拟] 创建微信H5支付: order={order_id}, amount={amount}")
+            return {
+                "h5_url": f"https://wx.tenpay.com/cgi-bin/mmpayweb-bin/checkmweb?prepay_id=wx{mock_random_string(32)}&package=mock"
+            }
+
+        try:
+            async with await self._create_client() as client:
+                code, message = await client.pay(
+                    description=subject,
+                    out_trade_no=order_id,
+                    amount={'total': amount, 'currency': 'CNY'},
+                    scene_info={
+                        'payer_client_ip': client_ip,
+                        'h5_info': {'type': 'Wap'}
+                    },
+                    pay_type=WeChatPayType.H5,
+                )
+
+                if code == 200:
+                    data = json.loads(message) if isinstance(message, str) else message
+                    h5_url = data.get('h5_url', '')
+                    logger.info(f"微信H5支付创建成功: order={order_id}, h5_url={h5_url[:50]}...")
+                    return {
+                        "h5_url": h5_url,
+                    }
+                else:
+                    logger.error(f"微信H5支付创建失败: code={code}, message={message}")
+                    raise Exception(f"微信H5支付下单失败: {message}")
+
+        except Exception as e:
+            logger.error(f"创建微信H5支付异常: {e}")
+            raise
+
+    async def query_order(self, order_id: str) -> Dict[str, Any]:
+        """
+        查询订单状态
+
+        Args:
+            order_id: 商户订单号
+
+        Returns:
+            订单状态信息
+        """
+        import json
+
+        if not self._is_configured():
+            logger.info(f"[模拟] 查询微信订单: order={order_id}")
+            return {
+                "trade_state": "NOTPAY",
+                "out_trade_no": order_id,
+            }
+
+        try:
+            async with await self._create_client() as client:
+                code, message = await client.query(out_trade_no=order_id)
+
+                if code == 200:
+                    data = json.loads(message) if isinstance(message, str) else message
+                    logger.info(f"查询微信订单成功: order={order_id}, state={data.get('trade_state')}")
+                    return data
+                else:
+                    logger.error(f"查询微信订单失败: code={code}, message={message}")
+                    raise Exception(f"查询订单失败: {message}")
+
+        except Exception as e:
+            logger.error(f"查询微信订单异常: {e}")
+            raise
+
+    async def close_order(self, order_id: str) -> bool:
+        """
+        关闭订单
+
+        Args:
+            order_id: 商户订单号
+
+        Returns:
+            是否关闭成功
+        """
+        if not self._is_configured():
+            logger.info(f"[模拟] 关闭微信订单: order={order_id}")
+            return True
+
+        try:
+            async with await self._create_client() as client:
+                code, message = await client.close(out_trade_no=order_id)
+
+                if code in (200, 204):
+                    logger.info(f"关闭微信订单成功: order={order_id}")
+                    return True
+                else:
+                    logger.warning(f"关闭微信订单失败: code={code}, message={message}")
+                    return False
+
+        except Exception as e:
+            logger.error(f"关闭微信订单异常: {e}")
+            return False
+
+    async def handle_callback(self, headers: Dict[str, str], body: bytes) -> Optional[Dict[str, Any]]:
+        """
+        处理微信支付回调通知（验签 + 解密）
+
+        Args:
+            headers: HTTP请求头（需要包含 Wechatpay-* 头）
+            body: 请求体原始字节
+
+        Returns:
+            解密后的回调数据，验签失败返回 None
+        """
+        import json
+
+        if not self._is_configured():
+            # 模拟模式，不验签
+            logger.warning("[模拟] 微信回调未验签")
+            try:
+                return json.loads(body.decode('utf-8'))
+            except Exception:
+                return None
+
+        try:
+            # 将 headers 的 key 转换为小写格式（FastAPI 兼容）
+            headers_lower = {k.lower(): v for k, v in headers.items()}
+
+            # 获取必要的回调头信息（SDK 支持小写的 fastapi 格式）
+            callback_headers = {
+                'wechatpay-serial': headers_lower.get('wechatpay-serial', ''),
+                'wechatpay-nonce': headers_lower.get('wechatpay-nonce', ''),
+                'wechatpay-signature': headers_lower.get('wechatpay-signature', ''),
+                'wechatpay-timestamp': headers_lower.get('wechatpay-timestamp', ''),
+            }
+
+            # 使用同步客户端的 callback 方法（验签不需要网络请求）- 平台公钥模式
+            from wechatpayv3 import WeChatPay, WeChatPayType
+
+            private_key = self._load_private_key()
+            sync_client = WeChatPay(
+                wechatpay_type=WeChatPayType.NATIVE,
+                mchid=self.mch_id,
+                private_key=private_key,
+                cert_serial_no=self.cert_serial_no,
+                apiv3_key=self.api_key,
+                appid=self.appid,
+                notify_url=self.notify_url,
+                logger=logger,
+                partner_mode=False,
+                # 平台公钥模式参数
+                public_key=self.public_key,
+                public_key_id=self.public_key_id,
+            )
+
+            # 使用 SDK 进行验签和解密
+            result = sync_client.callback(
+                headers=callback_headers,
+                body=body.decode('utf-8')
+            )
+
+            if result is None:
+                logger.error("微信回调验签失败")
+                return None
+
+            # result 包含解密后的 resource 字段
+            logger.info(f"微信回调验签解密成功: order={result.get('out_trade_no', 'unknown')}")
+            return result
+
+        except Exception as e:
+            logger.error(f"微信回调验签失败: {e}")
+            return None
 
 
 # 支付宝相关
