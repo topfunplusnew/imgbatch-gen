@@ -91,12 +91,12 @@ export const useCaseStore = defineStore('cases', () => {
 
     try {
       const offset = page * pageSize.value
-      const result = await api.getPublishedCases(
-        selectedCategory.value || undefined,
-        searchQuery.value || undefined,
-        pageSize.value,
-        offset
-      )
+      const result = await api.getPublishedCases({
+        category: selectedCategory.value || undefined,
+        keyword: searchQuery.value || undefined,
+        limit: pageSize.value,
+        offset,
+      })
 
       if (append) {
         cases.value = [...cases.value, ...result]
@@ -108,10 +108,10 @@ export const useCaseStore = defineStore('cases', () => {
       hasMore.value = result.length === pageSize.value
 
       // 获取总数
-      const countResult = await api.getPublishedCasesCount(
-        selectedCategory.value || undefined,
-        searchQuery.value || undefined
-      )
+      const countResult = await api.getPublishedCasesCount({
+        category: selectedCategory.value || undefined,
+        keyword: searchQuery.value || undefined,
+      })
       totalCount.value = countResult.count
     } catch (error: any) {
       console.error('获取案例列表失败:', error)
