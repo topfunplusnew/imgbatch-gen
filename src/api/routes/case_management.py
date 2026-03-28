@@ -19,12 +19,11 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from loguru import logger
 import json
-from pathlib import Path
 
 from ...database import get_db_manager
 from ...database.models import Case
 from ..auth import RequiredAuthDependency, OptionalAuthDependency
-from ...config.settings import settings
+from ...services.media_storage_service import save_uploaded_image, delete_stored_image_assets
 
 
 # ==================== 路由定义 ====================
@@ -132,60 +131,14 @@ def case_to_response(case: Case) -> CaseResponse:
 
 async def save_case_image(image_file: UploadFile, user_id: str) -> dict:
     """保存案例图片并返回URL信息"""
-    from ...storage.local_storage import LocalStorage
-
     try:
-        # 读取图片数据
-        image_data = await image_file.read()
-
-        # 创建存储实例
-        storage = LocalStorage()
-
-        # 生成唯一文件名
         import uuid
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        case_id = str(uuid.uuid4())
-        filename = f"case_{timestamp}_{case_id[:8]}.{image_file.filename.split('.')[-1]}"
 
-        # 保存到cases子目录
-        cases_dir = Path(storage.storage_path) / "cases"
-        cases_dir.mkdir(parents=True, exist_ok=True)
-
-        file_path = cases_dir / filename
-
-        # 保存原图
-        with open(file_path, "wb") as f:
-            f.write(image_data)
-
-        # 生成缩略图
-        thumbnail_url = None
-        try:
-            from PIL import Image
-            import io
-
-            thumbnail_data = storage._make_thumbnail(image_data)
-            thumb_filename = filename.rsplit(".", 1)[0] + "_thumb.jpg"
-            thumb_path = cases_dir / thumb_filename
-
-            with open(thumb_path, "wb") as f:
-                f.write(thumbnail_data)
-
-            thumb_relative = thumb_path.relative_to(storage.storage_path)
-            thumbnail_url = f"{settings.storage_url_prefix}/{thumb_relative.as_posix()}"
-        except Exception as e:
-            logger.warning(f"生成缩略图失败: {e}")
-
-        # 生成URL
-        relative_path = file_path.relative_to(storage.storage_path)
-        image_url = f"{settings.storage_url_prefix}/{relative_path.as_posix()}"
-
-        return {
-            "image_url": image_url,
-            "thumbnail_url": thumbnail_url,
-            "image_path": str(file_path),
-        }
-
+        return await save_uploaded_image(
+            image_file,
+            storage_task_id=f"cases/{user_id}/{uuid.uuid4().hex[:12]}",
+            prompt=f"case-image-{user_id}",
+        )
     except Exception as e:
         logger.error(f"保存案例图片失败: {e}")
         raise HTTPException(status_code=500, detail=f"保存图片失败: {str(e)}")
@@ -214,7 +167,7 @@ async def create_case(
     创建新案例
 
     - 支持上传图片（自动生成缩略图）
-    - 图片保存到storage/cases目录
+    - 图片会按当前存储配置保存到本地或 MinIO
     """
     db_manager = get_db_manager()
 
@@ -461,6 +414,7 @@ async def update_case_image(
 
         # 保存新图片
         image_info = await save_case_image(image, admin["id"])
+        old_image_path = case.image_path
 
         case.image_url = image_info["image_url"]
         case.thumbnail_url = image_info["thumbnail_url"]
@@ -469,6 +423,7 @@ async def update_case_image(
         await session.commit()
         await session.refresh(case)
 
+    delete_stored_image_assets(old_image_path)
     logger.info(f"管理员 {admin['id']} 更新案例图片: {case_id}")
     return case_to_response(case)
 
@@ -491,21 +446,13 @@ async def delete_case(
         if not case:
             raise HTTPException(status_code=404, detail="案例不存在")
 
-        # 删除图片文件
-        if case.image_path:
-            try:
-                Path(case.image_path).unlink(missing_ok=True)
-                # 删除缩略图
-                if case.image_path:
-                    thumb_path = Path(case.image_path).parent / (Path(case.image_path).stem + "_thumb.jpg")
-                    thumb_path.unlink(missing_ok=True)
-            except Exception as e:
-                logger.warning(f"删除案例图片文件失败: {e}")
+        old_image_path = case.image_path
 
         # 删除数据库记录
         await session.execute(delete(Case).where(Case.id == case_id))
         await session.commit()
 
+    delete_stored_image_assets(old_image_path)
     logger.info(f"管理员 {admin['id']} 删除案例: {case_id}")
     return {"success": True, "message": "案例已删除"}
 

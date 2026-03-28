@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from minio import Minio
 from ...database import get_db_manager
 from ...config.settings import settings
+from ...storage.minio_storage import ensure_bucket_public_read_policy
 
 router = APIRouter(prefix="/api/v1/files", tags=["files"])
 
@@ -419,6 +420,7 @@ async def get_minio_presigned_url(request: Request, filename: str):
         # 确保bucket存在
         if not minio_client.bucket_exists(bucket):
             minio_client.make_bucket(bucket)
+        ensure_bucket_public_read_policy(minio_client, bucket)
 
         # 生成预签名上传URL（有效期1小时）
         from datetime import timedelta

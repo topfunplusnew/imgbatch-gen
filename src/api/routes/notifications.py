@@ -11,9 +11,9 @@ from datetime import datetime
 from loguru import logger
 
 from ...services.notification_service import get_notification_service
+from ...services.media_storage_service import save_uploaded_image
 from ...utils.sse_manager import stream_sse
 from ..auth import RequiredAuthDependency, get_current_user_optional
-from ..routes.files import get_safe_filename, ensure_upload_directory, get_file_url
 import os
 
 
@@ -249,8 +249,6 @@ async def upload_cover_image(
     user: dict = Depends(RequiredAuthDependency()),
 ):
     """上传公告封面图片"""
-    from fastapi import UploadFile, File
-
     # 验证管理员权限
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="需要管理员权限")
@@ -270,35 +268,33 @@ async def upload_cover_image(
     if file_size > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="图片大小不能超过5MB")
 
-    # 生成安全的文件名
-    timestamp = str(int(datetime.now().timestamp()))
-    safe_filename = f"announcement_cover_{announcement_id}_{timestamp}{file_extension}"
-
-    # 确保上传目录存在
-    upload_dir = ensure_upload_directory()
-    file_path = os.path.join(upload_dir, safe_filename)
-
-    # 保存文件
-    with open(file_path, 'wb') as f:
-        f.write(file_content)
-
-    # 生成文件访问URL
-    file_url = get_file_url(safe_filename)
+    await file.seek(0)
+    image_info = await save_uploaded_image(
+        file,
+        storage_task_id=f"announcements/{announcement_id}",
+        prompt=f"announcement-cover-{announcement_id}",
+    )
 
     # 更新公告
     service = get_notification_service()
     announcement = await service.update_announcement(
         announcement_id=announcement_id,
-        data={"cover_image_url": file_url, "cover_image_path": file_path},
+        data={
+            "cover_image_url": image_info["image_url"],
+            "cover_image_path": image_info["image_path"],
+        },
         admin_id=user["id"]
     )
 
     if not announcement:
         raise HTTPException(status_code=404, detail="公告不存在")
 
-    logger.info(f"上传公告封面成功: {safe_filename}")
+    logger.info(f"上传公告封面成功: {image_info['image_path']}")
 
-    return {"url": file_url, "filename": safe_filename}
+    return {
+        "url": image_info["image_url"],
+        "filename": os.path.basename(image_info["image_path"]),
+    }
 
 
 # ==================== 用户端点 ====================

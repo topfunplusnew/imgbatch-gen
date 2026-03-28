@@ -189,7 +189,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { api } from '@/services/api'
 
 const props = defineProps({
@@ -204,6 +204,7 @@ const emit = defineEmits(['close', 'save'])
 const fileInput = ref(null)
 const imageFile = ref(null)
 const imagePreview = ref('')
+const previewObjectUrl = ref('')
 const saving = ref(false)
 const tagsInput = ref('')
 const categoryInput = ref('')
@@ -309,6 +310,7 @@ watch(() => form.value.category, (newVal) => {
 
 // 初始化表单
 watch(() => props.caseData, (newData) => {
+  revokePreviewObjectUrl()
   if (newData) {
     form.value = {
       title: newData.title || '',
@@ -391,12 +393,20 @@ const handleDrop = (event) => {
 
 const setImageFile = (file) => {
   imageFile.value = file
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    imagePreview.value = e.target.result
-  }
-  reader.readAsDataURL(file)
+  revokePreviewObjectUrl()
+  previewObjectUrl.value = URL.createObjectURL(file)
+  imagePreview.value = previewObjectUrl.value
 }
+
+const revokePreviewObjectUrl = () => {
+  if (!previewObjectUrl.value) return
+  URL.revokeObjectURL(previewObjectUrl.value)
+  previewObjectUrl.value = ''
+}
+
+onBeforeUnmount(() => {
+  revokePreviewObjectUrl()
+})
 
 const parseTags = () => {
   if (tagsInput.value) {

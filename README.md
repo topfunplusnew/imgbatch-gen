@@ -118,7 +118,8 @@ MINIO_ACCESS_KEY=minioadmin
 MINIO_SECRET_KEY=minioadmin
 MINIO_BUCKET_NAME=images
 MINIO_SECURE=false
-MINIO_URL_PREFIX=http://127.0.0.1:9000/images
+PUBLIC_BASE_URL=http://127.0.0.1:8080
+MINIO_URL_PREFIX=/storage
 ```
 
 说明：

@@ -1,5 +1,6 @@
 """MinIO图片存储"""
 
+import json
 import uuid
 from typing import Optional
 from datetime import datetime, timedelta
@@ -15,6 +16,74 @@ from ..models.image import ImageResult, ImageParams
 
 # 设置日志记录器
 logger = logging.getLogger(__name__)
+
+
+def build_public_minio_url_prefix(
+    endpoint: str,
+    bucket_name: str,
+    secure: bool,
+    url_prefix: Optional[str] = None,
+) -> str:
+    """构建浏览器可访问的 MinIO 前缀地址。"""
+    prefix = (url_prefix or settings.minio_url_prefix or "").strip()
+
+    if prefix:
+        normalized_prefix = prefix.rstrip("/")
+        if normalized_prefix.startswith(("http://", "https://")):
+            return normalized_prefix
+
+        public_base_url = (settings.public_base_url or "").rstrip("/")
+        if public_base_url:
+            normalized_path = normalized_prefix if normalized_prefix.startswith("/") else f"/{normalized_prefix}"
+            return f"{public_base_url}{normalized_path}"
+
+        return normalized_prefix
+
+    scheme = "https" if secure else "http"
+    return f"{scheme}://{endpoint}/{bucket_name}"
+
+
+def build_public_minio_object_url(
+    object_name: str,
+    *,
+    endpoint: Optional[str] = None,
+    bucket_name: Optional[str] = None,
+    secure: Optional[bool] = None,
+    url_prefix: Optional[str] = None,
+) -> str:
+    """构建对象的对外访问 URL。"""
+    resolved_bucket = bucket_name or settings.minio_bucket_name or "images"
+    resolved_endpoint = endpoint or settings.minio_endpoint
+    resolved_secure = secure if secure is not None else settings.minio_secure
+    prefix = build_public_minio_url_prefix(
+        endpoint=resolved_endpoint,
+        bucket_name=resolved_bucket,
+        secure=resolved_secure,
+        url_prefix=url_prefix,
+    )
+    return f"{prefix.rstrip('/')}/{object_name.lstrip('/')}"
+
+
+def ensure_bucket_public_read_policy(client: Minio, bucket_name: str) -> None:
+    """确保 bucket 允许匿名读取对象。"""
+    policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {"AWS": ["*"]},
+                "Action": ["s3:GetObject"],
+                "Resource": [f"arn:aws:s3:::{bucket_name}/*"],
+            }
+        ],
+    }
+
+    try:
+        client.set_bucket_policy(bucket_name, json.dumps(policy))
+        logger.info("已为 bucket %s 设置匿名读策略", bucket_name)
+    except S3Error as exc:
+        logger.error("设置 bucket %s 匿名读策略失败: %s", bucket_name, exc)
+        raise
 
 
 class MinioStorage:
@@ -35,11 +104,12 @@ class MinioStorage:
         self.secret_key = secret_key or settings.minio_secret_key
         self.bucket_name = bucket_name or settings.minio_bucket_name
         self.secure = secure if secure is not None else settings.minio_secure
-        prefix = url_prefix or settings.minio_url_prefix
-        if not prefix:
-            scheme = "https" if self.secure else "http"
-            prefix = f"{scheme}://{self.endpoint}/{self.bucket_name}"
-        self.url_prefix = prefix
+        self.url_prefix = build_public_minio_url_prefix(
+            endpoint=self.endpoint,
+            bucket_name=self.bucket_name,
+            secure=self.secure,
+            url_prefix=url_prefix,
+        )
 
         # 初始化MinIO客户端
         self.client = Minio(
@@ -61,6 +131,8 @@ class MinioStorage:
                 logger.info(f"成功创建bucket: {self.bucket_name}")
             else:
                 logger.info(f"使用现有bucket: {self.bucket_name}")
+
+            ensure_bucket_public_read_policy(self.client, self.bucket_name)
         except S3Error as e:
             error_msg = f"无法访问MinIO或创建bucket {self.bucket_name}: {str(e)}"
             logger.error(error_msg)
@@ -131,13 +203,25 @@ class MinioStorage:
                     len(thumb_data),
                     content_type="image/jpeg"
                 )
-                thumbnail_url = f"{self.url_prefix.rstrip('/')}/{thumb_object_name.lstrip('/')}"
+                thumbnail_url = build_public_minio_object_url(
+                    thumb_object_name,
+                    endpoint=self.endpoint,
+                    bucket_name=self.bucket_name,
+                    secure=self.secure,
+                    url_prefix=self.url_prefix,
+                )
                 logger.info(f"成功上传缩略图: {thumb_object_name}")
             except Exception as e:
                 logger.warning(f"生成缩略图失败，使用原图: {e}")
 
             # 生成URL
-            url = f"{self.url_prefix.rstrip('/')}/{object_name.lstrip('/')}"
+            url = build_public_minio_object_url(
+                object_name,
+                endpoint=self.endpoint,
+                bucket_name=self.bucket_name,
+                secure=self.secure,
+                url_prefix=self.url_prefix,
+            )
 
             # 创建结果对象
             image_id = object_name.replace(f".{image_format}", "")
