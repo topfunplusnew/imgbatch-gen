@@ -88,7 +88,9 @@ jobs:
           if [ -d sql ]; then cp -r sql deploy-root/; fi
           cp web/Dockerfile web/package.json web/package-lock.json web/index.html web/jsconfig.json web/postcss.config.js web/tailwind.config.js web/vite.config.js web/nginx.conf web/.env.production deploy-root/web/
           if [ -d web/public ]; then cp -r web/public deploy-root/web/; fi
+          cp -r web/dist deploy-root/web/dist
           cp -r web/src deploy-root/web/src
+          test -f deploy-root/web/dist/index.html
           tar czf deploy-root.tgz -C deploy-root .
 
       - name: Upload deploy payload
@@ -345,6 +347,10 @@ jobs:
           fi
 
           curl -fsS "http://127.0.0.1:${frontend_port}/nginx-health" >/dev/null || {
+            "${compose_cmd[@]}" logs --tail=200 frontend
+            exit 1
+          }
+          curl -fsS "http://127.0.0.1:${frontend_port}/" >/dev/null || {
             "${compose_cmd[@]}" logs --tail=200 frontend
             exit 1
           }
