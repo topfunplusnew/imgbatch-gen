@@ -26,6 +26,7 @@ from ...providers import (
 from ...database import get_db_manager
 from ...workflows import build_pdf_prompt
 from .chat import _extract_api_key
+from ...utils.config_helper import require_relay_api_key
 
 
 def _debug_log(
@@ -478,8 +479,8 @@ async def unified_generate(
         prepared_params: List[ImageParams] = []
         prepared_user_inputs: List[str] = []
         consumed_inline_prompt = False
-        # API Key 可选，如果未提供则使用管理员统一配置
-        api_key = _extract_api_key(http_request)
+        # API Key 默认从 system_config 读取，不再依赖前端显式传递
+        api_key = await require_relay_api_key(_extract_api_key(http_request))
 
         # 处理image字段（参考图片）
         if image_file and hasattr(image_file, 'filename') and image_file.filename:
@@ -1131,4 +1132,3 @@ async def _handle_operation(
         status_code=400,
         detail=f"不支持的操作类型: {operation_type}，或当前 Provider({provider_name}) 不支持该操作",
     )
-

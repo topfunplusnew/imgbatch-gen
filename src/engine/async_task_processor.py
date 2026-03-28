@@ -8,6 +8,7 @@ from ..config.settings import settings
 from ..database import get_db_manager
 from ..database.async_task_manager import get_async_task_manager
 from ..providers.relay_client import RelayClient
+from ..utils.config_helper import require_relay_api_key, resolve_relay_config
 
 
 class AsyncTaskProcessor:
@@ -139,7 +140,8 @@ class AsyncTaskProcessor:
             api_key = credential["api_key"]
 
         if not credential_id:
-            raise ValueError("Async task is missing credential_id; API key must come from request.")
+            base_url, _ = await resolve_relay_config()
+            api_key = await require_relay_api_key()
 
         if not base_url:
             raise ValueError("Relay base URL is not configured for the async task.")

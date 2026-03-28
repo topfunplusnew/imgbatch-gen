@@ -17,8 +17,7 @@
                 <img
                   :src="getFilePreviewUrl(file)"
                   :alt="file.name"
-                  class="h-[60px] w-[60px] rounded-lg border border-border-dark object-cover"
-                  @load="revokeFilePreviewUrl(file)">
+                  class="h-[60px] w-[60px] rounded-lg border border-border-dark object-cover">
               </div>
               <span v-else class="material-symbols-outlined !text-sm text-primary">{{ getFileIcon(file) }}</span>
 
@@ -382,9 +381,8 @@ const handleFileSelect = (event) => {
 // 移除文件
 const removeFile = (index) => {
   const file = generatorStore.attachments[index];
-  if (file && filePreviewUrls.has(file.name)) {
-    URL.revokeObjectURL(filePreviewUrls.get(file.name));
-    filePreviewUrls.delete(file.name);
+  if (file) {
+    releaseFilePreviewUrl(file);
   }
   generatorStore.removeAttachment(index);
 };
@@ -425,22 +423,22 @@ const getFilePreviewUrl = (file) => {
   if (!isImageFile(file)) return null;
 
   // 如果已经创建过URL，直接返回
-  if (filePreviewUrls.has(file.name)) {
-    return filePreviewUrls.get(file.name);
+  if (filePreviewUrls.has(file)) {
+    return filePreviewUrls.get(file);
   }
 
   // 创建新的URL
   const url = URL.createObjectURL(file);
-  filePreviewUrls.set(file.name, url);
+  filePreviewUrls.set(file, url);
   return url;
 };
 
 // 释放文件预览URL
-const revokeFilePreviewUrl = (file) => {
-  if (filePreviewUrls.has(file.name)) {
-    URL.revokeObjectURL(filePreviewUrls.get(file.name));
-    // 不删除Map中的条目，保持引用以避免重复创建
-  }
+const releaseFilePreviewUrl = (file) => {
+  const previewUrl = filePreviewUrls.get(file);
+  if (!previewUrl) return;
+  URL.revokeObjectURL(previewUrl);
+  filePreviewUrls.delete(file);
 };
 
 // 清理所有预览URL
@@ -451,16 +449,32 @@ const cleanupFilePreviewUrls = () => {
   filePreviewUrls.clear();
 };
 
+const releaseMessageFilePreviewUrl = (fileMeta) => {
+  const previewUrl = fileMeta?.local_url || fileMeta?.preview_url;
+  if (!previewUrl || !String(previewUrl).startsWith('blob:')) return;
+  URL.revokeObjectURL(previewUrl);
+};
+
+const releaseMessageFilesPreviewUrls = (files = []) => {
+  files.forEach((fileMeta) => releaseMessageFilePreviewUrl(fileMeta));
+};
+
 /**
  * 从 File 对象构建消息文件元数据
  */
 const buildMessageFileMeta = (file) => {
-  return {
+  const messageFile = {
     name: file.name,
     type: file.type,
     size: file.size,
     url: null, // 上传前为 null，上传后更新
+  };
+
+  if (isImageFile(file)) {
+    messageFile.local_url = URL.createObjectURL(file);
   }
+
+  return messageFile;
 }
 
 /**
@@ -475,6 +489,11 @@ const patchMessageFilesWithUploadResults = (messageId, messageFiles, uploadResul
     if (uploadResults[index]) {
       file.url = uploadResults[index].url
       file.file_id = uploadResults[index].file_id
+      if (file.url) {
+        releaseMessageFilePreviewUrl(file)
+        delete file.local_url
+        delete file.preview_url
+      }
     }
   })
 }
@@ -712,7 +731,16 @@ const handleImageModelSend = async () => {
         body: formData
       })
 
-      if (!res.ok) throw new Error(`请求失败 (${res.status})`)
+      if (!res.ok) {
+        let errorMessage = `请求失败 (${res.status})`
+        try {
+          const errorPayload = await res.json()
+          errorMessage = errorPayload?.detail || errorPayload?.message || errorMessage
+        } catch {
+          // ignore parse failure and keep fallback message
+        }
+        throw new Error(errorMessage)
+      }
       response = await res.json()
 
       // 转换为统一格式
@@ -945,10 +973,11 @@ const goToRecharge = () => {
 };
 
 // Create new conversation
-const handleNewConversation = () => {
-  generatorStore.clearMessages();
-  generatorStore.clearAttachments();
-  generatorStore.prompt = '';
+const handleNewConversation = async () => {
+  generatorStore.messages.forEach((message) => {
+    releaseMessageFilesPreviewUrls(message.files || []);
+  });
+  await generatorStore.startNewConversation();
 };
 
 // Toggle expand/fullscreen mode
@@ -1003,6 +1032,16 @@ watch(
     }
   },
   { immediate: true }
+);
+
+watch(
+  () => [...generatorStore.attachments],
+  (newFiles, oldFiles) => {
+    const activeFiles = new Set(newFiles);
+    oldFiles
+      .filter((file) => !activeFiles.has(file))
+      .forEach((file) => releaseFilePreviewUrl(file));
+  }
 );
 </script>
 

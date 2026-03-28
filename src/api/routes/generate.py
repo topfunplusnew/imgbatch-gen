@@ -16,6 +16,7 @@ from ...config.model_registry import get_model_registry
 from ...database import get_db_manager
 from ..routes.chat import _extract_api_key
 from ..auth import RequiredAuthDependency
+from ...utils.config_helper import require_relay_api_key
 
 router = APIRouter(prefix="/api/v1", tags=["generate"])
 
@@ -106,6 +107,7 @@ async def generate_image(
 
         # 2. 构建参数（API Key 可选，未提供则使用管理员统一配置）
         request_api_key = _extract_api_key(http_request)
+        effective_api_key = await require_relay_api_key(request_api_key)
 
         params = ImageParams(
             prompt=request.prompt,
@@ -115,7 +117,7 @@ async def generate_image(
             quality=request.quality or "standard",
             n=request.n or 1,
             provider=provider_name,
-            api_key=request_api_key,
+            api_key=effective_api_key,
             extra_params=request.extra_params or {},
         )
         
@@ -169,9 +171,9 @@ async def generate_image(
             from ...database.async_task_manager import get_async_task_manager
             async_manager = get_async_task_manager()
             credential_id = None
-            if params.api_key:
+            if request_api_key:
                 credential = await db_manager.store_api_credential(
-                    api_key=params.api_key,
+                    api_key=request_api_key,
                     provider="relay",
                     user_id=request.user_id,
                 )
@@ -366,4 +368,3 @@ async def get_unified_generation_history_count(
     )
 
     return {"count": chat_count + async_count}
-

@@ -15,6 +15,7 @@ from ..matcher import get_matcher
 from ..config.settings import settings
 from ..database import get_db_manager
 from ..utils.error_classifier import classify_error, ErrorType
+from ..utils.config_helper import require_relay_api_key
 
 
 class Worker:
@@ -193,6 +194,8 @@ class Worker:
 
     async def _extract_prompt(self, task: ImageTask) -> ImageTask:
         """提取提示词（如果需要）"""
+        if not (task.params.api_key or "").strip():
+            task.params.api_key = await require_relay_api_key()
         extractor = get_extractor(self.extractor_provider, api_key=task.params.api_key)
         user_input = task.metadata.get("user_input", "")
         if user_input:
@@ -220,6 +223,8 @@ class Worker:
 
     async def _enhance_params(self, task: ImageTask) -> ImageTask:
         """语义匹配增强参数"""
+        if not (task.params.api_key or "").strip():
+            task.params.api_key = await require_relay_api_key()
         matcher = get_matcher(self.matcher_provider, api_key=task.params.api_key)
         user_input = task.metadata.get("user_input", task.params.prompt)
         task.params = await matcher.enhance_params(task.params, user_input)

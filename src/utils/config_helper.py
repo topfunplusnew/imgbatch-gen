@@ -75,3 +75,22 @@ def normalize_openai_base_url(base_url: Optional[str]) -> Optional[str]:
     if not normalized.endswith("/v1"):
         normalized += "/v1"
     return normalized
+
+
+async def resolve_relay_config(preferred_api_key: Optional[str] = None) -> Tuple[str, Optional[str]]:
+    """Prefer a request-scoped key and otherwise fall back to system-managed relay config."""
+
+    key = (preferred_api_key or "").strip()
+    if key:
+        return settings.relay_base_url, key
+    return await get_relay_config()
+
+
+async def require_relay_api_key(preferred_api_key: Optional[str] = None) -> str:
+    """Return a usable relay key or raise a clear configuration error."""
+
+    _, api_key = await resolve_relay_config(preferred_api_key)
+    key = (api_key or "").strip()
+    if key:
+        return key
+    raise ValueError("系统未配置 relay.api_key，请在 system_configs 表中完成配置")
