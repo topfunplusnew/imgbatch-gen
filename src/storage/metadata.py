@@ -32,9 +32,41 @@ class MetadataManager:
             self.storage_path = Path(settings.storage_path)
             self.metadata_dir = self.storage_path / "metadata"
             self.metadata_dir.mkdir(parents=True, exist_ok=True)
+
+    def _sanitize_json_value(self, value: Any) -> Any:
+        """移除不可 JSON 序列化的运行时字段。"""
+        if isinstance(value, (bytes, bytearray)):
+            return None
+        if isinstance(value, dict):
+            sanitized: Dict[str, Any] = {}
+            for key, item in value.items():
+                cleaned = self._sanitize_json_value(item)
+                if cleaned is not None:
+                    sanitized[key] = cleaned
+            return sanitized
+        if isinstance(value, list):
+            sanitized_list = []
+            for item in value:
+                cleaned = self._sanitize_json_value(item)
+                if cleaned is not None:
+                    sanitized_list.append(cleaned)
+            return sanitized_list
+        if isinstance(value, tuple):
+            sanitized_tuple = []
+            for item in value:
+                cleaned = self._sanitize_json_value(item)
+                if cleaned is not None:
+                    sanitized_tuple.append(cleaned)
+            return sanitized_tuple
+        return value
     
     def save_metadata(self, image_result: ImageResult, params: ImageParams):
         """保存图片元数据"""
+        sanitized_extra_params = self._sanitize_json_value(params.extra_params)
+        if isinstance(params.extra_params, dict) and "image" in params.extra_params:
+            sanitized_extra_params = dict(sanitized_extra_params or {})
+            sanitized_extra_params["has_reference_image"] = True
+
         metadata = {
             "image_id": image_result.image_id,
             "task_id": image_result.task_id,
@@ -53,7 +85,7 @@ class MetadataManager:
                 "quality": params.quality,
                 "n": params.n,
                 "provider": params.provider,
-                "extra_params": params.extra_params,
+                "extra_params": sanitized_extra_params,
             },
             "metadata": image_result.metadata,
         }
@@ -168,5 +200,4 @@ class MetadataManager:
                     continue
 
         return sorted(metadata_list, key=lambda x: x.get("created_at", ""), reverse=True)
-
 

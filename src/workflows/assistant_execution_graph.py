@@ -1610,6 +1610,11 @@ async def _build_image_plan(
         api_key=api_key,
     )
     word_section_items = _flatten_word_section_items(attachments)
+    reference_image_sources = [
+        attachment.source
+        for attachment in attachments
+        if attachment.kind == "image" and attachment.source
+    ]
     word_section_prompts: List[str] = []
     if not pdf_page_prompts:
         word_section_prompts = await _build_word_section_matched_prompts(
@@ -1654,6 +1659,8 @@ async def _build_image_plan(
             "attachment_route": "image" if attachments else "none",
             "attachment_count": len(attachments),
             "attachment_text_count": attachment_text_count,
+            "reference_image_count": len(reference_image_sources),
+            "reference_image_sources": reference_image_sources,
             "planning_basis": route_decision.planning_basis,
             "conversation_context_used": contextual_user_instruction != (user_instruction or "").strip(),
             "pdf_page_match_enabled": bool(pdf_page_prompts),

@@ -98,6 +98,39 @@ def _isoformat(dt: Optional[datetime]) -> Optional[str]:
     return dt.isoformat() if dt else None
 
 
+def _sanitize_for_response(value: Any) -> Any:
+    if isinstance(value, (bytes, bytearray)):
+        return None
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, datetime):
+        return _isoformat(value)
+    if isinstance(value, BaseModel):
+        return _sanitize_for_response(value.model_dump())
+    if isinstance(value, dict):
+        sanitized: Dict[str, Any] = {}
+        for key, item in value.items():
+            cleaned = _sanitize_for_response(item)
+            if cleaned is not None:
+                sanitized[key] = cleaned
+        return sanitized
+    if isinstance(value, list):
+        sanitized_list: List[Any] = []
+        for item in value:
+            cleaned = _sanitize_for_response(item)
+            if cleaned is not None:
+                sanitized_list.append(cleaned)
+        return sanitized_list
+    if isinstance(value, tuple):
+        sanitized_tuple: List[Any] = []
+        for item in value:
+            cleaned = _sanitize_for_response(item)
+            if cleaned is not None:
+                sanitized_tuple.append(cleaned)
+        return sanitized_tuple
+    return value
+
+
 class TaskStageEvent(BaseModel):
     """单个任务阶段事件"""
 
@@ -227,34 +260,36 @@ class ImageTask(BaseModel):
 
     def to_response_dict(self) -> Dict[str, Any]:
         """转换为响应格式（包含images字段）"""
+        params_data = _sanitize_for_response(self.params.model_dump())
+        metadata_data = _sanitize_for_response(self.metadata)
         response_data = {
             "task_id": self.task_id,
-            "status": self.status,
-            "params": self.params,
-            "result": self.result,
+            "status": self.status.value,
+            "params": params_data,
+            "result": _sanitize_for_response(self.result),
             "error": self.error,
             "progress": self.progress,
             "created_at": _isoformat(self.created_at),
             "started_at": _isoformat(self.started_at),
             "completed_at": _isoformat(self.completed_at),
             "updated_at": _isoformat(self.updated_at),
-            "stage": self.stage,
+            "stage": self.stage.value,
             "stage_label": self.stage_label,
             "stage_message": self.stage_message,
             "attempt": self.attempt,
             "stage_history": [
                 {
-                    "stage": event.stage,
+                    "stage": event.stage.value,
                     "label": event.label,
                     "message": event.message,
-                    "status": event.status,
+                    "status": event.status.value,
                     "progress": event.progress,
                     "attempt": event.attempt,
                     "timestamp": _isoformat(event.timestamp),
                 }
                 for event in self.stage_history
             ],
-            "metadata": self.metadata
+            "metadata": metadata_data
         }
 
         # 如果有result，添加images字段
@@ -386,3 +421,25 @@ class BatchTask(BaseModel):
                 if count > 0
             ],
         )
+
+    def to_response_dict(self) -> Dict[str, Any]:
+        """转换为安全的批量任务响应格式。"""
+        return {
+            "batch_id": self.batch_id,
+            "user_request_id": self.user_request_id,
+            "tasks": [task.to_response_dict() for task in self.tasks],
+            "total": self.total,
+            "completed": self.completed,
+            "failed": self.failed,
+            "pending": self.pending,
+            "running": self.running,
+            "progress": self.progress,
+            "status": self.status.value,
+            "stage": self.stage.value,
+            "stage_label": self.stage_label,
+            "stage_message": self.stage_message,
+            "created_at": _isoformat(self.created_at),
+            "completed_at": _isoformat(self.completed_at),
+            "updated_at": _isoformat(self.updated_at),
+            "status_detail": _sanitize_for_response(self.status_detail),
+        }

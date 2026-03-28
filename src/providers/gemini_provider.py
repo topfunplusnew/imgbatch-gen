@@ -1,5 +1,6 @@
 """Gemini 图像生成 Provider（通过中转站）"""
 
+import base64
 from typing import Optional, List
 from loguru import logger
 
@@ -39,6 +40,7 @@ class GeminiProvider(SyncRelayProvider):
         """gemini-*-image-* 系列走 /v1beta/models/{model}:generateContent"""
         model = params.model or ""
         endpoint = f"/v1beta/models/{model}:generateContent"
+        extra = params.extra_params or {}
 
         # 构建增强的prompt，包含尺寸和质量信息
         enhanced_prompt = params.prompt
@@ -137,11 +139,32 @@ class GeminiProvider(SyncRelayProvider):
 
             logger.info(f"[Gemini] 设置API参数: imageConfig={image_config}, 请求尺寸={params.width}x{params.height}, 标准化尺寸={standard_width}x{standard_height}")
 
+        parts = [{"text": enhanced_prompt}]
+
+        image_val = extra.get("image")
+        if image_val is not None:
+            mime_type = extra.get("reference_image_mime_type") or "image/png"
+            try:
+                if isinstance(image_val, (bytes, bytearray)):
+                    parts.append(
+                        {
+                            "inlineData": {
+                                "mimeType": mime_type,
+                                "data": base64.b64encode(bytes(image_val)).decode("ascii"),
+                            }
+                        }
+                    )
+                    logger.info("[Gemini] 已添加参考图片输入，mimeType={}", mime_type)
+                else:
+                    logger.warning("[Gemini] 参考图片不是 bytes，已跳过多模态图片输入")
+            except Exception as exc:
+                logger.warning("[Gemini] 添加参考图片失败: {}", exc)
+
         payload = {
             "contents": [
                 {
                     "role": "user",
-                    "parts": [{"text": enhanced_prompt}]
+                    "parts": parts
                 }
             ],
             "generationConfig": generation_config

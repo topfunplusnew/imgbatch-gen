@@ -2,10 +2,13 @@
 
 import asyncio
 import json
+import mimetypes
 import uuid
 from typing import Any, Dict, List, Optional
 from datetime import datetime
+from urllib.parse import urlsplit
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request, Depends, UploadFile, File
 from ...api.routes.chat import _extract_api_key, _get_openai_client
 from ...api.auth import get_current_user
@@ -99,6 +102,85 @@ def _plan_messages_to_chat_messages(messages: List[Dict[str, Any]]) -> List[Chat
             continue
         normalized.append(ChatMessage(role=role, content=message.get("content", "")))
     return normalized
+
+
+def _normalize_reference_image_sources(value: Any) -> List[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _guess_image_mime_type(source: str) -> str:
+    guessed, _ = mimetypes.guess_type(source)
+    if guessed and guessed.startswith("image/"):
+        return guessed
+    extension = urlsplit(source).path.rsplit(".", 1)[-1].lower() if "." in urlsplit(source).path else ""
+    return {
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "png": "image/png",
+        "gif": "image/gif",
+        "webp": "image/webp",
+        "bmp": "image/bmp",
+        "svg": "image/svg+xml",
+    }.get(extension, "image/png")
+
+
+async def _resolve_reference_image_input(reference_image_sources: Optional[List[str]]) -> Optional[Dict[str, Any]]:
+    sources = _normalize_reference_image_sources(reference_image_sources)
+    if not sources:
+        return None
+
+    primary_source = sources[0]
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            response = await client.get(primary_source)
+            response.raise_for_status()
+            mime_type = (response.headers.get("content-type") or "").split(";", 1)[0].strip()
+            if not mime_type.startswith("image/"):
+                mime_type = _guess_image_mime_type(primary_source)
+            return {
+                "bytes": response.content,
+                "source": primary_source,
+                "mime_type": mime_type or _guess_image_mime_type(primary_source),
+                "count": len(sources),
+            }
+    except Exception as exc:
+        logger.warning("下载参考图片失败 {}: {}", primary_source, exc)
+        return None
+
+
+def _strengthen_prompt_with_reference_image(prompt_text: str, reference_count: int) -> str:
+    base_prompt = str(prompt_text or "").strip()
+    reference_instruction = (
+        "请严格参考上传图片的主体、构图、版式、关键文字、颜色关系与核心视觉元素进行生成；"
+        "除非用户明确要求改动，否则不要偏离原图语义与画面结构。"
+    )
+    if reference_count > 1:
+        reference_instruction = (
+            "请严格参考上传图片，优先保持主参考图的主体、构图、版式、关键文字、颜色关系与核心视觉元素；"
+            "同时吸收其余参考图的重要信息，除非用户明确要求改动，否则不要偏离原图语义与画面结构。"
+        )
+    if reference_instruction in base_prompt:
+        return base_prompt
+    if not base_prompt:
+        return reference_instruction
+    return f"{base_prompt}\n\n{reference_instruction}"
+
+
+def _build_generation_extra_params(
+    image_params: Optional[ImageParamsInput],
+    reference_image_input: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    extra_params = dict(image_params.extra_params or {}) if image_params else {}
+    if not reference_image_input or extra_params.get("image") is not None:
+        return extra_params
+
+    extra_params["image"] = reference_image_input["bytes"]
+    extra_params["reference_image_url"] = reference_image_input.get("source")
+    extra_params["reference_image_mime_type"] = reference_image_input.get("mime_type")
+    extra_params["reference_image_count"] = reference_image_input.get("count", 1)
+    return extra_params
 
 def get_task_manager(request: Request) -> TaskManager:
     """获取任务管理器（依赖注入）"""
@@ -198,6 +280,9 @@ async def assistant_chat(
         )
         execution_plan_metadata = dict(execution_plan.metadata or {})
         planned_batch_prompts = execution_plan_metadata.pop("_batch_prompts", None)
+        reference_image_sources = _normalize_reference_image_sources(
+            execution_plan_metadata.pop("reference_image_sources", None)
+        )
         route_metadata: Dict[str, Any] = {
             **execution_plan_metadata,
             "planned_mode": execution_plan.mode,
@@ -344,6 +429,7 @@ async def assistant_chat(
                     precomputed_prompts=planned_batch_prompts,
                     user_id=user_id,
                     freeze_id=billing_info["freeze_id"] if billing_info else None,
+                    reference_image_sources=reference_image_sources,
                 )
             else:
                 intent = Intent(
@@ -363,6 +449,7 @@ async def assistant_chat(
                     api_key,
                     user_id=user_id,
                     freeze_id=billing_info["freeze_id"] if billing_info else None,
+                    reference_image_sources=reference_image_sources,
                 )
 
         if response and route_metadata:
@@ -419,12 +506,18 @@ async def assistant_chat(
         raise HTTPException(status_code=500, detail=f"处理失败: {str(e)}")
 
 
-async def handle_single_generate(message: ChatMessage, intent: Intent, task_manager: TaskManager, user_request_id: str = "", session_id: str = "", image_params: Optional[ImageParamsInput] = None, request_model: Optional[str] = None, api_key: str = None, user_id: str = None, freeze_id: str = None) -> ChatResponse:
+async def handle_single_generate(message: ChatMessage, intent: Intent, task_manager: TaskManager, user_request_id: str = "", session_id: str = "", image_params: Optional[ImageParamsInput] = None, request_model: Optional[str] = None, api_key: str = None, user_id: str = None, freeze_id: str = None, reference_image_sources: Optional[List[str]] = None) -> ChatResponse:
     """处理单图生成意图"""
 
     try:
         ip = image_params or ImageParamsInput()
         prompt_text = intent.parameters.get("prompt", message.content)
+        reference_image_input = await _resolve_reference_image_input(reference_image_sources)
+        if reference_image_input:
+            prompt_text = _strengthen_prompt_with_reference_image(
+                prompt_text,
+                int(reference_image_input.get("count") or 1),
+            )
 
         # 使用 LLM 分析提示词，提取参数
         try:
@@ -488,8 +581,10 @@ async def handle_single_generate(message: ChatMessage, intent: Intent, task_mana
         if not provider_name:
             provider_name = settings.default_image_provider
 
+        extra_params = _build_generation_extra_params(ip, reference_image_input)
+
         params = ImageParams(
-            prompt=intent.parameters.get("prompt", message.content),
+            prompt=prompt_text,
             model=model_name,
             width=width,
             height=height,
@@ -499,7 +594,7 @@ async def handle_single_generate(message: ChatMessage, intent: Intent, task_mana
             seed=ip.seed,
             provider=provider_name,
             api_key=api_key,
-            extra_params=ip.extra_params or {}
+            extra_params=extra_params
         )
 
         # 检查是否是异步模型
@@ -556,7 +651,7 @@ async def handle_single_generate(message: ChatMessage, intent: Intent, task_mana
         session_id = session_id or f"session_{datetime.now().timestamp()}"
         task = task_manager.create_task(
             params=params,
-            user_input=message.content,
+            user_input=prompt_text,
             user_request_id=user_request_id,
             metadata={
                 "session_id": session_id,
@@ -606,11 +701,12 @@ async def handle_single_generate(message: ChatMessage, intent: Intent, task_mana
         )
 
 
-async def handle_batch_generate(message: ChatMessage, intent: Intent, task_manager: TaskManager, user_request_id: str = "", session_id: str = "", image_params: Optional[ImageParamsInput] = None, request_model: Optional[str] = None, api_key: str = None, precomputed_prompts: Optional[List[str]] = None, user_id: str = None, freeze_id: str = None) -> ChatResponse:
+async def handle_batch_generate(message: ChatMessage, intent: Intent, task_manager: TaskManager, user_request_id: str = "", session_id: str = "", image_params: Optional[ImageParamsInput] = None, request_model: Optional[str] = None, api_key: str = None, precomputed_prompts: Optional[List[str]] = None, user_id: str = None, freeze_id: str = None, reference_image_sources: Optional[List[str]] = None) -> ChatResponse:
     """处理批量生成意图"""
 
     try:
         ip = image_params or ImageParamsInput()
+        reference_image_input = await _resolve_reference_image_input(reference_image_sources)
 
         # 优先用外层 request.model，其次用 image_params.model_name
         model_name = request_model or ip.model_name
@@ -652,6 +748,17 @@ async def handle_batch_generate(message: ChatMessage, intent: Intent, task_manag
             # 生成多个不同的提示词
             prompts = await generate_batch_prompts(original_prompt, count)
 
+        if reference_image_input:
+            prompts = [
+                _strengthen_prompt_with_reference_image(
+                    prompt,
+                    int(reference_image_input.get("count") or 1),
+                )
+                for prompt in prompts
+            ]
+
+        base_extra_params = _build_generation_extra_params(ip, reference_image_input)
+
         # 创建批量任务
         params_list = []
         for prompt in prompts:
@@ -666,7 +773,7 @@ async def handle_batch_generate(message: ChatMessage, intent: Intent, task_manag
                 seed=ip.seed,
                 provider=provider_name,
                 api_key=api_key,
-                extra_params=ip.extra_params or {}
+                extra_params=dict(base_extra_params)
             )
             params_list.append(params)
 
@@ -1180,7 +1287,7 @@ async def get_batch_task_status(
         raise HTTPException(status_code=404, detail="批量任务不存在")
 
     # 批量任务完成时，自动结算冻结积分
-    response_data = batch_task.model_dump()
+    response_data = batch_task.to_response_dict()
     if batch_task.status in (TaskStatus.COMPLETED, TaskStatus.FAILED):
         first_task = batch_task.tasks[0] if batch_task.tasks else None
         freeze_id = first_task.metadata.get("freeze_id") if first_task else None

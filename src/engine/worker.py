@@ -230,6 +230,39 @@ class Worker:
         task.params = await matcher.enhance_params(task.params, user_input)
         return task
 
+    def _sanitize_extra_params_for_storage(self, extra_params: Optional[dict]) -> dict:
+        """移除运行时不可序列化字段，避免写库时报 JSON 序列化错误。"""
+        if not isinstance(extra_params, dict):
+            return {}
+
+        sanitized: dict = {}
+        has_reference_image = False
+
+        for key, value in extra_params.items():
+            if isinstance(value, (bytes, bytearray)):
+                if key == "image":
+                    has_reference_image = True
+                continue
+
+            if isinstance(value, dict):
+                sanitized[key] = self._sanitize_extra_params_for_storage(value)
+                continue
+
+            if isinstance(value, list):
+                sanitized[key] = [
+                    self._sanitize_extra_params_for_storage(item) if isinstance(item, dict) else item
+                    for item in value
+                    if not isinstance(item, (bytes, bytearray))
+                ]
+                continue
+
+            sanitized[key] = value
+
+        if has_reference_image:
+            sanitized["has_reference_image"] = True
+
+        return sanitized
+
     def _validate_image_results(self, images: List) -> bool:
         """
         验证图片结果有效性
@@ -450,7 +483,7 @@ class Worker:
                 n=task.params.n,
                 style=task.params.style,
                 quality=task.params.quality,
-                extra_params=task.params.extra_params or {},
+                extra_params=self._sanitize_extra_params_for_storage(task.params.extra_params),
                 status="completed",
                 image_urls=image_urls,
                 image_paths=[img.file_path for img in results],

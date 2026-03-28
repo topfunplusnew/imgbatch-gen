@@ -42,7 +42,7 @@ async def get_task_result(
     return task.to_response_dict()
 
 
-@router.get("/batch/{batch_id}", response_model=BatchTask)
+@router.get("/batch/{batch_id}")
 async def get_batch_task(
     batch_id: str,
     task_manager: TaskManager = Depends(get_task_manager)
@@ -51,15 +51,14 @@ async def get_batch_task(
     batch_task = task_manager.get_batch_task(batch_id)
     if not batch_task:
         raise HTTPException(status_code=404, detail="批量任务不存在")
-    return batch_task
+    return batch_task.to_response_dict()
 
 
-@router.get("/tasks", response_model=list[ImageTask])
+@router.get("/tasks")
 async def list_tasks(
     status: Optional[TaskStatus] = None,
     task_manager: TaskManager = Depends(get_task_manager)
 ):
     """列出任务"""
     tasks = task_manager.list_tasks(status)
-    return tasks
-
+    return [task.to_response_dict() for task in tasks]
