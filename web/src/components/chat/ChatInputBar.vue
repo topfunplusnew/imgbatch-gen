@@ -641,7 +641,7 @@ const handleChatModelSend = async () => {
 };
 
 /**
- * 图片模型发送 - 原有图片生成逻辑
+ * 图片模型发送 - 统一走附件理解/ OCR 后再进入生图流程
  */
 const handleImageModelSend = async () => {
   if ((!generatorStore.prompt.trim() && generatorStore.attachments.length === 0) || generatorStore.isGenerating) return;
@@ -676,159 +676,87 @@ const handleImageModelSend = async () => {
   generatorStore.isGenerating = true
 
   try {
-    // 检查是否有图片文件
-    const hasImageFile = attachments.length > 0 && attachments.some(f => f.type.startsWith('image/'))
-
-    // 如果有图片文件，直接调用统一生图接口（不需要先上传）
     let response
-    if (hasImageFile) {
-      // 使用FormData直接调用统一生图接口
-      const formData = new FormData()
-      formData.append('prompt', prompt || '根据参考图生成')
-      formData.append('model_name', generatorStore.selectedModelInfo?.model_name || generatorStore.model)
-      formData.append('provider', generatorStore.selectedModelInfo?.provider || '')
-      formData.append('width', generatorStore.width.toString())
-      formData.append('height', generatorStore.height.toString())
-      formData.append('quality', generatorStore.quality)
-      formData.append('n', generatorStore.batchSize.toString())
-      formData.append('operation_type', 'generate')
+    let uploadedFiles = []
 
-      // 添加参考图片
-      const imageFile = attachments.find(f => f.type.startsWith('image/'))
-      if (imageFile) {
-        formData.append('image', imageFile)
-        console.log('[统一生图] 添加参考图片:', imageFile.name, imageFile.type, imageFile.size, 'bytes')
-      }
-
-      // 添加额外参数
-      const extraParams = {}
-      if (generatorStore.negativePrompt) extraParams.negative_prompt = generatorStore.negativePrompt
-      if (generatorStore.seed) extraParams.seed = parseInt(generatorStore.seed)
-      formData.append('extra_params', JSON.stringify(extraParams))
-
-      console.log('[统一生图] 发送请求（带参考图）')
-      console.log('[统一生图] FormData内容:', {
-        prompt: prompt || '根据参考图生成',
-        model_name: generatorStore.selectedModelInfo?.model_name || generatorStore.model,
-        provider: generatorStore.selectedModelInfo?.provider,
-        has_image: !!imageFile
-      })
-
-      const apiConfig = (await import('@/store/useApiConfigStore')).useApiConfigStore()
-      const baseURL = apiConfig.apiEndpoint || ''
-      const accessToken = localStorage.getItem('access_token')
-      const requestHeaders = {}
-      if (accessToken) {
-        requestHeaders.Authorization = `Bearer ${accessToken}`
-      }
-      if (apiConfig.apiKey) {
-        requestHeaders['X-Model-Api-Key'] = apiConfig.apiKey
-      }
-
-      const res = await fetch(`${baseURL}/api/v1/generate-unified`, {
-        method: 'POST',
-        headers: requestHeaders,
-        body: formData
-      })
-
-      if (!res.ok) {
-        let errorMessage = `请求失败 (${res.status})`
+    if (attachments.length > 0) {
+      // 如果有 PDF，按页数设置批量数量
+      const pdfFile = attachments.find(f => f.name.toLowerCase().endsWith('.pdf'))
+      if (pdfFile) {
         try {
-          const errorPayload = await res.json()
-          errorMessage = errorPayload?.detail || errorPayload?.message || errorMessage
-        } catch {
-          // ignore parse failure and keep fallback message
-        }
-        throw new Error(errorMessage)
-      }
-      response = await res.json()
+          const { getDocument } = await import('pdfjs-dist')
+          const arrayBuffer = await pdfFile.arrayBuffer()
+          const pdf = await getDocument({ data: arrayBuffer }).promise
+          const pageCount = pdf.numPages
 
-      // 转换为统一格式
-      if (response.task_id) {
-        response = {
-          message: { content: '正在生成图像...' },
-          intent: { type: 'single_generate' },
-          task_id: response.task_id
-        }
-      }
-    } else {
-      // 非图片文件（PDF/Word等）需要先上传
-      let uploadedFiles = []
-      if (attachments.length > 0) {
-        // 如果有 PDF，按页数设置批量数量
-        const pdfFile = attachments.find(f => f.name.toLowerCase().endsWith('.pdf'))
-        if (pdfFile) {
-          try {
-            const { getDocument } = await import('pdfjs-dist')
-            const arrayBuffer = await pdfFile.arrayBuffer()
-            const pdf = await getDocument({ data: arrayBuffer }).promise
-            const pageCount = pdf.numPages
-
-            // 对于大PDF文件，限制单次生成数量并提供提示
-            const MAX_BATCH = 20
-            if (pageCount > MAX_BATCH) {
-              generatorStore.batchSize = MAX_BATCH
-              notification.info('PDF 文件较大', `PDF 共 ${pageCount} 页，为避免超时将分批处理。当前批次将生成前 ${MAX_BATCH} 页，您可以多次发送请求完成全部页面。`)
-            } else {
-              generatorStore.batchSize = pageCount
-              notification.info('PDF 已识别', `共 ${pageCount} 页，将生成 ${pageCount} 张图片`)
-            }
-          } catch (e) {
-            console.warn('[PDF] 无法读取页数，使用当前批量设置', e)
+          // 对于大PDF文件，限制单次生成数量并提供提示
+          const MAX_BATCH = 20
+          if (pageCount > MAX_BATCH) {
+            generatorStore.batchSize = MAX_BATCH
+            notification.info('PDF 文件较大', `PDF 共 ${pageCount} 页，为避免超时将分批处理。当前批次将生成前 ${MAX_BATCH} 页，您可以多次发送请求完成全部页面。`)
+          } else {
+            generatorStore.batchSize = pageCount
+            notification.info('PDF 已识别', `共 ${pageCount} 页，将生成 ${pageCount} 张图片`)
           }
+        } catch (e) {
+          console.warn('[PDF] 无法读取页数，使用当前批量设置', e)
         }
+      }
 
-        notification.info('上传文件中', `正在上传 ${attachments.length} 个文件...`)
+      notification.info('上传文件中', `正在上传 ${attachments.length} 个文件...`)
 
-        try {
-          const uploadResults = await api.uploadFiles(attachments, (progress, current, total) => {
-            generatorStore.updateMessage(assistantMessage.id, {
-              content: `正在上传文件... (${current}/${total}) - ${progress}%`
-            })
-          })
-
-          patchMessageFilesWithUploadResults(userMessage.id, messageFiles, uploadResults)
-          uploadedFiles = uploadResults.map(f => f.url)
-          notification.success('文件上传成功', `已上传 ${uploadedFiles.length} 个文件`)
-        } catch (uploadError) {
-          console.error('[文件上传] 失败:', uploadError)
+      try {
+        const uploadResults = await api.uploadFiles(attachments, (progress, current, total) => {
           generatorStore.updateMessage(assistantMessage.id, {
-            content: `文件上传失败: ${uploadError?.response?.data?.detail || uploadError?.message || '未知错误'}`,
-            status: 'error'
+            content: `正在上传文件... (${current}/${total}) - ${progress}%`
           })
-          notification.error('文件上传失败', uploadError?.response?.data?.detail || uploadError?.message || '未知错误')
-          generatorStore.isGenerating = false
-          return
-        }
+        })
+
+        patchMessageFilesWithUploadResults(userMessage.id, messageFiles, uploadResults)
+        uploadedFiles = uploadResults.map(f => f.url).filter(Boolean)
+        notification.success('文件上传成功', `已上传 ${uploadedFiles.length} 个文件`)
+      } catch (uploadError) {
+        console.error('[文件上传] 失败:', uploadError)
+        generatorStore.updateMessage(assistantMessage.id, {
+          content: `文件上传失败: ${uploadError?.response?.data?.detail || uploadError?.message || '未知错误'}`,
+          status: 'error'
+        })
+        notification.error('文件上传失败', uploadError?.response?.data?.detail || uploadError?.message || '未知错误')
+        generatorStore.isGenerating = false
+        return
       }
-
-      // 准备聊天请求
-      const chatRequest = {
-        messages: generatorStore.messages.map(m => ({
-          role: m.role,
-          content: m.content
-        })),
-        session_id: generatorStore.currentSessionId,
-        files: uploadedFiles.length > 0 ? uploadedFiles : undefined,
-        model: generatorStore.selectedModelInfo?.model_name || generatorStore.model,
-        model_type: 'image',
-        image_params: {
-          width: generatorStore.width,
-          height: generatorStore.height,
-          quality: generatorStore.quality,
-          n: generatorStore.batchSize,
-          negative_prompt: generatorStore.negativePrompt || undefined,
-          seed: generatorStore.seed ? parseInt(generatorStore.seed) : undefined,
-          model_name: generatorStore.model || undefined,
-          provider: generatorStore.selectedModelInfo?.provider || undefined
-        }
-      }
-
-      console.log('[AI助手] 发送聊天请求:', chatRequest)
-
-      // 调用统一AI助手接口
-      response = await api.assistantChat(chatRequest)
     }
+
+    // 所有附件统一走 assistant 工作流：
+    // 上传附件 -> OCR/内容理解 -> 规划生图 -> 创建任务
+    const chatRequest = {
+      messages: generatorStore.messages.map(m => ({
+        role: m.role,
+        content: m.content
+      })),
+      session_id: generatorStore.currentSessionId,
+      files: uploadedFiles.length > 0 ? uploadedFiles : undefined,
+      model: generatorStore.selectedModelInfo?.model_name || generatorStore.model,
+      model_type: 'image',
+      image_params: {
+        width: generatorStore.width,
+        height: generatorStore.height,
+        quality: generatorStore.quality,
+        n: generatorStore.batchSize,
+        negative_prompt: generatorStore.negativePrompt || undefined,
+        seed: generatorStore.seed ? parseInt(generatorStore.seed) : undefined,
+        model_name: generatorStore.model || undefined,
+        provider: generatorStore.selectedModelInfo?.provider || undefined
+      }
+    }
+
+    console.log('[AI助手] 统一附件生图请求:', {
+      ...chatRequest,
+      files: chatRequest.files,
+      attachmentCount: attachments.length
+    })
+
+    response = await api.assistantChat(chatRequest)
 
     console.log('[AI助手] 收到响应:', response)
 
