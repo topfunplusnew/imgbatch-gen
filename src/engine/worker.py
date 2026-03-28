@@ -48,8 +48,8 @@ class Worker:
 
         # 获取重试配置
         max_retries = getattr(settings, 'max_generation_retries', 2)
-        base_delay = getattr(settings, 'retry_base_delay', 1.0)
-        max_delay = getattr(settings, 'retry_max_delay', 10.0)
+        base_delay = max(0.0, float(getattr(settings, 'generation_retry_base_delay', 0.0)))
+        max_delay = max(0.0, float(getattr(settings, 'generation_retry_max_delay', 0.0)))
         max_attempts = max_retries + 1  # 总尝试次数 = 原始 + 重试
 
         last_error: Optional[Exception] = None
@@ -167,17 +167,24 @@ class Worker:
 
                 # 可重试错误：等待后重试
                 delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
-                logger.warning(
-                    f"任务 {task.task_id} 第 {attempt} 次尝试失败 ({error_type.value})，"
-                    f"{delay}秒后重试: {str(e)[:200]}"
+                retry_message = (
+                    f"任务 {task.task_id} 第 {attempt} 次尝试失败 ({error_type.value})，立即重试: {str(e)[:200]}"
+                    if delay <= 0
+                    else f"任务 {task.task_id} 第 {attempt} 次尝试失败 ({error_type.value})，{delay}秒后重试: {str(e)[:200]}"
                 )
+                logger.warning(retry_message)
                 task.set_stage(
                     TaskStage.RETRYING,
-                    message=f"当前尝试失败，{delay:.1f} 秒后准备第 {attempt + 1} 次重试。",
+                    message=(
+                        f"当前尝试失败，立即开始第 {attempt + 1} 次重试。"
+                        if delay <= 0
+                        else f"当前尝试失败，{delay:.1f} 秒后准备第 {attempt + 1} 次重试。"
+                    ),
                     progress=max(task.progress, 0.1),
                     attempt=attempt,
                 )
-                await asyncio.sleep(delay)
+                if delay > 0:
+                    await asyncio.sleep(delay)
 
         # 理论上不会到达这里
         if last_error:
@@ -282,11 +289,13 @@ class Worker:
         return results
 
     async def _handle_success(self, task: ImageTask, results: List) -> None:
-        """处理成功：扣费并记录"""
+        """处理成功：结算冻结积分"""
         logger.info(f"任务 {task.task_id} 生成成功: {len(results)}张图片")
 
-        # 获取用户ID
-        user_id = task.user_id
+        user_id = task.metadata.get("user_id") or task.user_id
+        freeze_id = task.metadata.get("freeze_id")
+        is_batch_subtask = "batch_id" in task.metadata
+
         if not user_id and task.user_request_id:
             try:
                 db_manager = get_db_manager()
@@ -296,13 +305,41 @@ class Worker:
             except Exception as e:
                 logger.warning(f"无法从user_request获取user_id: {str(e)}")
 
-        # 扣费（仅在成功后）
-        if user_id:
+        # 批量子任务不单独结算，由批量完成时统一结算
+        if is_batch_subtask and freeze_id:
+            logger.info(f"批量子任务 {task.task_id} 成功，跳过单独结算（freeze_id={freeze_id}）")
+            return
+
+        if user_id and freeze_id:
             try:
                 from ..services.account_service import get_account_service
                 account_service = get_account_service()
 
-                # 验证图片URL
+                image_urls = [img.url for img in results if self._is_valid_url(img.url)]
+                if not image_urls:
+                    raise ValueError("没有有效的图片URL")
+
+                billing_result = await account_service.settle_frozen_points(
+                    user_id=user_id,
+                    freeze_id=freeze_id,
+                    success=True,
+                    model_name=task.params.model or "unknown",
+                    provider=task.params.provider or "unknown",
+                    request_id=task.task_id,
+                    prompt=task.params.prompt,
+                    image_count=len(image_urls),
+                    image_urls=image_urls,
+                )
+                task.metadata["billing_result"] = billing_result
+                logger.info(f"用户 {user_id} 结算成功，任务 {task.task_id}")
+            except Exception as billing_error:
+                logger.error(f"结算失败: {str(billing_error)}")
+        elif user_id and not is_batch_subtask:
+            # 没有 freeze_id 的兼容路径（非 assistant/chat 入口）
+            try:
+                from ..services.account_service import get_account_service
+                account_service = get_account_service()
+
                 image_urls = [img.url for img in results if self._is_valid_url(img.url)]
                 if not image_urls:
                     raise ValueError("没有有效的图片URL，不应扣费")
@@ -319,10 +356,9 @@ class Worker:
                 logger.info(f"用户 {user_id} 扣费成功，任务 {task.task_id}")
             except Exception as billing_error:
                 logger.error(f"扣费失败: {str(billing_error)}")
-                # 扣费失败不影响任务完成状态
 
     async def _handle_failure(self, task: ImageTask, error: Exception, attempt: int) -> None:
-        """处理失败：记录但不扣费"""
+        """处理失败：返还冻结积分"""
         logger.error(f"Worker {self.worker_id} 任务 {task.task_id} 第{attempt}次尝试失败: {str(error)}")
 
         task.update_status(TaskStatus.FAILED)
@@ -334,8 +370,10 @@ class Worker:
             attempt=attempt,
         )
 
-        # 记录失败（不扣费）
-        user_id = task.user_id
+        user_id = task.metadata.get("user_id") or task.user_id
+        freeze_id = task.metadata.get("freeze_id")
+        is_batch_subtask = "batch_id" in task.metadata
+
         if not user_id and task.user_request_id:
             try:
                 db_manager = get_db_manager()
@@ -345,7 +383,31 @@ class Worker:
             except Exception:
                 pass
 
-        if user_id:
+        # 批量子任务不单独退还，由批量完成时统一结算
+        if is_batch_subtask and freeze_id:
+            logger.info(f"批量子任务 {task.task_id} 失败，跳过单独退还（freeze_id={freeze_id}）")
+            return
+
+        if user_id and freeze_id:
+            try:
+                from ..services.account_service import get_account_service
+                account_service = get_account_service()
+                billing_result = await account_service.settle_frozen_points(
+                    user_id=user_id,
+                    freeze_id=freeze_id,
+                    success=False,
+                    model_name=task.params.model or "unknown",
+                    provider=task.params.provider or "unknown",
+                    request_id=task.task_id,
+                    prompt=task.params.prompt,
+                    error_reason=str(error),
+                )
+                task.metadata["billing_result"] = billing_result
+                logger.info(f"用户 {user_id} 积分已返还，任务 {task.task_id}")
+            except Exception as billing_error:
+                logger.error(f"返还积分失败: {str(billing_error)}")
+        elif user_id and not is_batch_subtask:
+            # 没有 freeze_id 的兼容路径
             try:
                 from ..services.account_service import get_account_service
                 account_service = get_account_service()

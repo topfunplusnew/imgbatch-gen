@@ -1131,6 +1131,13 @@ class DatabaseManager:
             logger.info(f"添加交易记录: {transaction.id}, type={transaction_type}, amount={amount}, points_after={points_after}")
             return transaction
 
+    async def get_transaction_by_id(self, transaction_id: str) -> Optional[Transaction]:
+        """根据ID获取交易记录"""
+        async with self.get_session() as session:
+            stmt = select(Transaction).where(Transaction.id == transaction_id)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
     async def get_user_transactions(
         self, user_id: str, limit: int = 50, offset: int = 0
     ) -> List[Transaction]:

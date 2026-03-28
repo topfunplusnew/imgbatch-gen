@@ -173,6 +173,257 @@ class AccountService:
             "description": f"积分和余额不足，需要 {required_points} 积分或 {required_amount / 100:.2f} 元",
         }
 
+    async def freeze_points(
+        self,
+        user_id: str,
+        model_name: str,
+        count: int = 1,
+        request_id: str = "",
+    ) -> Dict[str, Any]:
+        """
+        冻结积分（提交生图任务前调用）
+
+        扣费优先级：gift_points > points > balance
+        冻结时立即从账户扣减，记录 freeze 类型 Transaction。
+        如果余额不足，返回 status="insufficient"。
+
+        Returns:
+            {
+                "status": "frozen" | "insufficient",
+                "freeze_id": str,          # Transaction.id，用于后续结算
+                "points_amount": int,       # 冻结的积分数
+                "money_amount": int,        # 冻结的金额（分）
+                "cost_type": str,           # gift_points / points / balance
+                "description": str,
+                "balance_after": {"points": int, "gift_points": int, "balance": float},
+            }
+        """
+        account = await self.get_or_create_account(user_id)
+        cost_info = await self.calculate_cost(user_id, model_name, count)
+
+        if cost_info["cost_type"] == "insufficient":
+            model_price = await self.get_model_price(model_name)
+            required = model_price["points"] * count
+            return {
+                "status": "insufficient",
+                "freeze_id": None,
+                "points_amount": required,
+                "money_amount": 0,
+                "cost_type": "insufficient",
+                "description": cost_info["description"],
+                "balance_after": {
+                    "points": account.points,
+                    "gift_points": account.gift_points or 0,
+                    "balance": account.balance / 100,
+                },
+            }
+
+        # 从账户扣减（冻结）
+        if cost_info["cost_type"] == "gift_points":
+            account.gift_points -= cost_info["points_used"]
+        elif cost_info["cost_type"] == "points":
+            account.points -= cost_info["points_used"]
+        elif cost_info["cost_type"] == "balance":
+            account.balance -= cost_info["amount"]
+
+        await self.db_manager.update_account(account)
+
+        # 记录冻结交易
+        points_change = -cost_info["points_used"] if cost_info["points_used"] else 0
+        amount_change = -cost_info["amount"] if cost_info["amount"] else 0
+        transaction = await self.db_manager.add_transaction(
+            user_id=user_id,
+            transaction_type="freeze",
+            amount=amount_change,
+            points_change=points_change,
+            description=f"冻结积分 - {model_name} x{count}（{cost_info['description']}）",
+            related_request_id=request_id,
+        )
+
+        logger.info(
+            f"用户 {user_id} 冻结积分: type={cost_info['cost_type']}, "
+            f"points={cost_info['points_used']}, amount={cost_info['amount']}, "
+            f"freeze_id={transaction.id}"
+        )
+
+        return {
+            "status": "frozen",
+            "freeze_id": transaction.id,
+            "points_amount": cost_info["points_used"],
+            "money_amount": cost_info["amount"],
+            "cost_type": cost_info["cost_type"],
+            "description": f"已冻结 {cost_info['points_used']} 积分" if cost_info["points_used"] else f"已冻结 ¥{cost_info['amount'] / 100:.2f}",
+            "balance_after": {
+                "points": account.points,
+                "gift_points": account.gift_points or 0,
+                "balance": account.balance / 100,
+            },
+        }
+
+    async def settle_frozen_points(
+        self,
+        user_id: str,
+        freeze_id: str,
+        success: bool,
+        model_name: str = "",
+        provider: str = "",
+        request_id: str = "",
+        prompt: str = "",
+        image_count: int = 0,
+        image_urls: List[str] = None,
+        error_reason: str = "",
+    ) -> Dict[str, Any]:
+        """
+        结算冻结的积分
+
+        成功：创建 consumption 记录 + 更新统计
+        失败：回滚冻结（加回积分/余额）+ 创建 refund Transaction
+
+        Returns:
+            {
+                "status": "deducted" | "refunded",
+                "points_amount": int,
+                "money_amount": int,
+                "cost_type": str,
+                "description": str,
+                "balance_after": {"points": int, "gift_points": int, "balance": float},
+            }
+        """
+        # 查找冻结交易记录
+        freeze_tx = await self.db_manager.get_transaction_by_id(freeze_id)
+        if not freeze_tx:
+            logger.error(f"冻结交易记录不存在: {freeze_id}")
+            return {
+                "status": "error",
+                "points_amount": 0,
+                "money_amount": 0,
+                "cost_type": "unknown",
+                "description": "冻结记录不存在",
+                "balance_after": {},
+            }
+
+        frozen_points = abs(freeze_tx.points_change or 0)
+        frozen_amount = abs(freeze_tx.amount or 0)
+        # 从冻结描述推断 cost_type
+        cost_type = "points"
+        if "临时积分" in (freeze_tx.description or ""):
+            cost_type = "gift_points"
+        elif "余额" in (freeze_tx.description or ""):
+            cost_type = "balance"
+
+        account = await self.get_or_create_account(user_id)
+
+        if success:
+            # 成功：冻结已扣，只需记录消费和更新统计
+            account.total_generated += image_count
+            if frozen_amount > 0:
+                account.total_spent += frozen_amount
+            await self.db_manager.update_account(account)
+
+            # 创建结算交易记录
+            await self.db_manager.add_transaction(
+                user_id=user_id,
+                transaction_type="consumption",
+                amount=-frozen_amount if frozen_amount else 0,
+                points_change=-frozen_points if frozen_points else 0,
+                description=f"图片生成扣费 - {model_name} x{image_count}",
+                related_request_id=request_id,
+            )
+
+            # 创建消费记录
+            await self.db_manager.create_consumption_record(
+                user_id=user_id,
+                model_name=model_name,
+                provider=provider,
+                cost_type=cost_type,
+                points_used=frozen_points,
+                amount=frozen_amount,
+                request_id=request_id,
+                prompt=prompt,
+                image_count=image_count,
+                image_urls=image_urls,
+                status="success",
+            )
+
+            # 处理分销佣金
+            await self._process_referral_commission(
+                user_id=user_id,
+                consumed_amount=frozen_amount,
+                request_id=request_id,
+            )
+
+            logger.info(
+                f"用户 {user_id} 结算成功: freeze_id={freeze_id}, "
+                f"points={frozen_points}, amount={frozen_amount}"
+            )
+
+            return {
+                "status": "deducted",
+                "points_amount": frozen_points,
+                "money_amount": frozen_amount,
+                "cost_type": cost_type,
+                "description": f"已扣除 {frozen_points} 积分" if frozen_points else f"已扣除 ¥{frozen_amount / 100:.2f}",
+                "balance_after": {
+                    "points": account.points,
+                    "gift_points": account.gift_points or 0,
+                    "balance": account.balance / 100,
+                },
+            }
+        else:
+            # 失败：回滚冻结
+            if cost_type == "gift_points":
+                account.gift_points = (account.gift_points or 0) + frozen_points
+            elif cost_type == "points":
+                account.points += frozen_points
+            elif cost_type == "balance":
+                account.balance += frozen_amount
+
+            await self.db_manager.update_account(account)
+
+            # 创建退还交易记录
+            await self.db_manager.add_transaction(
+                user_id=user_id,
+                transaction_type="refund",
+                amount=frozen_amount,
+                points_change=frozen_points,
+                description=f"生成失败退还 - {model_name}（{error_reason[:100] if error_reason else '未知错误'}）",
+                related_request_id=request_id,
+            )
+
+            # 创建消费记录（失败）
+            await self.db_manager.create_consumption_record(
+                user_id=user_id,
+                model_name=model_name,
+                provider=provider,
+                cost_type="failed",
+                points_used=0,
+                amount=0,
+                request_id=request_id,
+                prompt=prompt,
+                image_count=0,
+                image_urls=None,
+                status="failed",
+                error_reason=error_reason,
+            )
+
+            logger.info(
+                f"用户 {user_id} 结算退还: freeze_id={freeze_id}, "
+                f"points={frozen_points}, amount={frozen_amount}, reason={error_reason[:100] if error_reason else ''}"
+            )
+
+            return {
+                "status": "refunded",
+                "points_amount": frozen_points,
+                "money_amount": frozen_amount,
+                "cost_type": cost_type,
+                "description": f"已返还 {frozen_points} 积分" if frozen_points else f"已返还 ¥{frozen_amount / 100:.2f}",
+                "balance_after": {
+                    "points": account.points,
+                    "gift_points": account.gift_points or 0,
+                    "balance": account.balance / 100,
+                },
+            }
+
     async def deduct_cost_on_success(
         self,
         user_id: str,

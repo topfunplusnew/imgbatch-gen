@@ -8,6 +8,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Request, Depends, UploadFile, File
 from ...api.routes.chat import _extract_api_key, _get_openai_client
+from ...api.auth import get_current_user
 from fastapi.responses import StreamingResponse
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -15,8 +16,10 @@ from pydantic import BaseModel, Field
 from ...config.settings import settings
 from ...engine import TaskManager
 from ...models.image import ImageParams
+from ...models.task import TaskStatus
 from ...database import get_db_manager
 from ...workflows import plan_assistant_execution
+from ...services.account_service import get_account_service
 
 
 router = APIRouter(prefix="/api/v1", tags=["assistant"])
@@ -102,7 +105,7 @@ def get_task_manager(request: Request) -> TaskManager:
     return request.app.state.task_manager
 
 
-async def create_user_request(db_manager, request: ChatRequest, http_request: Request) -> str:
+async def create_user_request(db_manager, request: ChatRequest, http_request: Request, user_id: str = "anonymous") -> str:
     """
     创建用户请求记录并返回请求ID
 
@@ -121,7 +124,7 @@ async def create_user_request(db_manager, request: ChatRequest, http_request: Re
 
         # 创建用户请求记录
         user_request = await db_manager.create_user_request(
-            user_id="anonymous",  # 如果有用户认证，可以使用真实用户ID
+            user_id=user_id,
             user_ip=client_host,
             user_agent=user_agent,
             request_type="chat",
@@ -147,6 +150,7 @@ async def create_user_request(db_manager, request: ChatRequest, http_request: Re
 async def assistant_chat(
     request: ChatRequest,
     http_request: Request,
+    current_user: dict = Depends(get_current_user),
     task_manager: TaskManager = Depends(get_task_manager)
 ):
     """
@@ -167,6 +171,7 @@ async def assistant_chat(
         # API Key 可选，如果未提供则使用管理员统一配置
         api_key = _extract_api_key(http_request)
         db_manager = get_db_manager()
+        user_id = current_user["id"]
 
         user_messages = [m for m in request.messages if m.role == "user"]
         if not user_messages:
@@ -177,7 +182,7 @@ async def assistant_chat(
         original_user_text = _extract_message_text(last_message.content)
         requested_count = request.image_params.n if request.image_params and request.image_params.n else None
 
-        user_request_id = await create_user_request(db_manager, request, http_request)
+        user_request_id = await create_user_request(db_manager, request, http_request, user_id=user_id)
         logger.info(f"创建用户请求: {user_request_id}")
 
         execution_plan = await plan_assistant_execution(
@@ -212,6 +217,54 @@ async def assistant_chat(
 
         intent: Optional[Intent] = None
         response = None
+        billing_info: Optional[Dict[str, Any]] = None
+
+        # 对 image 路由进行积分冻结
+        if execution_plan.mode != "chat":
+            account_service = get_account_service()
+            image_model = (
+                execution_plan.effective_model
+                or request.model
+                or (request.image_params.model_name if request.image_params else None)
+                or "default"
+            )
+            # 计算需要冻结的图片数量
+            if execution_plan.intent_type == "batch_generate" or execution_plan.batch_count > 1:
+                freeze_count = execution_plan.batch_count
+                if planned_batch_prompts:
+                    freeze_count = len(planned_batch_prompts)
+            else:
+                freeze_count = 1
+
+            freeze_result = await account_service.freeze_points(
+                user_id=user_id,
+                model_name=image_model,
+                count=freeze_count,
+                request_id=user_request_id,
+            )
+
+            if freeze_result["status"] == "insufficient":
+                # 积分不足，直接返回
+                return ChatResponse(
+                    message=ChatMessage(
+                        role="assistant",
+                        content=f"积分不足，无法生成图片。{freeze_result['description']}",
+                    ),
+                    intent=Intent(
+                        type=execution_plan.intent_type or "single_generate",
+                        confidence=execution_plan.confidence,
+                        parameters={},
+                        reasoning="积分不足",
+                    ),
+                    requires_action=False,
+                    metadata={
+                        **route_metadata,
+                        "billing": freeze_result,
+                    },
+                )
+
+            billing_info = freeze_result
+            route_metadata["billing"] = billing_info
 
         if execution_plan.mode == "chat":
             planned_messages = _plan_messages_to_chat_messages(
@@ -289,6 +342,8 @@ async def assistant_chat(
                     image_model,
                     api_key,
                     precomputed_prompts=planned_batch_prompts,
+                    user_id=user_id,
+                    freeze_id=billing_info["freeze_id"] if billing_info else None,
                 )
             else:
                 intent = Intent(
@@ -306,6 +361,8 @@ async def assistant_chat(
                     request.image_params,
                     image_model,
                     api_key,
+                    user_id=user_id,
+                    freeze_id=billing_info["freeze_id"] if billing_info else None,
                 )
 
         if response and route_metadata:
@@ -362,7 +419,7 @@ async def assistant_chat(
         raise HTTPException(status_code=500, detail=f"处理失败: {str(e)}")
 
 
-async def handle_single_generate(message: ChatMessage, intent: Intent, task_manager: TaskManager, user_request_id: str = "", session_id: str = "", image_params: Optional[ImageParamsInput] = None, request_model: Optional[str] = None, api_key: str = None) -> ChatResponse:
+async def handle_single_generate(message: ChatMessage, intent: Intent, task_manager: TaskManager, user_request_id: str = "", session_id: str = "", image_params: Optional[ImageParamsInput] = None, request_model: Optional[str] = None, api_key: str = None, user_id: str = None, freeze_id: str = None) -> ChatResponse:
     """处理单图生成意图"""
 
     try:
@@ -503,15 +560,18 @@ async def handle_single_generate(message: ChatMessage, intent: Intent, task_mana
             user_request_id=user_request_id,
             metadata={
                 "session_id": session_id,
-                "user_request_id": user_request_id
+                "user_request_id": user_request_id,
+                "user_id": user_id,
+                "freeze_id": freeze_id,
             }
         )
+        task.user_id = user_id
         await task_manager.submit_task(task)
 
         # 保存任务信息到数据库
         db_manager = get_db_manager()
         await db_manager.create_user_request(
-            user_id="anonymous",
+            user_id=user_id or "anonymous",
             request_type="image_generation",
             request_data={
                 "task_id": task.task_id,
@@ -546,7 +606,7 @@ async def handle_single_generate(message: ChatMessage, intent: Intent, task_mana
         )
 
 
-async def handle_batch_generate(message: ChatMessage, intent: Intent, task_manager: TaskManager, user_request_id: str = "", session_id: str = "", image_params: Optional[ImageParamsInput] = None, request_model: Optional[str] = None, api_key: str = None, precomputed_prompts: Optional[List[str]] = None) -> ChatResponse:
+async def handle_batch_generate(message: ChatMessage, intent: Intent, task_manager: TaskManager, user_request_id: str = "", session_id: str = "", image_params: Optional[ImageParamsInput] = None, request_model: Optional[str] = None, api_key: str = None, precomputed_prompts: Optional[List[str]] = None, user_id: str = None, freeze_id: str = None) -> ChatResponse:
     """处理批量生成意图"""
 
     try:
@@ -618,14 +678,16 @@ async def handle_batch_generate(message: ChatMessage, intent: Intent, task_manag
             user_request_id=user_request_id,
             metadata={
                 "session_id": session_id,
-                "user_request_id": user_request_id
+                "user_request_id": user_request_id,
+                "user_id": user_id,
+                "freeze_id": freeze_id,
             }
         )
 
         # 保存批量任务信息到数据库
         db_manager = get_db_manager()
         await db_manager.create_user_request(
-            user_id="anonymous",
+            user_id=user_id or "anonymous",
             request_type="batch_image_generation",
             request_data={
                 "batch_id": batch_task.batch_id,
@@ -777,6 +839,56 @@ async def _run_chat_completion(client, messages: List[Dict[str, Any]], model: st
     raise RuntimeError("Chat completion did not produce a result.")
 
 
+async def _run_chat_completion_stream(client, messages: List[Dict[str, Any]], model: str):
+    safe_model = _default_chat_execution_model()
+    attempts: List[str] = [model]
+    if safe_model and safe_model != model:
+        attempts.append(safe_model)
+
+    last_error: Optional[Exception] = None
+    for index, attempt_model in enumerate(attempts):
+        same_model_retry_limit = 2
+        for retry_index in range(same_model_retry_limit + 1):
+            try:
+                logger.info(
+                    "流式对话: model={}, messages={}条, request_attempt={}",
+                    attempt_model,
+                    len(messages),
+                    retry_index + 1,
+                )
+                stream = await client.chat.completions.create(
+                    model=attempt_model,
+                    messages=messages,
+                    stream=True,
+                )
+                return stream, attempt_model
+            except Exception as exc:
+                last_error = exc
+                if retry_index < same_model_retry_limit and _should_retry_chat_invalid_token(exc):
+                    logger.warning(
+                        "Chat stream got retryable 401 token error for model={}, retry {}/{}: {}",
+                        attempt_model,
+                        retry_index + 1,
+                        same_model_retry_limit,
+                        exc,
+                    )
+                    await asyncio.sleep(0.2)
+                    continue
+                if index < len(attempts) - 1 and _should_retry_chat_with_safe_model(exc):
+                    logger.warning(
+                        "Chat stream failed for model={}, retrying with {}: {}",
+                        attempt_model,
+                        attempts[index + 1],
+                        exc,
+                    )
+                    break
+                raise
+
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("Chat completion stream did not produce a result.")
+
+
 async def handle_chat_query(message: ChatMessage, history: List[ChatMessage], model: str = None, api_key: str = None) -> ChatResponse:
     """处理普通对话查询 - 调用 LLM 生成回复"""
 
@@ -847,8 +959,6 @@ async def handle_chat_query(message: ChatMessage, history: List[ChatMessage], mo
 async def handle_chat_stream(model: str, history: List[ChatMessage], api_key: str = None):
     """流式 LLM 对话，返回 SSE StreamingResponse"""
 
-    from .chat import _get_openai_client
-
     async def event_generator():
         try:
             client = await _get_openai_client(api_key)
@@ -860,18 +970,31 @@ async def handle_chat_stream(model: str, history: List[ChatMessage], api_key: st
                 yield "data: [DONE]\n\n"
                 return
 
-            # 直接用非流式调用，模拟SSE输出避免异步生成器中流对象被GC问题
-            raw, used_model = await _run_chat_completion(client, messages, effective_model)
+            stream, used_model = await _run_chat_completion_stream(client, messages, effective_model)
             logger.info("流式对话输出使用模型: {}", used_model)
 
-            if isinstance(raw, str):
-                content = "抱歉，对话请求失败，请稍后重试。"
-            else:
-                content = raw.choices[0].message.content if raw.choices else "抱歉，未能生成回复。"
+            collected_content = ""
+            async for chunk in stream:
+                delta_content = ""
 
-            collected_content = content or ""
-            if collected_content:
-                data = json.dumps({"content": collected_content}, ensure_ascii=False)
+                if hasattr(chunk, "choices") and chunk.choices:
+                    delta = getattr(chunk.choices[0], "delta", None)
+                    raw_delta = getattr(delta, "content", "") if delta else ""
+
+                    if isinstance(raw_delta, str):
+                        delta_content = raw_delta
+                    elif isinstance(raw_delta, list):
+                        delta_content = "".join(
+                            str(item.get("text", ""))
+                            for item in raw_delta
+                            if isinstance(item, dict) and item.get("text")
+                        )
+
+                if not delta_content:
+                    continue
+
+                collected_content += delta_content
+                data = json.dumps({"content": delta_content}, ensure_ascii=False)
                 yield f"data: {data}\n\n"
 
             logger.info(f"对话完成: {len(collected_content)} 字符")
@@ -1050,10 +1173,99 @@ async def get_batch_task_status(
     batch_id: str,
     task_manager: TaskManager = Depends(get_task_manager)
 ):
-    """查询批量任务状态（复用现有接口）"""
+    """查询批量任务状态（复用现有接口），批量完成时自动结算积分"""
 
     batch_task = task_manager.get_batch_task(batch_id)
     if not batch_task:
         raise HTTPException(status_code=404, detail="批量任务不存在")
 
-    return batch_task
+    # 批量任务完成时，自动结算冻结积分
+    response_data = batch_task.model_dump()
+    if batch_task.status in (TaskStatus.COMPLETED, TaskStatus.FAILED):
+        first_task = batch_task.tasks[0] if batch_task.tasks else None
+        freeze_id = first_task.metadata.get("freeze_id") if first_task else None
+        user_id = first_task.metadata.get("user_id") if first_task else None
+        already_settled = first_task.metadata.get("batch_billing_settled") if first_task else False
+
+        if freeze_id and user_id and not already_settled:
+            try:
+                account_service = get_account_service()
+                completed_count = batch_task.completed
+                failed_count = batch_task.failed
+                total_count = batch_task.total
+
+                # 收集成功任务的图片URL
+                all_image_urls = []
+                for t in batch_task.tasks:
+                    if t.status == TaskStatus.COMPLETED and t.result:
+                        all_image_urls.extend([img.url for img in t.result if img.url])
+
+                if completed_count > 0 and completed_count == total_count:
+                    # 全部成功：正常结算
+                    billing_result = await account_service.settle_frozen_points(
+                        user_id=user_id,
+                        freeze_id=freeze_id,
+                        success=True,
+                        model_name=first_task.params.model or "unknown",
+                        provider=first_task.params.provider or "unknown",
+                        request_id=batch_id,
+                        prompt="batch_generate",
+                        image_count=completed_count,
+                        image_urls=all_image_urls,
+                    )
+                elif completed_count == 0:
+                    # 全部失败：全额退还
+                    billing_result = await account_service.settle_frozen_points(
+                        user_id=user_id,
+                        freeze_id=freeze_id,
+                        success=False,
+                        model_name=first_task.params.model or "unknown",
+                        provider=first_task.params.provider or "unknown",
+                        request_id=batch_id,
+                        prompt="batch_generate",
+                        error_reason=f"批量任务全部失败（{failed_count}/{total_count}）",
+                    )
+                else:
+                    # 部分成功：先结算成功部分，再退还失败部分的差额
+                    billing_result = await account_service.settle_frozen_points(
+                        user_id=user_id,
+                        freeze_id=freeze_id,
+                        success=True,
+                        model_name=first_task.params.model or "unknown",
+                        provider=first_task.params.provider or "unknown",
+                        request_id=batch_id,
+                        prompt="batch_generate",
+                        image_count=completed_count,
+                        image_urls=all_image_urls,
+                    )
+                    # 退还失败部分的积分
+                    if failed_count > 0:
+                        model_price = await account_service.get_model_price(first_task.params.model or "default")
+                        refund_points = model_price["points"] * failed_count
+                        account = await account_service.get_or_create_account(user_id)
+                        account.points += refund_points
+                        await account_service.db_manager.update_account(account)
+                        await account_service.db_manager.add_transaction(
+                            user_id=user_id,
+                            transaction_type="refund",
+                            amount=0,
+                            points_change=refund_points,
+                            description=f"批量生成部分失败退还 - {failed_count}/{total_count} 张失败",
+                            related_request_id=batch_id,
+                        )
+                        billing_result["description"] += f"，已退还 {refund_points} 积分（{failed_count} 张失败）"
+                        billing_result["balance_after"]["points"] = account.points
+
+                # 标记已结算，避免重复
+                for t in batch_task.tasks:
+                    t.metadata["batch_billing_settled"] = True
+                    t.metadata["billing_result"] = billing_result
+
+                response_data["billing"] = billing_result
+                logger.info(f"批量任务 {batch_id} 结算完成: {billing_result['status']}")
+            except Exception as e:
+                logger.error(f"批量任务结算失败: {str(e)}")
+        elif already_settled and first_task:
+            response_data["billing"] = first_task.metadata.get("billing_result")
+
+    return response_data

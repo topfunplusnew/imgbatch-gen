@@ -3,6 +3,7 @@
 from typing import Optional, List
 from abc import abstractmethod
 
+from ..config.settings import settings
 from ..models.image import ImageParams
 from .base import BaseProvider
 from .relay_client import RelayClient
@@ -14,7 +15,12 @@ class SyncRelayProvider(BaseProvider):
     
     def __init__(self, base_url: Optional[str] = None, api_key: Optional[str] = None):
         """初始化同步Provider"""
-        self.client = RelayClient(base_url, api_key)
+        self.client = RelayClient(
+            base_url,
+            api_key,
+            retry_base_delay=settings.generation_retry_base_delay,
+            retry_max_delay=settings.generation_retry_max_delay,
+        )
         self.parser = ResponseParser()
     
     async def generate_image(self, params: ImageParams) -> bytes:
@@ -108,5 +114,4 @@ class SyncRelayProvider(BaseProvider):
         from loguru import logger
         logger.info(f"API响应内容: {str(response)[:500]}")
         return self.parser.extract_urls(response)
-
 

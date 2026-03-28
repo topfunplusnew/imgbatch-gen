@@ -198,7 +198,7 @@ async def test_plan_assistant_execution_matches_all_pdf_pages_when_count_is_equa
 
 
 @pytest.mark.asyncio
-async def test_plan_assistant_execution_caps_pdf_page_matching_to_available_pages(monkeypatch):
+async def test_plan_assistant_execution_expands_pdf_page_matching_to_requested_count(monkeypatch):
     async def fake_load_attachment_descriptors(files, db_manager, api_key=None):
         return [
             AttachmentDescriptor(
@@ -244,8 +244,13 @@ async def test_plan_assistant_execution_caps_pdf_page_matching_to_available_page
 
     assert plan.mode == "image"
     assert plan.intent_type == "batch_generate"
-    assert plan.batch_count == 2
-    assert len(plan.metadata["_batch_prompts"]) == 2
+    assert plan.batch_count == 5
+    assert plan.metadata["pdf_page_match_count"] == 5
+    assert len(plan.metadata["_batch_prompts"]) == 5
+    assert "第一页内容" in plan.metadata["_batch_prompts"][0]
+    assert "第二页内容" in plan.metadata["_batch_prompts"][1]
+    assert "variation 2" in plan.metadata["_batch_prompts"][2]
+    assert "variation 3" in plan.metadata["_batch_prompts"][4]
 
 
 @pytest.mark.asyncio
@@ -353,6 +358,61 @@ async def test_plan_assistant_execution_builds_word_section_matched_prompts(monk
     assert "森林绿" in plan.metadata["_batch_prompts"][0]
     assert "新品活动" in plan.metadata["_batch_prompts"][1]
     assert "会员权益" not in plan.metadata["_batch_prompts"][0]
+
+
+@pytest.mark.asyncio
+async def test_plan_assistant_execution_expands_word_section_matching_to_requested_count(monkeypatch):
+    async def fake_load_attachment_descriptors(files, db_manager, api_key=None):
+        return [
+            AttachmentDescriptor(
+                name="requirements.docx",
+                kind="docx",
+                source="http://example.com/requirements.docx",
+                text_excerpt="[Section 1]\n品牌主色是森林绿。\n\n[Section 2]\n首页需要突出新品活动。",
+                page_excerpts=["品牌主色是森林绿。", "首页需要突出新品活动。"],
+            )
+        ]
+
+    async def fake_build_attachment_route(user_instruction, attachments, api_key=None, model_hint=None):
+        return AttachmentRouteDecision(
+            route="image",
+            confidence=0.92,
+            reasoning="The request explicitly asks to generate images from the uploaded Word document.",
+            source="langgraph",
+        )
+
+    async def fake_build_text_attachment_prompt(user_instruction, attachments, api_key=None):
+        primary = attachments[0]
+        return TextAttachmentPromptResult(
+            prompt=f"Prompt for {primary.name}: {primary.text_excerpt}",
+            summary=primary.text_excerpt or "",
+            source="test",
+        )
+
+    monkeypatch.setattr(graph, "_load_attachment_descriptors", fake_load_attachment_descriptors)
+    monkeypatch.setattr(graph, "build_attachment_route", fake_build_attachment_route)
+    monkeypatch.setattr(graph, "build_text_attachment_prompt", fake_build_text_attachment_prompt)
+
+    plan = await graph.plan_assistant_execution(
+        messages=[{"role": "user", "content": "根据这个 Word 生成 4 张图"}],
+        files=["file-1"],
+        user_instruction="根据这个 Word 生成 4 张图",
+        request_model="gpt-image-1",
+        request_model_type="image",
+        requested_count=4,
+        db_manager=object(),
+        app_state=SimpleNamespace(model_registry=None),
+        api_key="test-key",
+    )
+
+    assert plan.mode == "image"
+    assert plan.intent_type == "batch_generate"
+    assert plan.batch_count == 4
+    assert plan.metadata["word_section_match_enabled"] is True
+    assert plan.metadata["word_total_sections"] == 2
+    assert plan.metadata["word_section_match_count"] == 4
+    assert len(plan.metadata["_batch_prompts"]) == 4
+    assert "variation 2" in plan.metadata["_batch_prompts"][2]
 
 
 @pytest.mark.asyncio

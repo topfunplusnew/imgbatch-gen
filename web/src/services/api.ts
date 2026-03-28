@@ -98,6 +98,68 @@ export interface ChatRequest {
   }
 }
 
+export interface ConversationHistorySummary {
+  session_id: string
+  title: string
+  created_at: string
+  updated_at: string
+  message_count: number
+  image_count: number
+}
+
+export interface ConversationHistoryMessage {
+  id: number
+  role: 'user' | 'assistant'
+  content: string
+  model?: string
+  provider?: string
+  created_at?: string
+  images?: string[]
+  files?: Array<{
+    id?: number
+    original_filename?: string
+    file_url?: string
+    file_size?: number
+    file_type?: string
+    category?: string
+    created_at?: string
+  }>
+}
+
+export interface ConversationHistoryDetail {
+  session_id: string
+  title: string
+  created_at: string
+  updated_at: string
+  message_count: number
+  image_count: number
+  file_count: number
+  messages: ConversationHistoryMessage[]
+  files: Array<{
+    id?: number
+    original_filename?: string
+    file_url?: string
+    file_size?: number
+    file_type?: string
+    category?: string
+    created_at?: string
+  }>
+}
+
+export interface BillingInfo {
+  status: 'frozen' | 'deducted' | 'refunded' | 'insufficient' | 'error'
+  freeze_id?: string | null
+  points_amount: number
+  money_amount: number
+  cost_type: string
+  description: string
+  balance_after?: {
+    points: number
+    gift_points: number
+    balance: number
+  }
+}
+
 export interface Intent {
   type: string
   confidence: number
@@ -111,7 +173,7 @@ export interface ChatResponse {
   task_id?: string
   batch_id?: string
   requires_action: boolean
-  metadata?: Record<string, any>
+  metadata?: Record<string, any> & { billing?: BillingInfo }
 }
 
 export interface GenerateRequest {
@@ -491,6 +553,29 @@ export const api = {
         const decoder = new TextDecoder()
         let buffer = ''
 
+        const resolveChunkContent = (parsed: any) => {
+          if (typeof parsed?.content === 'string') {
+            return parsed.content
+          }
+
+          const deltaContent = parsed?.choices?.[0]?.delta?.content
+          if (typeof deltaContent === 'string') {
+            return deltaContent
+          }
+
+          if (Array.isArray(deltaContent)) {
+            return deltaContent
+              .map((item) => {
+                if (typeof item === 'string') return item
+                if (item && typeof item.text === 'string') return item.text
+                return ''
+              })
+              .join('')
+          }
+
+          return ''
+        }
+
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
@@ -515,8 +600,9 @@ export const api = {
                 callbacks.onError(parsed.error)
                 return
               }
-              if (parsed.content) {
-                callbacks.onChunk(parsed.content)
+              const chunkContent = resolveChunkContent(parsed)
+              if (chunkContent) {
+                callbacks.onChunk(chunkContent)
               }
             } catch {
               // ignore malformed JSON
@@ -1002,6 +1088,36 @@ export const api = {
 
     const response = await apiClient.get('/api/v1/generate/history/unified/count', { params })
     return response.data
+  },
+
+  /**
+   * 获取对话历史摘要列表
+   */
+  async getConversationHistoryList(limit: number = 20, offset: number = 0): Promise<{
+    total: number
+    conversations: ConversationHistorySummary[]
+    limit: number
+    offset: number
+  }> {
+    const response = await apiClient.get('/api/v1/history/list', {
+      params: { limit, offset }
+    })
+    return response.data
+  },
+
+  /**
+   * 获取对话历史详情
+   */
+  async getConversationHistoryDetail(sessionId: string): Promise<ConversationHistoryDetail> {
+    const response = await apiClient.get(`/api/v1/history/${sessionId}`)
+    return response.data
+  },
+
+  /**
+   * 删除对话历史
+   */
+  async deleteConversationHistory(sessionId: string): Promise<void> {
+    await apiClient.delete(`/api/v1/history/${sessionId}`)
   },
 
   // ==================== 管理员相关API ====================

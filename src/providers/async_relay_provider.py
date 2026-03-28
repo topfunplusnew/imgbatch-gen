@@ -4,6 +4,7 @@ import asyncio
 from abc import ABC, abstractmethod
 from typing import Optional, List, Callable, Dict, Any
 
+from ..config.settings import settings
 from ..models.image import ImageParams
 from .base import BaseProvider
 from .relay_client import RelayClient
@@ -20,7 +21,12 @@ class AsyncRelayProvider(BaseProvider):
         max_poll_time: float = 300.0
     ):
         """初始化异步Provider"""
-        self.client = RelayClient(base_url, api_key)
+        self.client = RelayClient(
+            base_url,
+            api_key,
+            retry_base_delay=settings.generation_retry_base_delay,
+            retry_max_delay=settings.generation_retry_max_delay,
+        )
         self.poll_interval = poll_interval
         self.max_poll_time = max_poll_time
     
@@ -138,4 +144,3 @@ class AsyncRelayProvider(BaseProvider):
             
             # 等待后继续轮询
             await asyncio.sleep(self.poll_interval)
-

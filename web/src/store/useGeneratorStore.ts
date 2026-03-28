@@ -819,7 +819,8 @@ export const useGeneratorStore = defineStore('generator', {
                             content: '图像生成完成！',
                             status: 'completed',
                             images: images,
-                            generationProgress: buildTaskProgressPayload(task, '图像生成完成！')
+                            generationProgress: buildTaskProgressPayload(task, '图像生成完成！'),
+                            ...(task.billing ? { billing: task.billing } : {})
                         })
                         console.log('任务完成，图片数据:', this.messages.find(m => m.id === messageId)?.images)
 
@@ -850,7 +851,8 @@ export const useGeneratorStore = defineStore('generator', {
                         this.updateMessage(messageId, {
                             content: `生成失败: ${task.error || '未知错误'}`,
                             status: 'error',
-                            generationProgress: buildTaskProgressPayload(task, `生成失败: ${task.error || '未知错误'}`)
+                            generationProgress: buildTaskProgressPayload(task, `生成失败: ${task.error || '未知错误'}`),
+                            ...(task.billing ? { billing: task.billing } : {})
                         })
                         this.activePollingTasks.delete(taskId)
                         return false
@@ -1266,7 +1268,8 @@ export const useGeneratorStore = defineStore('generator', {
                             content: finalContent,
                             status: finalStatus,
                             images: orderedImages,
-                            batchProgress: buildBatchProgressPayload(batchTask, orderedImages, progressTotal)
+                            batchProgress: buildBatchProgressPayload(batchTask, orderedImages, progressTotal),
+                            ...(batchTask.billing ? { billing: batchTask.billing } : {})
                         })
 
                         if (this.sessionSavedToHistory) {
@@ -1454,6 +1457,7 @@ export const useGeneratorStore = defineStore('generator', {
                         api.assistantChatStream(chatRequest, {
                             onChunk(content) {
                                 fullContent += content
+                                this.updateMessage(messageId, { content: fullContent, status: 'processing' })
                             },
                             onDone: () => {
                                 this.updateMessage(messageId, { content: fullContent || '(空回复)', status: 'completed' })
@@ -1500,6 +1504,7 @@ export const useGeneratorStore = defineStore('generator', {
                             content: response.message.content,
                             taskId: response.task_id,
                             status: 'processing',
+                            billing: response.metadata?.billing || undefined,
                             generationProgress: buildInitialTaskProgressPayload(response.metadata, response.message.content)
                         })
                         this.pollTaskStatus(response.task_id, messageId, 900, 2000)
@@ -1512,6 +1517,7 @@ export const useGeneratorStore = defineStore('generator', {
                             batchId: response.batch_id,
                             status: 'processing',
                             batchCount: totalCount,
+                            billing: response.metadata?.billing || undefined,
                             batchProgress: {
                                 completed: 0,
                                 total: totalCount,

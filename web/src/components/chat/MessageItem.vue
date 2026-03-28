@@ -50,6 +50,14 @@
         <template v-else-if="msg.role === 'user'">{{ msg.content }}</template>
       </div>
 
+      <div
+        v-if="isStreamingTextResponse"
+        class="mb-2 inline-flex max-w-[90%] xs:max-w-[85%] sm:max-w-[80%] items-center gap-1.5 rounded-full bg-white/80 px-2.5 py-1 text-[11px] text-ink-400 border border-primary/10"
+      >
+        <span class="streaming-indicator__dot"></span>
+        <span>实时输出中</span>
+      </div>
+
       <!-- Message Action Bar - Only for assistant messages (outside the bubble) -->
       <div v-if="msg.role === 'assistant'" class="mt-2">
         <!-- Action buttons container -->
@@ -160,12 +168,12 @@
         <transition name="status-card">
           <div v-if="progressCard" class="mt-3">
             <div
-              class="status-card relative overflow-hidden rounded-[1.25rem] border px-3 py-3 sm:px-4"
+              class="status-card relative overflow-hidden rounded-[1.1rem] border px-3 py-2.5 sm:px-3.5"
               :class="statusCardThemeClass"
             >
               <div v-if="isProgressActive" class="status-card__ambient"></div>
 
-              <div class="relative flex items-start gap-3">
+              <div class="relative flex items-start gap-2.5 sm:gap-3">
                 <div class="status-card__badge" :class="statusBadgeThemeClass">
                   <span
                     class="material-symbols-outlined !text-lg"
@@ -177,7 +185,7 @@
 
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap items-center gap-2">
-                    <span class="text-sm font-semibold text-ink-950">{{ progressCard.title }}</span>
+                    <span class="text-sm font-medium text-ink-700">{{ progressCard.title }}</span>
                     <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="statusTagThemeClass">
                       {{ progressCard.tag }}
                     </span>
@@ -188,77 +196,118 @@
                     </div>
                   </div>
 
-                  <p class="mt-1 text-xs leading-relaxed text-ink-500 sm:text-sm">
-                    {{ progressCard.message }}
-                  </p>
+                  <div class="mt-1.5 flex items-center gap-2">
+                    <p class="status-card__summary flex-1">
+                      {{ collapsedProgressSummary }}
+                    </p>
 
-                  <div class="mt-3">
-                    <div class="status-card__progress-track">
-                      <div
-                        class="status-card__progress-fill"
-                        :class="progressFillThemeClass"
-                        :style="{ width: `${progressCard.percent}%` }"
+                    <button
+                      v-if="hasProgressDetails"
+                      type="button"
+                      class="status-card__toggle status-card__toggle--compact"
+                      :aria-expanded="isProgressDetailsOpen"
+                      @click="isProgressDetailsOpen = !isProgressDetailsOpen"
+                    >
+                      <span>{{ isProgressDetailsOpen ? '收起' : '过程' }}</span>
+                      <span
+                        class="material-symbols-outlined !text-[15px] transition-transform duration-200"
+                        :class="{ 'rotate-180': isProgressDetailsOpen }"
                       >
-                        <span v-if="isProgressActive" class="status-card__progress-shine"></span>
-                      </div>
-                    </div>
-                    <div class="mt-2 flex items-center justify-between text-[11px] font-medium text-ink-500">
-                      <span>{{ progressCard.caption }}</span>
-                      <span class="text-ink-700">{{ progressCard.percent }}%</span>
-                    </div>
+                        expand_more
+                      </span>
+                    </button>
                   </div>
 
-                  <div v-if="progressStatChips.length > 0" class="mt-3 flex flex-wrap gap-2">
-                    <div
-                      v-for="chip in progressStatChips"
-                      :key="chip.label"
-                      class="status-chip"
-                    >
-                      <span class="text-[10px] uppercase tracking-[0.12em] text-ink-400">{{ chip.label }}</span>
-                      <span class="text-xs font-semibold text-ink-700">{{ chip.value }}</span>
-                    </div>
-                  </div>
+                  <transition name="status-details">
+                    <div v-if="isProgressDetailsOpen && hasProgressDetails" class="status-card__details">
+                      <p class="text-xs leading-relaxed text-ink-500">
+                        {{ progressCard.message }}
+                      </p>
 
-                  <div v-if="progressStagePills.length > 0" class="mt-3 flex flex-wrap gap-2">
-                    <div
-                      v-for="item in progressStagePills"
-                      :key="`${item.stage}-${item.countText}`"
-                      class="stage-pill"
-                      :class="{
-                        'stage-pill--active': item.isActive,
-                        'stage-pill--done': item.isDone,
-                        'stage-pill--error': item.isError
-                      }"
-                    >
-                      <span class="material-symbols-outlined !text-sm">{{ item.icon }}</span>
-                      <span class="font-medium">{{ item.label }}</span>
-                      <span v-if="item.countText">{{ item.countText }}</span>
-                    </div>
-                  </div>
-
-                  <div v-if="progressTimeline.length > 0" class="mt-3 space-y-2">
-                    <div
-                      v-for="event in progressTimeline"
-                      :key="`${event.stage}-${event.timestamp || event.label}`"
-                      class="timeline-item"
-                      :class="{ 'timeline-item--active': event.isActive }"
-                    >
-                      <span class="timeline-item__dot"></span>
-                      <div class="min-w-0 flex-1">
-                        <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                          <span class="text-xs font-semibold text-ink-700">{{ event.label }}</span>
-                          <span class="text-[10px] text-ink-400">{{ event.progressPercent }}%</span>
-                          <span v-if="event.timestamp" class="text-[10px] text-ink-400">{{ event.timestamp }}</span>
+                      <div class="mt-3">
+                        <div class="flex items-center gap-3">
+                          <div class="status-card__progress-track flex-1">
+                            <div
+                              class="status-card__progress-fill"
+                              :class="progressFillThemeClass"
+                              :style="{ width: `${progressCard.percent}%` }"
+                            >
+                              <span v-if="isProgressActive" class="status-card__progress-shine"></span>
+                            </div>
+                          </div>
+                          <span class="text-[11px] font-medium text-ink-500">{{ progressCard.percent }}%</span>
                         </div>
-                        <p class="mt-0.5 text-[11px] leading-relaxed text-ink-500">{{ event.message }}</p>
+                        <div class="mt-2 flex items-center justify-between gap-3 text-[11px] text-ink-400">
+                          <span class="min-w-0 truncate">{{ progressCard.caption }}</span>
+                          <span v-if="progressMetaSummary" class="status-card__meta-summary">{{ progressMetaSummary }}</span>
+                        </div>
+                      </div>
+
+                      <div v-if="progressStatChips.length > 0" class="flex flex-wrap gap-2">
+                        <div
+                          v-for="chip in progressStatChips"
+                          :key="chip.label"
+                          class="status-chip"
+                        >
+                          <span class="text-[10px] uppercase tracking-[0.12em] text-ink-400">{{ chip.label }}</span>
+                          <span class="text-xs font-medium text-ink-500">{{ chip.value }}</span>
+                        </div>
+                      </div>
+
+                      <div v-if="progressStagePills.length > 0" class="mt-3 flex flex-wrap gap-2">
+                        <div
+                          v-for="item in progressStagePills"
+                          :key="`${item.stage}-${item.countText}`"
+                          class="stage-pill"
+                          :class="{
+                            'stage-pill--active': item.isActive,
+                            'stage-pill--done': item.isDone,
+                            'stage-pill--error': item.isError
+                          }"
+                        >
+                          <span class="material-symbols-outlined !text-sm">{{ item.icon }}</span>
+                          <span class="font-medium">{{ item.label }}</span>
+                          <span v-if="item.countText">{{ item.countText }}</span>
+                        </div>
+                      </div>
+
+                      <div v-if="progressTimeline.length > 0" class="mt-3 space-y-2">
+                        <div
+                          v-for="event in progressTimeline"
+                          :key="`${event.stage}-${event.timestamp || event.label}`"
+                          class="timeline-item"
+                          :class="{ 'timeline-item--active': event.isActive }"
+                        >
+                          <span class="timeline-item__dot"></span>
+                          <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                              <span class="text-xs font-medium text-ink-600">{{ event.label }}</span>
+                              <span class="text-[10px] text-ink-400">{{ event.progressPercent }}%</span>
+                              <span v-if="event.timestamp" class="text-[10px] text-ink-400">{{ event.timestamp }}</span>
+                            </div>
+                            <p class="mt-0.5 text-[11px] leading-relaxed text-ink-500">{{ event.message }}</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </transition>
                 </div>
               </div>
             </div>
           </div>
         </transition>
+      </div>
+
+      <!-- 计费状态卡片 -->
+      <div v-if="billingDisplay" class="mt-2 max-w-[90%] xs:max-w-[85%] sm:max-w-[80%]">
+        <div
+          class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border"
+          :class="billingDisplay.classes"
+        >
+          <span class="material-symbols-outlined !text-sm">{{ billingDisplay.icon }}</span>
+          <span>{{ billingDisplay.text }}</span>
+          <span v-if="billingDisplay.balanceText" class="text-ink-400 ml-1">{{ billingDisplay.balanceText }}</span>
+        </div>
       </div>
 
       <!-- 单张图片 -->
@@ -317,18 +366,18 @@
         </div>
       </div>
 
-      <div v-if="msg.images && msg.images.length === 1" class="mt-3">
+      <div v-if="shouldRenderSingleGeneratedImage" class="mt-3">
         <div
           class="relative group max-w-xs md:max-w-md w-full cursor-zoom-in"
           @click="openGeneratedImagePreview(0)"
         >
           <img
-            :src="getImageUrl(msg.images[0], true)"
-            :alt="typeof msg.images[0] === 'object' ? msg.images[0].alt : '生成的图像'"
+            :src="generatedImageEntries[0].preview.url"
+            :alt="generatedImageEntries[0].preview.alt || '生成的图像'"
             class="w-full rounded-xl shadow-lg transition-transform duration-300 group-hover:scale-[1.01]">
           <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-xl">
             <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between">
-              <p class="text-sm text-white truncate">{{ typeof msg.images[0] === 'object' ? (msg.images[0].alt || '生成的图像') : '生成的图像' }}</p>
+              <p class="text-sm text-white truncate">{{ generatedImageEntries[0].preview.alt || '生成的图像' }}</p>
               <div class="flex items-center gap-2">
                 <button
                   @click.stop="openGeneratedImagePreview(0)"
@@ -337,7 +386,7 @@
                   <span class="material-symbols-outlined !text-lg text-white">zoom_in</span>
                 </button>
                 <button
-                  @click.stop="downloadSingleImage(msg.images[0])"
+                  @click.stop="downloadSingleImage(generatedImageEntries[0].raw)"
                   class="p-2 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm transition-colors"
                   title="下载图片">
                   <span class="material-symbols-outlined !text-lg text-white">download</span>
@@ -348,12 +397,12 @@
         </div>
       </div>
 
-      <!-- 多张图片（批量结果） -->
-      <div v-if="msg.images && msg.images.length > 1">
+      <div v-if="shouldRenderGeneratedGallery">
         <!-- 批量下载按钮 -->
         <div class="mb-3 flex items-center justify-between">
-          <span class="text-sm text-slate-500">共 {{ msg.images.length }} 张图片</span>
+          <span class="text-sm text-slate-500">{{ generatedGalleryCountLabel }}</span>
           <button
+            v-if="generatedImageEntries.length > 1"
             @click="downloadAllImages"
             :disabled="isDownloading"
             class="flex items-center gap-2 px-4 py-2 bg-primary-strong text-white rounded-lg text-sm hover:bg-primary-deep disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
@@ -363,44 +412,68 @@
         </div>
 
         <!-- 图片网格 -->
-        <div class="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 xs:gap-3 md:gap-4">
+        <div :class="generatedGalleryGridClass">
           <div
-            v-for="(image, index) in msg.images"
-            :key="index"
-            class="relative group aspect-square bg-white rounded-xl overflow-hidden border border-border-dark shadow-lg hover:shadow-xl transition-shadow cursor-zoom-in"
-            @click="openGeneratedImagePreview(index)"
+            v-for="slot in generatedGallerySlots"
+            :key="slot.index"
+            :class="[
+              'aspect-square rounded-xl overflow-hidden border border-border-dark shadow-lg transition-shadow',
+              slot.entry ? 'relative group bg-white hover:shadow-xl cursor-zoom-in' : 'relative bg-white/80'
+            ]"
+            @click="slot.entry ? openGeneratedImagePreview(slot.entry.index) : undefined"
           >
-            <img
-              :src="getImageUrl(image, true)"
-              :alt="typeof image === 'object' ? (image.alt || `图片 ${index + 1}`) : `图片 ${index + 1}`"
-              class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
-            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-              <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-                <p class="text-xs text-white truncate">{{ typeof image === 'object' ? (image.alt || `图片 ${index + 1}`) : `图片 ${index + 1}` }}</p>
-                <div class="flex items-center gap-1.5">
-                  <button
-                    @click.stop="openGeneratedImagePreview(index)"
-                    class="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm transition-colors"
-                    title="预览此图片"
-                  >
-                    <span class="material-symbols-outlined !text-base text-white">zoom_in</span>
-                  </button>
-                  <button
-                    @click.stop="downloadSingleImage(image)"
-                    class="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm transition-colors"
-                    title="下载此图片">
-                    <span class="material-symbols-outlined !text-base text-white">download</span>
-                  </button>
+            <template v-if="slot.entry">
+              <img
+                :src="slot.entry.preview.url"
+                :alt="slot.entry.preview.alt || `图片 ${slot.index + 1}`"
+                class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
+              <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+                  <p class="text-xs text-white truncate">{{ slot.entry.preview.alt || `图片 ${slot.index + 1}` }}</p>
+                  <div class="flex items-center gap-1.5">
+                    <button
+                      @click.stop="openGeneratedImagePreview(slot.entry.index)"
+                      class="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm transition-colors"
+                      title="预览此图片"
+                    >
+                      <span class="material-symbols-outlined !text-base text-white">zoom_in</span>
+                    </button>
+                    <button
+                      @click.stop="downloadSingleImage(slot.entry.raw)"
+                      class="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm transition-colors"
+                      title="下载此图片">
+                      <span class="material-symbols-outlined !text-base text-white">download</span>
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-            <!-- 下载进度 -->
-            <div v-if="downloadProgress[index] !== undefined" class="absolute inset-0 bg-black/70 flex items-center justify-center">
-              <div class="text-center">
-                <span class="material-symbols-outlined !text-3xl text-white animate-spin">downloading</span>
-                <p class="text-xs text-white mt-2">{{ downloadProgress[index] }}%</p>
+              <!-- 下载进度 -->
+              <div v-if="downloadProgress[slot.entry.index] !== undefined" class="absolute inset-0 bg-black/70 flex items-center justify-center">
+                <div class="text-center">
+                  <span class="material-symbols-outlined !text-3xl text-white animate-spin">downloading</span>
+                  <p class="text-xs text-white mt-2">{{ downloadProgress[slot.entry.index] }}%</p>
+                </div>
               </div>
-            </div>
+            </template>
+
+            <template v-else>
+              <div class="generated-skeleton">
+                <div class="generated-skeleton__shine"></div>
+                <div class="generated-skeleton__orb generated-skeleton__orb--one"></div>
+                <div class="generated-skeleton__orb generated-skeleton__orb--two"></div>
+                <div class="generated-skeleton__panel"></div>
+              </div>
+              <div class="absolute inset-x-0 bottom-0 p-3">
+                <div class="inline-flex items-center gap-1.5 rounded-full bg-white/85 px-2.5 py-1 text-[11px] font-medium text-emerald-700 shadow-sm">
+                  <span class="material-symbols-outlined !text-sm animate-spin">progress_activity</span>
+                  生成中
+                </div>
+                <div class="mt-2 space-y-2">
+                  <div class="h-2.5 w-3/4 rounded-full bg-white/80"></div>
+                  <div class="h-2.5 w-1/2 rounded-full bg-white/60"></div>
+                </div>
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -445,6 +518,7 @@ const isDownloading = ref(false)
 const downloadProgress = ref({})
 const copied = ref(false)
 const imagePreviewModalRef = ref(null)
+const isProgressDetailsOpen = ref(false)
 
 // Message interaction state
 const isLiked = ref(false)
@@ -464,6 +538,19 @@ const previewableGeneratedImages = computed(() =>
     .map((image, index) => normalizePreviewImage(image, index))
     .filter((image) => image.url)
 )
+const generatedImageEntries = computed(() =>
+  (Array.isArray(props.msg.images) ? props.msg.images : [])
+    .map((image, index) => {
+      const preview = normalizePreviewImage(image, index)
+      if (!preview.url) return null
+      return {
+        raw: image,
+        preview,
+        index,
+      }
+    })
+    .filter(Boolean)
+)
 const previewableAttachmentImages = computed(() =>
   imageAttachments.value
     .map((file, index) => ({
@@ -473,6 +560,52 @@ const previewableAttachmentImages = computed(() =>
     .filter((image) => image.url)
 )
 const generationProgress = computed(() => props.msg?.generationProgress || null)
+const expectedGeneratedCount = computed(() => {
+  const actualCount = generatedImageEntries.value.length
+  const batchTotal = Number(props.msg?.batchProgress?.total ?? props.msg?.batchCount ?? 0)
+  if (Number.isFinite(batchTotal) && batchTotal > 0) {
+    return Math.max(actualCount, Math.round(batchTotal))
+  }
+  if (generationProgress.value || props.msg?.taskId) {
+    return Math.max(actualCount, 1)
+  }
+  return actualCount
+})
+const hasPendingGeneratedSlots = computed(() => {
+  const status = String(props.msg?.status || '').toLowerCase()
+  if (!['processing', 'pending', 'running'].includes(status)) return false
+  return expectedGeneratedCount.value > generatedImageEntries.value.length
+})
+const generatedGallerySlots = computed(() => {
+  const actualCount = generatedImageEntries.value.length
+  const total = hasPendingGeneratedSlots.value
+    ? Math.max(expectedGeneratedCount.value, actualCount)
+    : actualCount
+
+  return Array.from({ length: total }, (_, index) => ({
+    index,
+    entry: generatedImageEntries.value[index] || null,
+  }))
+})
+const shouldRenderSingleGeneratedImage = computed(() =>
+  !hasPendingGeneratedSlots.value
+  && generatedImageEntries.value.length === 1
+  && expectedGeneratedCount.value <= 1
+)
+const shouldRenderGeneratedGallery = computed(() =>
+  generatedGallerySlots.value.length > 0 && !shouldRenderSingleGeneratedImage.value
+)
+const generatedGalleryCountLabel = computed(() => {
+  if (hasPendingGeneratedSlots.value) {
+    return `已生成 ${generatedImageEntries.value.length} / ${expectedGeneratedCount.value} 张图片`
+  }
+  return `共 ${generatedImageEntries.value.length} 张图片`
+})
+const generatedGalleryGridClass = computed(() =>
+  generatedGallerySlots.value.length <= 1
+    ? 'grid grid-cols-1 max-w-xs md:max-w-md gap-2 xs:gap-3 md:gap-4'
+    : 'grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 xs:gap-3 md:gap-4'
+)
 const batchProgressPercent = computed(() => {
   const explicitPercent = Number(props.msg?.batchProgress?.progressPercent)
   if (Number.isFinite(explicitPercent)) {
@@ -488,6 +621,49 @@ const normalizedBatchStageOverview = computed(() =>
     ? props.msg.batchProgress.stageOverview.filter((item) => item && item.count > 0)
     : []
 )
+
+const billingDisplay = computed(() => {
+  const billing = props.msg?.billing
+  if (!billing || !billing.status) return null
+
+  const balanceText = billing.balance_after
+    ? `(余额: ${billing.balance_after.points + (billing.balance_after.gift_points || 0)} 积分)`
+    : ''
+
+  switch (billing.status) {
+    case 'frozen':
+      return {
+        icon: 'ac_unit',
+        text: billing.description || `已冻结 ${billing.points_amount} 积分`,
+        balanceText,
+        classes: 'bg-sky-50 text-sky-700 border-sky-200'
+      }
+    case 'deducted':
+      return {
+        icon: 'check_circle',
+        text: billing.description || `已扣除 ${billing.points_amount} 积分`,
+        balanceText,
+        classes: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      }
+    case 'refunded':
+      return {
+        icon: 'undo',
+        text: billing.description || `已返还 ${billing.points_amount} 积分`,
+        balanceText,
+        classes: 'bg-amber-50 text-amber-700 border-amber-200'
+      }
+    case 'insufficient':
+      return {
+        icon: 'error',
+        text: billing.description || `积分不足，需要 ${billing.points_amount} 积分`,
+        balanceText,
+        classes: 'bg-red-50 text-red-600 border-red-200'
+      }
+    default:
+      return null
+  }
+})
+
 const progressCard = computed(() => {
   if (props.msg.role !== 'assistant') return null
 
@@ -547,7 +723,7 @@ const progressStatChips = computed(() => {
     const running = Number(props.msg?.batchProgress?.running || 0)
     const pending = Number(props.msg?.batchProgress?.pending || 0)
     const failed = Number(props.msg?.batchProgress?.failed || 0)
-    const returnedImages = Array.isArray(props.msg?.images) ? props.msg.images.length : 0
+    const returnedImages = generatedImageEntries.value.length
 
     return [
       total > 0 ? { label: '完成', value: `${completed}/${total}` } : null,
@@ -562,7 +738,7 @@ const progressStatChips = computed(() => {
   const stageIndex = Number(currentProgress.stageIndex || 0)
   const totalStages = Number(currentProgress.totalStages || 0)
   const attempt = Number(currentProgress.attempt || 0)
-  const outputCount = Array.isArray(props.msg?.images) ? props.msg.images.length : 0
+  const outputCount = generatedImageEntries.value.length
 
   return [
     stageIndex > 0 && totalStages > 0 ? { label: '阶段', value: `${stageIndex}/${totalStages}` } : null,
@@ -627,6 +803,32 @@ const progressFillThemeClass = computed(() => {
   if (messageStatus === 'completed') return 'status-card__progress-fill--success'
   return 'status-card__progress-fill--active'
 })
+const hasProgressDetails = computed(() =>
+  progressStatChips.value.length > 0
+  || progressStagePills.value.length > 0
+  || progressTimeline.value.length > 0
+)
+const progressMetaSummary = computed(() => {
+  if (!progressStatChips.value.length) return ''
+
+  return progressStatChips.value
+    .slice(0, 3)
+    .map((chip) => `${chip.label} ${chip.value}`)
+    .join(' · ')
+})
+const collapsedProgressSummary = computed(() =>
+  progressCard.value?.message || progressCard.value?.caption || ''
+)
+const isStreamingTextResponse = computed(() =>
+  props.msg?.role === 'assistant'
+  && props.msg?.status === 'processing'
+  && Boolean(props.msg?.content)
+  && !String(props.msg?.content || '').startsWith('正在上传文件')
+  && !props.msg?.taskId
+  && !props.msg?.batchId
+  && !props.msg?.generationProgress
+  && !props.msg?.batchProgress
+)
 
 function getAttachmentName(file) {
   return file?.name || file?.filename || file?.original_filename || '附件'
@@ -1222,33 +1424,33 @@ onUnmounted(() => {
 .markdown-body :deep(th) { background: rgba(16, 19, 18, 0.04); }
 
 .status-card {
-  backdrop-filter: blur(14px);
-  box-shadow: 0 18px 40px rgba(16, 19, 18, 0.08);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 18px rgba(16, 19, 18, 0.05);
 }
 
 .status-card--active {
   border-color: rgba(0, 187, 111, 0.16);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(0, 187, 111, 0.06) 62%, rgba(226, 255, 242, 0.92) 100%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.97) 0%, rgba(245, 252, 248, 0.96) 56%, rgba(236, 249, 242, 0.94) 100%);
 }
 
 .status-card--success {
   border-color: rgba(16, 185, 129, 0.18);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(209, 250, 229, 0.9) 100%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.97) 0%, rgba(241, 252, 247, 0.95) 100%);
 }
 
 .status-card--error {
   border-color: rgba(239, 68, 68, 0.18);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(254, 242, 242, 0.94) 100%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.97) 0%, rgba(253, 245, 245, 0.95) 100%);
 }
 
 .status-card__ambient {
   position: absolute;
-  left: -3rem;
-  top: -3rem;
-  width: 14rem;
-  height: 14rem;
+  left: -2.4rem;
+  top: -2.8rem;
+  width: 8rem;
+  height: 8rem;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(0, 187, 111, 0.18) 0%, rgba(0, 187, 111, 0) 70%);
+  background: radial-gradient(circle, rgba(0, 187, 111, 0.08) 0%, rgba(0, 187, 111, 0) 70%);
   animation: status-orbit 5s ease-in-out infinite;
   pointer-events: none;
 }
@@ -1256,12 +1458,12 @@ onUnmounted(() => {
 .status-card__badge {
   position: relative;
   display: flex;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 2rem;
+  height: 2rem;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border-radius: 1rem;
+  border-radius: 0.75rem;
   overflow: hidden;
 }
 
@@ -1269,13 +1471,13 @@ onUnmounted(() => {
   content: '';
   position: absolute;
   inset: -0.3rem;
-  border-radius: 1.15rem;
+  border-radius: 0.85rem;
 }
 
 .status-card__badge--active {
   color: #00a86b;
-  background: linear-gradient(145deg, rgba(0, 187, 111, 0.14), rgba(255, 255, 255, 0.9));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 10px 24px rgba(0, 187, 111, 0.16);
+  background: linear-gradient(145deg, rgba(0, 187, 111, 0.12), rgba(255, 255, 255, 0.88));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 6px 18px rgba(0, 187, 111, 0.1);
 }
 
 .status-card__badge--active::after {
@@ -1285,14 +1487,14 @@ onUnmounted(() => {
 
 .status-card__badge--success {
   color: #047857;
-  background: linear-gradient(145deg, rgba(16, 185, 129, 0.14), rgba(255, 255, 255, 0.9));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 10px 24px rgba(16, 185, 129, 0.14);
+  background: linear-gradient(145deg, rgba(16, 185, 129, 0.12), rgba(255, 255, 255, 0.88));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 6px 18px rgba(16, 185, 129, 0.08);
 }
 
 .status-card__badge--error {
   color: #dc2626;
-  background: linear-gradient(145deg, rgba(239, 68, 68, 0.14), rgba(255, 255, 255, 0.92));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 10px 24px rgba(239, 68, 68, 0.12);
+  background: linear-gradient(145deg, rgba(239, 68, 68, 0.12), rgba(255, 255, 255, 0.9));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 6px 18px rgba(239, 68, 68, 0.08);
 }
 
 .status-card__icon-spin {
@@ -1301,10 +1503,10 @@ onUnmounted(() => {
 
 .status-card__progress-track {
   position: relative;
-  height: 0.75rem;
+  height: 0.45rem;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.78);
   box-shadow: inset 0 1px 2px rgba(16, 19, 18, 0.08);
 }
 
@@ -1320,7 +1522,7 @@ onUnmounted(() => {
 .status-card__progress-fill {
   position: relative;
   height: 100%;
-  min-width: 0.9rem;
+  min-width: 0.7rem;
   border-radius: inherit;
   overflow: hidden;
   transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -1366,13 +1568,13 @@ onUnmounted(() => {
 
 .status-chip {
   display: flex;
-  min-width: 4.5rem;
+  min-width: 4.1rem;
   flex-direction: column;
   gap: 0.2rem;
-  border-radius: 0.95rem;
-  border: 1px solid rgba(16, 19, 18, 0.08);
-  background: rgba(255, 255, 255, 0.72);
-  padding: 0.55rem 0.7rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(16, 19, 18, 0.06);
+  background: rgba(255, 255, 255, 0.7);
+  padding: 0.48rem 0.62rem;
 }
 
 .stage-pill {
@@ -1380,11 +1582,11 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.35rem;
   border-radius: 999px;
-  border: 1px solid rgba(16, 19, 18, 0.08);
-  background: rgba(255, 255, 255, 0.78);
-  padding: 0.38rem 0.65rem;
+  border: 1px solid rgba(16, 19, 18, 0.06);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.34rem 0.62rem;
   font-size: 0.7rem;
-  color: rgba(16, 19, 18, 0.68);
+  color: rgba(16, 19, 18, 0.58);
   transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease, color 220ms ease;
 }
 
@@ -1409,16 +1611,19 @@ onUnmounted(() => {
   display: flex;
   align-items: flex-start;
   gap: 0.7rem;
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.48);
+  padding: 0.5rem 0.65rem;
 }
 
 .timeline-item__dot {
-  width: 0.65rem;
-  height: 0.65rem;
+  width: 0.55rem;
+  height: 0.55rem;
   margin-top: 0.35rem;
   flex-shrink: 0;
   border-radius: 999px;
-  background: rgba(0, 187, 111, 0.22);
-  box-shadow: 0 0 0 0.35rem rgba(0, 187, 111, 0.08);
+  background: rgba(0, 187, 111, 0.18);
+  box-shadow: 0 0 0 0.3rem rgba(0, 187, 111, 0.05);
 }
 
 .timeline-item--active .timeline-item__dot {
@@ -1446,6 +1651,118 @@ onUnmounted(() => {
 
 .loading-dots span:nth-child(3) {
   animation-delay: 0.3s;
+}
+
+.streaming-indicator__dot {
+  width: 0.42rem;
+  height: 0.42rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: #00b26d;
+  animation: streaming-pulse 1.1s ease-in-out infinite;
+}
+
+.status-card__meta-summary {
+  max-width: 46%;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.status-card__summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  color: rgba(16, 19, 18, 0.5);
+}
+
+.status-card__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  border-radius: 999px;
+  border: 1px solid rgba(16, 19, 18, 0.04);
+  background: rgba(255, 255, 255, 0.58);
+  padding: 0.24rem 0.56rem;
+  font-size: 0.71rem;
+  font-weight: 500;
+  color: rgba(16, 19, 18, 0.48);
+  transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease;
+}
+
+.status-card__toggle:hover {
+  color: rgba(16, 19, 18, 0.68);
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(16, 19, 18, 0.08);
+}
+
+.status-card__toggle--compact {
+  flex-shrink: 0;
+}
+
+.status-card__details {
+  margin-top: 0.65rem;
+  border-top: 1px solid rgba(16, 19, 18, 0.06);
+  padding-top: 0.7rem;
+}
+
+.generated-skeleton {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(16, 185, 129, 0.16), transparent 38%),
+    linear-gradient(145deg, rgba(247, 250, 249, 0.98), rgba(228, 239, 235, 0.92));
+}
+
+.generated-skeleton__shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 12%, rgba(255, 255, 255, 0.78) 42%, transparent 72%);
+  transform: translateX(-100%);
+  animation: skeleton-shine 1.8s ease-in-out infinite;
+}
+
+.generated-skeleton__orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(2px);
+  opacity: 0.8;
+}
+
+.generated-skeleton__orb--one {
+  width: 44%;
+  height: 44%;
+  left: 10%;
+  top: 12%;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.28), rgba(16, 185, 129, 0));
+  animation: skeleton-float 3.8s ease-in-out infinite;
+}
+
+.generated-skeleton__orb--two {
+  width: 54%;
+  height: 54%;
+  right: -8%;
+  top: -4%;
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.24), rgba(52, 211, 153, 0));
+  animation: skeleton-float 4.8s ease-in-out infinite reverse;
+}
+
+.generated-skeleton__panel {
+  position: absolute;
+  inset: 18% 12% 18% 12%;
+  border-radius: 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.34)),
+    linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(255, 255, 255, 0.2));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 /* Thinking animation dots */
@@ -1533,6 +1850,35 @@ onUnmounted(() => {
   }
 }
 
+@keyframes streaming-pulse {
+  0%, 100% {
+    transform: scale(0.85);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes skeleton-shine {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(140%);
+  }
+}
+
+@keyframes skeleton-float {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0.35rem, -0.45rem, 0) scale(1.06);
+  }
+}
+
 .status-card-enter-active,
 .status-card-leave-active {
   transition: opacity 220ms ease, transform 220ms ease;
@@ -1544,6 +1890,17 @@ onUnmounted(() => {
   transform: translateY(8px);
 }
 
+.status-details-enter-active,
+.status-details-leave-active {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.status-details-enter-from,
+.status-details-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .status-card__ambient,
   .status-card__badge--active::after,
@@ -1553,6 +1910,9 @@ onUnmounted(() => {
   .status-card__progress-shine,
   .timeline-item--active .timeline-item__dot,
   .loading-dots span,
+  .streaming-indicator__dot,
+  .generated-skeleton__shine,
+  .generated-skeleton__orb,
   .thinking-dot {
     animation: none !important;
   }

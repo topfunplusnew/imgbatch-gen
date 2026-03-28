@@ -87,6 +87,8 @@ class Settings(BaseSettings):
     max_generation_retries: int = 2
     retry_base_delay: float = 1.0
     retry_max_delay: float = 10.0
+    generation_retry_base_delay: float = 0.0
+    generation_retry_max_delay: float = 0.0
     validate_image_urls: bool = True
 
     jwt_secret_key: str = "your-secret-key-change-in-production"

@@ -830,6 +830,7 @@ const handleImageModelSend = async () => {
           content: response.message.content,
           taskId: response.task_id,
           status: 'processing',
+          billing: response.metadata?.billing || undefined,
           generationProgress: {
             stage: initialStage,
             stageLabel: response.metadata?.stage_label || '请求已接收',
@@ -861,6 +862,7 @@ const handleImageModelSend = async () => {
           batchId: response.batch_id,
           status: 'processing',
           batchCount: totalCount,
+          billing: response.metadata?.billing || undefined,
           batchProgress: {
             completed: 0,
             total: totalCount,
@@ -886,11 +888,12 @@ const handleImageModelSend = async () => {
         })
 
       } else {
-        // 普通对话响应
+        // 普通对话响应（或积分不足等情况）
         const updatedMessage = {
           content: response.message.content,
           status: 'completed',
-          images: response.message.images || null
+          images: response.message.images || null,
+          billing: response.metadata?.billing || undefined
         }
         generatorStore.updateMessage(assistantMessage.id, updatedMessage)
 

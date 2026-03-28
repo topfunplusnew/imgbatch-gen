@@ -20,8 +20,9 @@
       <!-- 创作记录详情面板 -->
       <CreationDetailPanel />
 
-      <div class="max-w-full md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto space-y-6 md:space-y-8">
+      <div ref="messageListRef" class="max-w-full md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto space-y-6 md:space-y-8">
         <MessageItem v-for="msg in generatorStore.messages" :key="msg.id" :msg="msg" />
+        <div ref="chatBottomRef" class="h-px w-full"></div>
       </div>
     </div>
 
@@ -45,7 +46,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import TopHeader from '@/components/layout/TopHeader.vue'
 import MessageItem from '@/components/chat/MessageItem.vue'
 import ChatInputBar from '@/components/chat/ChatInputBar.vue'
@@ -81,6 +82,65 @@ const handleModelSelect = (model) => {
 // 对话区域高度拖拽（通过 chatAreaStyle 控制，这里保持 flex-1 自动）
 const chatAreaStyle = computed(() => ({}))
 const chatAreaRef = ref(null)
+const messageListRef = ref(null)
+const chatBottomRef = ref(null)
+
+let scrollFrameId = 0
+let resizeObserver = null
+
+const scheduleScrollToBottom = () => {
+  if (scrollFrameId) {
+    cancelAnimationFrame(scrollFrameId)
+  }
+
+  scrollFrameId = requestAnimationFrame(() => {
+    if (chatBottomRef.value?.scrollIntoView) {
+      chatBottomRef.value.scrollIntoView({ block: 'end' })
+      return
+    }
+
+    if (chatAreaRef.value) {
+      chatAreaRef.value.scrollTop = chatAreaRef.value.scrollHeight
+    }
+  })
+}
+
+watch(
+  () => generatorStore.currentSessionId,
+  async () => {
+    await nextTick()
+    scheduleScrollToBottom()
+  },
+  { immediate: true }
+)
+
+watch(
+  () => generatorStore.messages,
+  async () => {
+    await nextTick()
+    scheduleScrollToBottom()
+  },
+  { deep: true, flush: 'post' }
+)
+
+onMounted(async () => {
+  await nextTick()
+  scheduleScrollToBottom()
+
+  if (typeof ResizeObserver !== 'undefined' && messageListRef.value) {
+    resizeObserver = new ResizeObserver(() => {
+      scheduleScrollToBottom()
+    })
+    resizeObserver.observe(messageListRef.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (scrollFrameId) {
+    cancelAnimationFrame(scrollFrameId)
+  }
+  resizeObserver?.disconnect?.()
+})
 </script>
 
 <style scoped>

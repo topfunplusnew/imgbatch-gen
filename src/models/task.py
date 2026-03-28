@@ -265,6 +265,11 @@ class ImageTask(BaseModel):
                 if img.url
             ]
 
+        # 添加计费信息
+        billing_result = self.metadata.get("billing_result")
+        if billing_result:
+            response_data["billing"] = billing_result
+
         return response_data
 
 

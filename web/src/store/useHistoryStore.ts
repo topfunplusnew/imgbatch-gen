@@ -5,11 +5,15 @@ export interface HistorySession {
   id: string
   title: string
   createdAt: number
+  updatedAt?: number
   model: string
   messages: Array<{
     id: number
     role: 'user' | 'assistant'
     content: string
+    model?: string
+    provider?: string
+    createdAt?: number
     images?: Array<{ url: string; alt: string }>
     files?: Array<{
       id: number
@@ -22,6 +26,8 @@ export interface HistorySession {
   }>
   imageCount: number
   totalFiles: number
+  messageCount?: number
+  loadedFromServer?: boolean
 }
 
 export const useHistoryStore = defineStore('history', {
@@ -78,18 +84,19 @@ export const useHistoryStore = defineStore('history', {
 
       this.isLoading = true
       try {
-        const response = await fetch(`/api/v1/history/list`)
-        const data = await response.json()
+        const data = await api.getConversationHistoryList(100, 0)
 
         if (data && data.conversations) {
           const serverSessions = data.conversations.map((conv: any) => ({
             id: conv.session_id,
             title: conv.title || '无标题会话',
             createdAt: new Date(conv.created_at).getTime(),
+            updatedAt: conv.updated_at ? new Date(conv.updated_at).getTime() : undefined,
             model: conv.model || 'unknown',
             messages: [],  // 详细消息需要单独获取
-            imageCount: 0,
+            imageCount: Number(conv.image_count || 0),
             totalFiles: 0,
+            messageCount: Number(conv.message_count || 0),
             loadedFromServer: true
           }))
 
@@ -109,8 +116,7 @@ export const useHistoryStore = defineStore('history', {
     // 获取特定会话的详细历史（包含文件）
     async loadSessionDetails(conversationId: string) {
       try {
-        const response = await fetch(`/api/v1/history/${conversationId}`)
-        const data = await response.json()
+        const data = await api.getConversationHistoryDetail(conversationId)
 
         if (data && data.messages) {
           // 转换消息格式
@@ -131,6 +137,8 @@ export const useHistoryStore = defineStore('history', {
             this.sessions[sessionIndex].messages = messages
             this.sessions[sessionIndex].imageCount = data.image_count || 0
             this.sessions[sessionIndex].totalFiles = data.file_count || 0
+            this.sessions[sessionIndex].messageCount = data.message_count || messages.length
+            this.sessions[sessionIndex].updatedAt = data.updated_at ? new Date(data.updated_at).getTime() : this.sessions[sessionIndex].updatedAt
           }
 
           return { messages, files: data.files || [] }
@@ -192,4 +200,3 @@ export const useHistoryStore = defineStore('history', {
     },
   },
 })
-

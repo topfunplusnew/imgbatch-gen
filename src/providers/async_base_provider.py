@@ -5,6 +5,7 @@ from abc import abstractmethod
 from typing import Optional, List, Dict, Any
 from loguru import logger
 
+from ..config.settings import settings
 from .base import BaseProvider
 from .relay_client import RelayClient
 from ..models.image import ImageParams
@@ -20,7 +21,12 @@ class AsyncBaseProvider(BaseProvider):
         poll_interval: float = 3.0,
         max_poll_time: float = 300.0
     ):
-        self.client = RelayClient(base_url, api_key)
+        self.client = RelayClient(
+            base_url,
+            api_key,
+            retry_base_delay=settings.generation_retry_base_delay,
+            retry_max_delay=settings.generation_retry_max_delay,
+        )
         self.poll_interval = poll_interval
         self.max_poll_time = max_poll_time
 

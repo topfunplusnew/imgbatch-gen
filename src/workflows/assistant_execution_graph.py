@@ -1381,7 +1381,8 @@ async def _build_pdf_page_matched_prompts(
     if not page_items:
         return []
 
-    target_count = min(max(1, requested_count), len(page_items))
+    target_count = max(1, requested_count)
+    repeat_variants = target_count > len(page_items)
     shared_text_attachments = [
         AttachmentDescriptor(
             name=attachment.name,
@@ -1395,10 +1396,12 @@ async def _build_pdf_page_matched_prompts(
     shared_grounding = _build_shared_non_pdf_grounding(attachments)
 
     prompts: List[str] = []
-    for page_item in page_items[:target_count]:
+    for prompt_index in range(target_count):
+        page_item = page_items[prompt_index % len(page_items)]
         attachment_name = str(page_item["attachment_name"])
         page_number = int(page_item["page_number"])
         page_excerpt = str(page_item.get("page_excerpt") or "").strip()
+        variant_index = prompt_index // len(page_items) + 1
         page_fallback_excerpt = (
             page_excerpt
             or f"第 {page_number} 页没有提取到可用文本，请尽量依据该页的版式、图示或结构线索生成与这一页对应的图像。"
@@ -1437,6 +1440,10 @@ async def _build_pdf_page_matched_prompts(
                 f"\"{attachment_name}\". Do not use content from other PDF pages."
             ),
             (
+                f"This is variation {variant_index} for page {page_number}. "
+                "Keep the same factual grounding, but make this image visually distinct from other variations for the same page."
+            ) if repeat_variants else "",
+            (
                 "Primary grounding content from the matched PDF page (must be reflected in the image):\n"
                 f"[Attachment: {attachment_name} | Page {page_number}]\n"
                 f"{_trim_attachment_text(page_fallback_excerpt, limit=1600)}"
@@ -1468,7 +1475,8 @@ async def _build_word_section_matched_prompts(
     if not section_items:
         return []
 
-    target_count = min(max(1, requested_count), len(section_items))
+    target_count = max(1, requested_count)
+    repeat_variants = target_count > len(section_items)
     shared_text_attachments = [
         AttachmentDescriptor(
             name=attachment.name,
@@ -1482,11 +1490,13 @@ async def _build_word_section_matched_prompts(
     shared_grounding = _build_shared_non_word_grounding(attachments)
 
     prompts: List[str] = []
-    for section_item in section_items[:target_count]:
+    for prompt_index in range(target_count):
+        section_item = section_items[prompt_index % len(section_items)]
         attachment_name = str(section_item["attachment_name"])
         section_number = int(section_item["section_number"])
         section_excerpt = str(section_item.get("section_excerpt") or "").strip()
         section_kind = str(section_item.get("kind") or "docx")
+        variant_index = prompt_index // len(section_items) + 1
         section_fallback_excerpt = (
             section_excerpt
             or f"第 {section_number} 个章节没有提取到可用文本，请尽量依据该章节的标题、结构或关键信息生成对应图像。"
@@ -1524,6 +1534,10 @@ async def _build_word_section_matched_prompts(
                 f"Must correspond only to section {section_number} of the Word document "
                 f"\"{attachment_name}\". Do not use content from other sections."
             ),
+            (
+                f"This is variation {variant_index} for section {section_number}. "
+                "Keep the same factual grounding, but make this image visually distinct from other variations for the same section."
+            ) if repeat_variants else "",
             (
                 "Primary grounding content from the matched Word document section (must be reflected in the image):\n"
                 f"[Attachment: {attachment_name} | Section {section_number}]\n"

@@ -1,113 +1,133 @@
 <template>
   <div
     v-if="announcements.length > 0"
-    class="relative w-full h-[120px] overflow-hidden bg-gradient-to-br from-primary/10 to-primary/5 border-b border-border-dark"
+    class="notification-carousel relative w-full overflow-hidden border-b border-border-dark/80 bg-[radial-gradient(circle_at_top_left,_rgba(17,24,39,0.06),_transparent_28%),linear-gradient(180deg,_rgba(255,255,255,0.96),_rgba(249,250,251,0.98))] px-3 py-3 md:px-4"
     @mouseenter="pauseAutoplay"
     @mouseleave="resumeAutoplay"
   >
-    <!-- 轮播内容 - 内部可滚动 -->
-    <transition
-      :name="transitionDirection"
-      mode="out-in"
-    >
+    <transition :name="transitionDirection" mode="out-in">
       <div
         v-if="currentAnnouncement"
         :key="currentAnnouncement.id"
-        class="h-full overflow-y-auto scrollbar-thin"
-        @click="handleClick(currentAnnouncement)"
+        class="notification-carousel__slide"
       >
-        <div
-          class="p-4 md:px-8 cursor-pointer min-h-full flex items-center"
+        <ACard
+          hoverable
+          :bordered="false"
+          size="small"
+          class="notification-carousel__card"
+          :body-style="{ padding: '0' }"
+          @click="handleClick(currentAnnouncement)"
         >
-          <div class="flex items-center gap-4 w-full">
-            <!-- 封面图片 -->
-            <div
-              v-if="currentAnnouncement.cover_image_url"
-              class="w-20 h-20 md:w-24 md:h-24 rounded-lg overflow-hidden flex-shrink-0 shadow-md"
-            >
-              <img
+          <div class="notification-carousel__card-accent"></div>
+
+          <div class="notification-carousel__card-inner">
+            <div class="notification-carousel__media">
+              <AImage
+                v-if="currentAnnouncement.cover_image_url"
                 :src="getImageUrl(currentAnnouncement.cover_image_url)"
                 :alt="currentAnnouncement.title"
-                class="w-full h-full object-cover"
+                :preview="false"
+                class="notification-carousel__image"
               />
+              <div v-else class="notification-carousel__placeholder">
+                <span class="material-symbols-outlined !text-[28px]">campaign</span>
+              </div>
             </div>
 
-            <!-- 内容 -->
-            <div class="flex-1 min-w-0">
-              <!-- 标签 -->
-              <div class="flex items-center gap-2 mb-1">
-                <span
-                  class="text-xs px-2 py-0.5 rounded-full"
-                  :class="priorityBadgeClasses[currentAnnouncement.priority]"
-                >
-                  {{ getPriorityLabel(currentAnnouncement.priority) }}
-                </span>
-                <span
-                  v-if="currentAnnouncement.is_pinned"
-                  class="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300"
-                >
-                  置顶
+            <div class="notification-carousel__content">
+              <div class="notification-carousel__meta">
+                <div class="notification-carousel__tags">
+                  <ATag
+                    class="notification-carousel__tag"
+                    :class="priorityTagClasses[currentAnnouncement.priority]"
+                  >
+                    {{ getPriorityLabel(currentAnnouncement.priority) }}
+                  </ATag>
+                  <ATag
+                    v-if="currentAnnouncement.is_pinned"
+                    class="notification-carousel__tag notification-carousel__tag--pinned"
+                  >
+                    置顶
+                  </ATag>
+                </div>
+
+                <span class="notification-carousel__date">
+                  {{ formatAnnouncementTime(currentAnnouncement.published_at || currentAnnouncement.created_at) }}
                 </span>
               </div>
 
-              <!-- 标题 -->
-              <h3 class="text-sm md:text-base font-semibold text-ink-950 dark:text-white mb-1 line-clamp-1">
-                {{ currentAnnouncement.title }}
-              </h3>
+              <div class="notification-carousel__title-row">
+                <span class="material-symbols-outlined notification-carousel__title-icon">campaign</span>
+                <h3 class="notification-carousel__title">
+                  {{ currentAnnouncement.title }}
+                </h3>
+              </div>
 
-              <!-- 内容预览 -->
-              <p
-                class="text-xs md:text-sm text-ink-600 dark:text-white/80 line-clamp-2"
-                v-html="stripHtml(currentAnnouncement.content)"
-              ></p>
+              <p class="notification-carousel__excerpt">
+                {{ stripHtml(currentAnnouncement.content) }}
+              </p>
             </div>
+
+            <AButton
+              type="text"
+              class="notification-carousel__action"
+              @click.stop="handleClick(currentAnnouncement)"
+            >
+              <span class="notification-carousel__action-text">查看</span>
+              <span class="material-symbols-outlined !text-base">arrow_forward</span>
+            </AButton>
           </div>
-        </div>
+        </ACard>
       </div>
     </transition>
 
-    <!-- 导航按钮 -->
     <template v-if="announcements.length > 1">
-      <!-- 上一张 -->
-      <button
-        @click.stop="previous"
-        class="absolute left-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-800 shadow-md flex items-center justify-center transition-all z-10"
+      <AButton
+        type="default"
+        shape="circle"
+        size="small"
+        class="notification-carousel__nav notification-carousel__nav--prev"
         aria-label="上一张"
+        @click.stop="previous"
       >
-        <span class="material-symbols-outlined !text-base text-gray-600 dark:text-gray-300">chevron_left</span>
-      </button>
+        <span class="material-symbols-outlined !text-[18px]">chevron_left</span>
+      </AButton>
 
-      <!-- 下一张 -->
-      <button
-        @click.stop="next"
-        class="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-800 shadow-md flex items-center justify-center transition-all z-10"
+      <AButton
+        type="default"
+        shape="circle"
+        size="small"
+        class="notification-carousel__nav notification-carousel__nav--next"
         aria-label="下一张"
+        @click.stop="next"
       >
-        <span class="material-symbols-outlined !text-base text-gray-600 dark:text-gray-300">chevron_right</span>
-      </button>
+        <span class="material-symbols-outlined !text-[18px]">chevron_right</span>
+      </AButton>
     </template>
 
-    <!-- 指示点 -->
     <div
       v-if="announcements.length > 1"
-      class="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5"
+      class="notification-carousel__dots"
     >
       <button
         v-for="(announcement, index) in announcements"
         :key="announcement.id"
-        @click.stop="goTo(index)"
-        class="w-1.5 h-1.5 rounded-full transition-all"
-        :class="currentIndex === index ? 'bg-primary w-5' : 'bg-white/50 hover:bg-white/70'"
+        type="button"
+        class="notification-carousel__dot"
+        :class="{ 'notification-carousel__dot--active': currentIndex === index }"
         :aria-label="`幻灯片 ${index + 1}`"
+        @click.stop="goTo(index)"
       ></button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { Button as AButton, Card as ACard, Image as AImage, Tag as ATag } from 'ant-design-vue'
 import { useAppStore } from '@/store/useAppStore'
-import { useNotificationStore } from '@/store/useNotificationStore'
+import { useNotificationStore, type Announcement } from '@/store/useNotificationStore'
 
 const props = defineProps<{
   autoplay?: boolean
@@ -118,24 +138,22 @@ const props = defineProps<{
 const appStore = useAppStore()
 const notificationStore = useNotificationStore()
 
-const announcements = ref<any[]>([])
+const announcements = ref<Announcement[]>([])
 const currentIndex = ref(0)
 const transitionDirection = ref<'slide-left' | 'slide-right'>('slide-left')
 
 let autoplayTimer: number | null = null
 let isPaused = false
 
-// 优先级标签样式 - 使用系统配色
-const priorityBadgeClasses = {
-  urgent: 'bg-red-500/20 text-red-600 dark:text-red-300',
-  high: 'bg-orange-500/20 text-orange-600 dark:text-orange-300',
-  normal: 'bg-primary/20 text-primary dark:text-white/90',
-  low: 'bg-gray-500/20 text-gray-600 dark:text-gray-300',
+const priorityTagClasses: Record<Announcement['priority'], string> = {
+  urgent: 'notification-carousel__tag--urgent',
+  high: 'notification-carousel__tag--high',
+  normal: 'notification-carousel__tag--normal',
+  low: 'notification-carousel__tag--low',
 }
 
-// 获取优先级标签
-function getPriorityLabel(priority: string): string {
-  const labels: Record<string, string> = {
+function getPriorityLabel(priority: Announcement['priority']): string {
+  const labels: Record<Announcement['priority'], string> = {
     urgent: '紧急',
     high: '重要',
     normal: '普通',
@@ -144,114 +162,73 @@ function getPriorityLabel(priority: string): string {
   return labels[priority] || '普通'
 }
 
-// 当前公告
-const currentAnnouncement = computed(() => {
-  console.log('[NotificationCarousel] Computing currentAnnouncement')
-  console.log('[NotificationCarousel] announcements:', announcements.value)
-  console.log('[NotificationCarousel] announcements.value.length:', announcements.value.length)
-  console.log('[NotificationCarousel] currentIndex:', currentIndex.value)
-
-  if (!announcements.value || announcements.value.length === 0) {
-    console.log('[NotificationCarousel] announcements is empty, returning null')
-    return null
-  }
-
+const currentAnnouncement = computed<Announcement | null>(() => {
+  if (!announcements.value.length) return null
   if (currentIndex.value >= announcements.value.length) {
-    console.log('[NotificationCarousel] currentIndex out of bounds, resetting to 0')
     currentIndex.value = 0
-    return null
   }
-
-  const announcement = announcements.value[currentIndex.value]
-  console.log('[NotificationCarousel] announcements.value[currentIndex.value]:', announcement)
-  console.log('[NotificationCarousel] currentAnnouncement:', announcement)
-  return announcement
+  return announcements.value[currentIndex.value] || null
 })
 
-// 加载公告列表
 async function loadAnnouncements() {
   try {
-    console.log('[NotificationCarousel] Loading announcements...')
     const items = await notificationStore.fetchPublicAnnouncements(1, props.maxItems || 5)
-    console.log('[NotificationCarousel] Fetched items type:', typeof items, Array.isArray(items))
-    console.log('[NotificationCarousel] Fetched items:', items)
+    const normalizedItems = Array.isArray(items)
+      ? items
+      : (items && Array.isArray(items.items) ? items.items : [])
 
-    // 显示所有已发布的公告（API已过滤is_published）
-    if (Array.isArray(items)) {
-      announcements.value = items
-    } else if (items && Array.isArray(items.items)) {
-      // 兼容不同的返回格式
-      announcements.value = items.items
-    } else {
-      announcements.value = []
-    }
-
-    console.log('[NotificationCarousel] Announcements to display:', announcements.value.length, announcements.value)
+    announcements.value = normalizedItems as Announcement[]
   } catch (error) {
     console.error('[NotificationCarousel] 加载公告失败:', error)
     announcements.value = []
   }
 }
 
-// 下一张
 function next() {
+  if (announcements.value.length <= 1) return
   transitionDirection.value = 'slide-left'
   currentIndex.value = (currentIndex.value + 1) % announcements.value.length
 }
 
- // 上一张
 function previous() {
+  if (announcements.value.length <= 1) return
   transitionDirection.value = 'slide-right'
   currentIndex.value =
     currentIndex.value === 0
       ? announcements.value.length - 1
       : currentIndex.value - 1
-  }
+}
 
-// 跳转到指定幻灯片
 function goTo(index: number) {
-  if (index < currentIndex.value) {
-    transitionDirection.value = 'slide-right'
-  } else {
-    transitionDirection.value = 'slide-left'
-  }
+  if (index === currentIndex.value) return
+  transitionDirection.value = index < currentIndex.value ? 'slide-right' : 'slide-left'
   currentIndex.value = index
 }
 
-// 处理点击
-function handleClick(announcement: any) {
-  // 设置选中的通知ID
+function handleClick(announcement: Announcement) {
   notificationStore.setSelectedNotification(announcement.id)
-
-  // 跳转到用户中心通知详情
   appStore.setCurrentPage('user-center')
 }
 
-// 暂停自动播放
 function pauseAutoplay() {
   isPaused = true
   stopAutoplay()
 }
 
- // 恢复自动播放
 function resumeAutoplay() {
   isPaused = false
   startAutoplay()
 }
 
- // 开始自动播放
 function startAutoplay() {
-  if (!props.autoplay || announcements.value.length <= 1) return
+  if (!props.autoplay || isPaused || announcements.value.length <= 1) return
 
   stopAutoplay()
   autoplayTimer = window.setInterval(() => {
-    if (!isPaused) {
-      next()
-    }
+    next()
   }, props.autoplayInterval || 5000)
 }
 
-// 停止自动播放
 function stopAutoplay() {
   if (autoplayTimer !== null) {
     clearInterval(autoplayTimer)
@@ -259,47 +236,68 @@ function stopAutoplay() {
   }
 }
 
-// 过渡动画回调
-function beforeEnter(el: HTMLElement) {
-  el.style.opacity = '0'
-}
+watch(
+  () => announcements.value.length,
+  (length) => {
+    if (length === 0) {
+      stopAutoplay()
+      currentIndex.value = 0
+      return
+    }
 
- function afterEnter(el: HTMLElement) {
-  el.style.opacity = '1'
-}
+    if (currentIndex.value >= length) {
+      currentIndex.value = 0
+    }
 
- onMounted(() => {
+    if (length > 1 && !isPaused) {
+      startAutoplay()
+      return
+    }
+
+    stopAutoplay()
+  }
+)
+
+onMounted(() => {
   loadAnnouncements()
-  startAutoplay()
 })
 
- onUnmounted(() => {
+onUnmounted(() => {
   stopAutoplay()
 })
 
-// 暴露方法给父组件
 defineExpose({
   pauseAutoplay,
-  resumeAutoplay
+  resumeAutoplay,
 })
 
-// 去除HTML标签
 function stripHtml(html: string): string {
   const div = document.createElement('div')
   div.innerHTML = html
   return div.textContent || div.innerText || ''
 }
 
-// 获取图片完整 URL
+function formatAnnouncementTime(value: string | null): string {
+  if (!value) return '最新公告'
+
+  try {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '最新公告'
+    return date.toLocaleDateString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+    })
+  } catch {
+    return '最新公告'
+  }
+}
+
 function getImageUrl(path: string | null): string {
   if (!path) return ''
-  // 如果 path 以 /api/ 开头，需要拼接完整 URL
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path
+  }
   if (path.startsWith('/api/')) {
-    // 如果已经是完整URL，直接返回
-    if (path.startsWith('http://') || path.startsWith('https://')) {
-      return path
-    }
-    // 否则，拼接 API 基础 URL
     return `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8888'}${path}`
   }
   return path
@@ -307,63 +305,304 @@ function getImageUrl(path: string | null): string {
 </script>
 
 <style scoped>
-.line-clamp-1 {
+.notification-carousel__slide {
+  cursor: pointer;
+}
+
+.notification-carousel__card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  box-shadow: 0 14px 32px rgba(17, 24, 39, 0.06);
+  backdrop-filter: blur(14px);
+}
+
+.notification-carousel__card-accent {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(17, 24, 39, 0.95), rgba(107, 114, 128, 0.28), rgba(255, 255, 255, 0));
+}
+
+.notification-carousel__card-inner {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 110px;
+  padding: 16px 18px 18px;
+}
+
+.notification-carousel__media {
+  width: 92px;
+  height: 92px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.08), rgba(255, 255, 255, 0.95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.notification-carousel__placeholder {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  color: rgba(17, 24, 39, 0.5);
+  background:
+    radial-gradient(circle at top left, rgba(17, 24, 39, 0.1), transparent 40%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(243, 244, 246, 0.9));
+}
+
+.notification-carousel__content {
+  min-width: 0;
+}
+
+.notification-carousel__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.notification-carousel__tags {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notification-carousel__date {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(17, 24, 39, 0.42);
+}
+
+.notification-carousel__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notification-carousel__title-icon {
+  flex-shrink: 0;
+  font-size: 18px;
+  color: rgba(17, 24, 39, 0.5);
+}
+
+.notification-carousel__title {
   display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: #111827;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
-.line-clamp-2 {
+.notification-carousel__excerpt {
   display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
   overflow: hidden;
+  margin: 8px 0 0;
+  color: rgba(17, 24, 39, 0.64);
+  font-size: 13px;
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-/* 幻灯片过渡动画 */
+.notification-carousel__action {
+  align-self: center;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.04);
+  color: #111827;
+}
+
+.notification-carousel__action-text {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.notification-carousel__dots {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transform: translateX(-50%);
+}
+
+.notification-carousel__dot {
+  width: 7px;
+  height: 7px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.16);
+  transition: width 180ms ease, background-color 180ms ease, transform 180ms ease;
+}
+
+.notification-carousel__dot--active {
+  width: 22px;
+  background: rgba(17, 24, 39, 0.82);
+}
+
 .slide-left-enter-active,
 .slide-left-leave-active,
 .slide-right-enter-active,
 .slide-right-leave-active {
-  transition: all 0.3s ease;
+  transition: all 0.28s ease;
 }
 
- .slide-left-enter-from {
+.slide-left-enter-from {
   opacity: 0;
-  transform: translateX(20px);
+  transform: translateX(18px);
 }
 
- .slide-left-leave-to {
+.slide-left-leave-to {
   opacity: 0;
-  transform: translateX(-20px);
+  transform: translateX(-18px);
 }
 
- .slide-right-enter-from {
+.slide-right-enter-from {
   opacity: 0;
-  transform: translateX(-20px);
+  transform: translateX(-18px);
 }
 
- .slide-right-leave-to {
+.slide-right-leave-to {
   opacity: 0;
-  transform: translateX(20px);
+  transform: translateX(18px);
 }
 
-/* 自定义滚动条样式 */
-.scrollbar-thin::-webkit-scrollbar {
-  width: 4px;
+.notification-carousel :deep(.ant-card-body) {
+  padding: 0 !important;
 }
 
-.scrollbar-thin::-webkit-scrollbar-track {
-  background: transparent;
+.notification-carousel :deep(.ant-image),
+.notification-carousel :deep(.ant-image-img) {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
- .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 2px;
+.notification-carousel :deep(.ant-image-img) {
+  object-fit: cover;
 }
 
-.scrollbar-thin:hover::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.3);
+.notification-carousel :deep(.ant-tag) {
+  margin-inline-end: 0;
+  border: none;
+  border-radius: 999px;
+  padding: 1px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.notification-carousel__tag--urgent {
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+}
+
+.notification-carousel__tag--high {
+  background: rgba(249, 115, 22, 0.12);
+  color: #c2410c;
+}
+
+.notification-carousel__tag--normal {
+  background: rgba(17, 24, 39, 0.08);
+  color: #111827;
+}
+
+.notification-carousel__tag--low {
+  background: rgba(107, 114, 128, 0.12);
+  color: #4b5563;
+}
+
+.notification-carousel__tag--pinned {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
+.notification-carousel :deep(.notification-carousel__action.ant-btn),
+.notification-carousel :deep(.notification-carousel__action.ant-btn:hover),
+.notification-carousel :deep(.notification-carousel__action.ant-btn:focus) {
+  box-shadow: none;
+}
+
+.notification-carousel :deep(.notification-carousel__action.ant-btn:hover),
+.notification-carousel :deep(.notification-carousel__action.ant-btn:focus) {
+  background: rgba(17, 24, 39, 0.08) !important;
+  color: #111827 !important;
+}
+
+.notification-carousel :deep(.notification-carousel__nav.ant-btn) {
+  position: absolute;
+  top: 50%;
+  z-index: 10;
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-color: rgba(17, 24, 39, 0.08);
+  background: rgba(255, 255, 255, 0.82);
+  color: rgba(17, 24, 39, 0.72);
+  box-shadow: 0 10px 20px rgba(17, 24, 39, 0.08);
+  transform: translateY(-50%);
+}
+
+.notification-carousel :deep(.notification-carousel__nav.ant-btn:hover),
+.notification-carousel :deep(.notification-carousel__nav.ant-btn:focus) {
+  border-color: rgba(17, 24, 39, 0.12);
+  background: rgba(255, 255, 255, 0.96) !important;
+  color: #111827 !important;
+}
+
+.notification-carousel__nav--prev {
+  left: 12px;
+}
+
+.notification-carousel__nav--next {
+  right: 12px;
+}
+
+@media (max-width: 768px) {
+  .notification-carousel__card-inner {
+    grid-template-columns: 72px minmax(0, 1fr) auto;
+    gap: 12px;
+    min-height: 96px;
+    padding: 14px 14px 16px;
+  }
+
+  .notification-carousel__media {
+    width: 72px;
+    height: 72px;
+    border-radius: 14px;
+  }
+
+  .notification-carousel__title {
+    font-size: 14px;
+  }
+
+  .notification-carousel__excerpt {
+    font-size: 12px;
+  }
+
+  .notification-carousel__action {
+    padding: 0 10px;
+  }
+
+  .notification-carousel__action-text {
+    display: none;
+  }
 }
 </style>

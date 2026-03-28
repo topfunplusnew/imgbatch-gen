@@ -81,6 +81,7 @@ import { onMounted, watch } from 'vue'
 import { useHistoryStore } from '@/store/useHistoryStore'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import { useAppStore } from '@/store/useAppStore'
+import { api } from '@/services/api'
 
 const historyStore = useHistoryStore()
 const generatorStore = useGeneratorStore()
@@ -144,6 +145,7 @@ const viewSession = async (session) => {
   generatorStore.currentSessionId = session.id
   generatorStore.model = session.model
   generatorStore.sessionSavedToHistory = true
+  appStore.setCurrentView('chat')
 
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -151,9 +153,7 @@ const viewSession = async (session) => {
 const deleteSession = async (sessionId) => {
   if (confirm('确定要删除这个会话吗？')) {
     try {
-      await fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/api/v1/history/${sessionId}`, {
-        method: 'DELETE'
-      })
+      await api.deleteConversationHistory(sessionId)
     } catch (error) {
       console.warn('删除服务器记录失败:', error)
     }

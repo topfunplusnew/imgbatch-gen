@@ -146,4 +146,9 @@ class AsyncTaskProcessor:
         if not api_key:
             raise ValueError("Async task is missing an API key.")
 
-        return RelayClient(base_url, api_key)
+        return RelayClient(
+            base_url,
+            api_key,
+            retry_base_delay=settings.generation_retry_base_delay,
+            retry_max_delay=settings.generation_retry_max_delay,
+        )

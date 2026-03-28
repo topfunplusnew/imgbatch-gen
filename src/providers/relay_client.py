@@ -39,14 +39,36 @@ def _raise_relay_error(response: httpx.Response, url: str) -> None:
 class RelayClient:
     """Minimal async client for the relay provider."""
 
-    def __init__(self, base_url: Optional[str] = None, api_key: Optional[str] = None):
+    def __init__(
+        self,
+        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        retry_base_delay: Optional[float] = None,
+        retry_max_delay: Optional[float] = None,
+    ):
         self.base_url = (base_url or settings.relay_base_url or "").rstrip("/")
         self.api_key = (api_key or "").strip()
         self._config_loaded = False
+        self.retry_base_delay = max(0.0, float(settings.retry_base_delay if retry_base_delay is None else retry_base_delay))
+        self.retry_max_delay = max(0.0, float(settings.retry_max_delay if retry_max_delay is None else retry_max_delay))
 
         # 不再强制要求 base_url 和 api_key，允许后续通过 ensure_config() 加载
         if self.base_url and not self.base_url.startswith(("http://", "https://")):
             raise ValueError(f"Relay base URL must start with http:// or https://: {self.base_url!r}")
+
+    def _get_retry_delay(self, attempt: int) -> float:
+        if self.retry_base_delay <= 0 or self.retry_max_delay <= 0:
+            return 0.0
+        return min(self.retry_base_delay * (2 ** (attempt - 1)), self.retry_max_delay)
+
+    async def _sleep_before_retry(self, delay: float) -> None:
+        if delay > 0:
+            await asyncio.sleep(delay)
+
+    def _format_retry_log(self, delay: float, attempt: int, max_attempts: int) -> str:
+        if delay <= 0:
+            return f"立即重试 (尝试 {attempt}/{max_attempts})"
+        return f"{delay}秒后重试 (尝试 {attempt}/{max_attempts})"
 
     async def ensure_config(self) -> None:
         """
@@ -108,9 +130,6 @@ class RelayClient:
         logger.info(f"-> POST {url} timeout={timeout}")
 
         max_attempts = max_retries + 1
-        base_delay = getattr(settings, 'retry_base_delay', 1.0)
-        max_delay = getattr(settings, 'retry_max_delay', 10.0)
-
         for attempt in range(1, max_attempts + 1):
             try:
                 timeout_config = httpx.Timeout(connect=30.0, read=timeout, write=30.0, pool=30.0)
@@ -156,12 +175,12 @@ class RelayClient:
                         # 可重试的状态码：429, 502, 503, 504
                         retryable_statuses = {429, 502, 503, 504}
                         if response.status_code in retryable_statuses and attempt < max_attempts:
-                            delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+                            delay = self._get_retry_delay(attempt)
                             logger.warning(
                                 f"Relay返回HTTP {response.status_code}，"
-                                f"{delay}秒后重试 (尝试 {attempt}/{max_attempts})"
+                                f"{self._format_retry_log(delay, attempt, max_attempts)}"
                             )
-                            await asyncio.sleep(delay)
+                            await self._sleep_before_retry(delay)
                             continue
 
                         logger.error(
@@ -181,11 +200,11 @@ class RelayClient:
             except httpx.TimeoutException as exc:
                 # 超时错误可重试
                 if attempt < max_attempts:
-                    delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+                    delay = self._get_retry_delay(attempt)
                     logger.warning(
-                        f"Relay请求超时，{delay}秒后重试 (尝试 {attempt}/{max_attempts}): {str(exc)[:200]}"
+                        f"Relay请求超时，{self._format_retry_log(delay, attempt, max_attempts)}: {str(exc)[:200]}"
                     )
-                    await asyncio.sleep(delay)
+                    await self._sleep_before_retry(delay)
                     continue
                 logger.error(f"Relay request timed out: {url}, error: {exc}")
                 raise ValueError(f"Relay request timed out: {exc}")
@@ -193,11 +212,11 @@ class RelayClient:
             except (httpx.ConnectError, httpx.NetworkError) as exc:
                 # 网络错误可重试
                 if attempt < max_attempts:
-                    delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+                    delay = self._get_retry_delay(attempt)
                     logger.warning(
-                        f"Relay网络错误，{delay}秒后重试 (尝试 {attempt}/{max_attempts}): {str(exc)[:200]}"
+                        f"Relay网络错误，{self._format_retry_log(delay, attempt, max_attempts)}: {str(exc)[:200]}"
                     )
-                    await asyncio.sleep(delay)
+                    await self._sleep_before_retry(delay)
                     continue
                 logger.error(f"Relay request failed: {url}, error: {exc}")
                 raise ValueError(f"Relay request failed: {exc}")
@@ -230,9 +249,6 @@ class RelayClient:
         headers = self._get_headers()
 
         max_attempts = max_retries + 1
-        base_delay = getattr(settings, 'retry_base_delay', 1.0)
-        max_delay = getattr(settings, 'retry_max_delay', 10.0)
-
         for attempt in range(1, max_attempts + 1):
             try:
                 async with httpx.AsyncClient(timeout=timeout) as client:
@@ -247,12 +263,12 @@ class RelayClient:
                         # 可重试的状态码：429, 502, 503, 504
                         retryable_statuses = {429, 502, 503, 504}
                         if response.status_code in retryable_statuses and attempt < max_attempts:
-                            delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+                            delay = self._get_retry_delay(attempt)
                             logger.warning(
                                 f"Relay返回HTTP {response.status_code}，"
-                                f"{delay}秒后重试 (尝试 {attempt}/{max_attempts})"
+                                f"{self._format_retry_log(delay, attempt, max_attempts)}"
                             )
-                            await asyncio.sleep(delay)
+                            await self._sleep_before_retry(delay)
                             continue
 
                         logger.error(
@@ -272,11 +288,11 @@ class RelayClient:
             except httpx.TimeoutException as exc:
                 # 超时错误可重试
                 if attempt < max_attempts:
-                    delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+                    delay = self._get_retry_delay(attempt)
                     logger.warning(
-                        f"Relay请求超时，{delay}秒后重试 (尝试 {attempt}/{max_attempts}): {str(exc)[:200]}"
+                        f"Relay请求超时，{self._format_retry_log(delay, attempt, max_attempts)}: {str(exc)[:200]}"
                     )
-                    await asyncio.sleep(delay)
+                    await self._sleep_before_retry(delay)
                     continue
                 logger.error(f"Relay request timed out: {url}, error: {exc}")
                 raise ValueError(f"Relay request timed out: {exc}")
@@ -284,11 +300,11 @@ class RelayClient:
             except (httpx.ConnectError, httpx.NetworkError) as exc:
                 # 网络错误可重试
                 if attempt < max_attempts:
-                    delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+                    delay = self._get_retry_delay(attempt)
                     logger.warning(
-                        f"Relay网络错误，{delay}秒后重试 (尝试 {attempt}/{max_attempts}): {str(exc)[:200]}"
+                        f"Relay网络错误，{self._format_retry_log(delay, attempt, max_attempts)}: {str(exc)[:200]}"
                     )
-                    await asyncio.sleep(delay)
+                    await self._sleep_before_retry(delay)
                     continue
                 logger.error(f"Relay request failed: {url}, error: {exc}")
                 raise ValueError(f"Relay request failed: {exc}")

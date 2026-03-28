@@ -59,8 +59,8 @@
           <!-- Panel -->
           <div
             @click.stop
-            class="relative w-[calc(100vw-8px)] xs:w-[calc(100vw-16px)] sm:w-[560px] md:w-[640px] lg:w-[700px] max-w-[calc(100vw-16px)] bg-white border border-border-dark rounded-xl shadow-2xl overflow-hidden max-h-[85vh]">
-            <CreationRecordList :onClose="() => showHistoryDrawer = false" />
+            class="relative h-[85vh] w-[calc(100vw-12px)] xs:w-[calc(100vw-20px)] sm:w-[760px] md:w-[920px] lg:w-[1040px] max-w-[calc(100vw-20px)] bg-white border border-border-dark rounded-xl shadow-2xl overflow-hidden">
+            <UnifiedHistoryPanel :onClose="() => showHistoryDrawer = false" />
           </div>
         </div>
       </Transition>
@@ -120,6 +120,7 @@ import MainSidebar from '../components/sidebar/MainSidebar.vue'
 import LandingView from './LandingView.vue'
 import ChatView from './ChatView.vue'
 import CreationRecordList from '../components/creation/CreationRecordList.vue'
+import UnifiedHistoryPanel from '../components/history/UnifiedHistoryPanel.vue'
 import TemplateDrawer from '../components/cases/TemplateDrawer.vue'
 import ProfileModal from '../components/layout/ProfileModal.vue'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
