@@ -267,7 +267,7 @@ jobs:
           set -euo pipefail
           ssh_cmd="ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -p $DEPLOY_PORT"
           $ssh_cmd "$DEPLOY_USER@$DEPLOY_HOST" \
-            "mkdir -p '$DEPLOY_PATH/web' '$DEPLOY_PATH/data' '$DEPLOY_PATH/logs' '$DEPLOY_PATH/storage' '$DEPLOY_PATH/src' '$DEPLOY_PATH/migrations' '$DEPLOY_PATH/sql' '$DEPLOY_PATH/.deploy-images'"
+            "mkdir -p '$DEPLOY_PATH/web' '$DEPLOY_PATH/data' '$DEPLOY_PATH/logs' '$DEPLOY_PATH/storage' '$DEPLOY_PATH/src' '$DEPLOY_PATH/migrations' '$DEPLOY_PATH/sql' && rm -rf '$DEPLOY_PATH/.deploy-images'"
 
       - name: Sync files
         shell: bash
@@ -310,10 +310,6 @@ jobs:
             deploy-root/web/ \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/web/"
 
-          rsync -az --delete -e "$rsync_ssh" \
-            image-artifacts/ \
-            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/.deploy-images/"
-
       - name: Remote deploy
         shell: bash
         env:
@@ -324,6 +320,19 @@ jobs:
         run: |
           set -euo pipefail
           ssh_cmd="ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -p $DEPLOY_PORT"
+
+          $ssh_cmd "$DEPLOY_USER@$DEPLOY_HOST" "docker image prune -f >/dev/null 2>&1 || true"
+          $ssh_cmd "$DEPLOY_USER@$DEPLOY_HOST" "df -h '$DEPLOY_PATH' || true; docker system df || true"
+
+          for archive in image-artifacts/backend-image.tar.gz image-artifacts/frontend-image.tar.gz; do
+            if [ ! -f "$archive" ]; then
+              echo "Missing Docker image archive: $archive"
+              exit 1
+            fi
+            echo "Streaming $(basename "$archive") to remote docker daemon"
+            gzip -dc "$archive" | $ssh_cmd "$DEPLOY_USER@$DEPLOY_HOST" "docker load"
+          done
+
           $ssh_cmd "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'EOF'
           set -euo pipefail
 
@@ -339,15 +348,7 @@ jobs:
             compose_cmd+=(--env-file .env)
           fi
           frontend_port="${FRONTEND_PORT:-8080}"
-
-          mkdir -p .deploy-images
-          for archive in .deploy-images/backend-image.tar.gz .deploy-images/frontend-image.tar.gz; do
-            if [ ! -f "$archive" ]; then
-              echo "Missing Docker image archive: $archive"
-              exit 1
-            fi
-            gzip -dc "$archive" | docker load
-          done
+          rm -rf .deploy-images || true
 
           "${compose_cmd[@]}" config >/dev/null
 
@@ -427,6 +428,7 @@ jobs:
             exit 1
           }
 
+          docker image prune -f >/dev/null 2>&1 || true
           "${compose_cmd[@]}" ps
           EOF
 
