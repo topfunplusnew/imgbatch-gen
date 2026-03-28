@@ -6,6 +6,14 @@ on:
 permissions:
   contents: read
 
+env:
+  PYPI_INDEX_URL: https://mirrors.aliyun.com/pypi/simple/
+  UV_DEFAULT_INDEX: https://mirrors.aliyun.com/pypi/simple/
+  PIP_INDEX_URL: https://mirrors.aliyun.com/pypi/simple/
+  NPM_REGISTRY: https://registry.npmmirror.com
+  NPM_CONFIG_REGISTRY: https://registry.npmmirror.com
+  DEBIAN_MIRROR: mirrors.aliyun.com
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -51,10 +59,13 @@ jobs:
           node-version: "20.19.0"
           cache: npm
           cache-dependency-path: web/package-lock.json
+          registry-url: ${{ env.NPM_REGISTRY }}
 
       - name: Install frontend dependencies
         working-directory: web
-        run: npm ci
+        run: |
+          npm config set registry "$NPM_REGISTRY"
+          npm ci --no-audit --no-fund
 
       - name: Build frontend
         working-directory: web
@@ -118,6 +129,9 @@ jobs:
           file: ./Dockerfile
           tags: img-batch-agent-backend:latest
           load: true
+          build-args: |
+            PYPI_INDEX_URL=${{ env.PYPI_INDEX_URL }}
+            DEBIAN_MIRROR=${{ env.DEBIAN_MIRROR }}
           cache-from: type=gha,scope=backend-image
           cache-to: type=gha,mode=max,scope=backend-image
 
@@ -128,6 +142,8 @@ jobs:
           file: ./web/Dockerfile
           tags: img-batch-agent-frontend:latest
           load: true
+          build-args: |
+            NPM_REGISTRY=${{ env.NPM_REGISTRY }}
           cache-from: type=gha,scope=frontend-image
           cache-to: type=gha,mode=max,scope=frontend-image
 

@@ -211,6 +211,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        PYPI_INDEX_URL: ${PYPI_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR:-mirrors.aliyun.com}
     container_name: img-batch-agent-backend
     restart: unless-stopped
     depends_on:
@@ -272,6 +275,8 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
     container_name: img-batch-agent-frontend
     restart: unless-stopped
     depends_on:
