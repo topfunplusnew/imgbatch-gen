@@ -92,7 +92,8 @@
           <tr v-for="caseItem in cases" :key="caseItem.id" class="hover:bg-gray-50">
             <td class="px-4 py-3">
               <img
-                :src="resolveImageSrc(caseItem.thumbnail_url, caseItem.image_url)"
+                :src="getCaseImageSources(caseItem)[0]"
+                :data-fallback-src="getCaseImageSources(caseItem)[1] || ''"
                 :alt="caseItem.title"
                 class="w-16 h-16 rounded-lg object-cover"
                 @error="handleImageFallback"
@@ -175,7 +176,8 @@
           <!-- 卡片头部：图片 + 标题 + 状态 -->
           <div class="flex gap-3">
             <img
-              :src="resolveImageSrc(caseItem.thumbnail_url, caseItem.image_url)"
+              :src="getCaseImageSources(caseItem)[0]"
+              :data-fallback-src="getCaseImageSources(caseItem)[1] || ''"
               :alt="caseItem.title"
               class="w-20 h-20 rounded-lg object-cover flex-shrink-0"
               @error="handleImageFallback"
@@ -282,7 +284,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { api } from '@/services/api'
-import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
+import { handleImageFallback, resolveImageSrcCandidates } from '@/utils/imageFallback'
 import CaseFormModal from './CaseFormModal.vue'
 
 const cases = ref([])
@@ -323,6 +325,10 @@ const customCategories = ref([])
 const allCategories = computed(() => {
   return [...presetCategories, ...customCategories.value]
 })
+
+const getCaseImageSources = (caseItem) => {
+  return resolveImageSrcCandidates(caseItem?.thumbnail_url, caseItem?.image_url)
+}
 
 // 加载自定义分类
 const loadCustomCategories = () => {

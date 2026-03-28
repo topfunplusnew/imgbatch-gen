@@ -169,7 +169,8 @@
               >
                 <div class="aspect-video relative">
                   <img
-                    :src="resolveImageSrc(caseItem.thumbnail_url, caseItem.image_url)"
+                    :src="getCaseImageSources(caseItem)[0]"
+                    :data-fallback-src="getCaseImageSources(caseItem)[1] || ''"
                     :alt="caseItem.title"
                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     @error="handleImageFallback"
@@ -204,7 +205,7 @@ import NotificationCarousel from '@/components/NotificationCarousel.vue'
 import ModelDropdown from '@/components/landing/ModelDropdown.vue'
 import RatioDropdown from '@/components/landing/RatioDropdown.vue'
 import ResolutionDropdown from '@/components/landing/ResolutionDropdown.vue'
-import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
+import { handleImageFallback, resolveImageSrcCandidates } from '@/utils/imageFallback'
 
 const appStore = useAppStore()
 const generatorStore = useGeneratorStore()
@@ -233,6 +234,10 @@ const filteredCases = computed(() => {
   }
   return cases.value.filter(c => c.category === selectedCategory.value)
 })
+
+const getCaseImageSources = (caseItem) => {
+  return resolveImageSrcCandidates(caseItem?.thumbnail_url, caseItem?.image_url)
+}
 
 // Select template and switch to generate view
 const selectTemplate = (caseItem) => {

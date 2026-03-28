@@ -6,7 +6,8 @@
     <!-- 图片 -->
     <div class="relative w-full aspect-[4/3] overflow-hidden bg-gray-100">
       <img
-        :src="resolveImageSrc(caseData.thumbnail_url, caseData.image_url)"
+        :src="imageSources[0]"
+        :data-fallback-src="imageSources[1] || ''"
         :alt="caseData.title"
         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         @error="handleImageFallback"
@@ -50,10 +51,11 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useCaseStore } from '@/store/useCaseStore'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import { useAppStore } from '@/store/useAppStore'
-import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
+import { handleImageFallback, resolveImageSrcCandidates } from '@/utils/imageFallback'
 
 const props = defineProps({
   caseData: {
@@ -65,6 +67,10 @@ const props = defineProps({
 const caseStore = useCaseStore()
 const generatorStore = useGeneratorStore()
 const appStore = useAppStore()
+
+const imageSources = computed(() => {
+  return resolveImageSrcCandidates(props.caseData.thumbnail_url, props.caseData.image_url)
+})
 
 const viewDetails = () => {
   appStore.setSelectedCase(props.caseData)

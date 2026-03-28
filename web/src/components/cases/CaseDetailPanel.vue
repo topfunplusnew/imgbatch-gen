@@ -15,7 +15,8 @@
         <div class="w-24 shrink-0 sm:w-32 md:w-40 lg:w-48">
           <div class="relative aspect-video overflow-hidden rounded-lg bg-gray-100">
             <img
-              :src="resolveImageSrc(caseData.image_url, caseData.thumbnail_url)"
+              :src="imageSources[0]"
+              :data-fallback-src="imageSources[1] || ''"
               :alt="caseData.title"
               class="h-full w-full object-cover"
               @error="handleImageFallback"
@@ -112,13 +113,16 @@ import { computed } from 'vue'
 import { useAppStore } from '@/store/useAppStore'
 import { useCaseStore } from '@/store/useCaseStore'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
-import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
+import { handleImageFallback, resolveImageSrcCandidates } from '@/utils/imageFallback'
 
 const appStore = useAppStore()
 const caseStore = useCaseStore()
 const generatorStore = useGeneratorStore()
 
 const caseData = computed(() => appStore.selectedCase)
+const imageSources = computed(() => {
+  return resolveImageSrcCandidates(caseData.value?.image_url, caseData.value?.thumbnail_url)
+})
 
 const closeDetail = () => {
   appStore.clearSelectedCase()

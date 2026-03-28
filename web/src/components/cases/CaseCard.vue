@@ -7,7 +7,8 @@
     <div class="cover shrink-0 w-10 h-10 xs:w-12 xs:h-12 rounded overflow-hidden bg-gray-100 flex items-center justify-center">
       <img
         v-if="caseData.thumbnail_url || caseData.image_url"
-        :src="resolveImageSrc(caseData.thumbnail_url, caseData.image_url)"
+        :src="imageSources[0]"
+        :data-fallback-src="imageSources[1] || ''"
         :alt="caseData.title"
         class="w-full h-full object-cover"
         @error="handleImageError"
@@ -33,8 +34,9 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useAppStore } from '@/store/useAppStore'
-import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
+import { handleImageFallback, resolveImageSrcCandidates } from '@/utils/imageFallback'
 
 const emit = defineEmits(['requestClose'])
 
@@ -46,6 +48,10 @@ const props = defineProps({
 })
 
 const appStore = useAppStore()
+
+const imageSources = computed(() => {
+  return resolveImageSrcCandidates(props.caseData.thumbnail_url, props.caseData.image_url)
+})
 
 const viewDetails = () => {
   try {
