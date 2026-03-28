@@ -207,6 +207,7 @@ services:
         log "MinIO initialization completed"
 
   backend:
+    image: ${BACKEND_IMAGE:-img-batch-agent-backend:latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -267,6 +268,7 @@ services:
       start_period: 40s
 
   frontend:
+    image: ${FRONTEND_IMAGE:-img-batch-agent-frontend:latest}
     build:
       context: ./web
       dockerfile: Dockerfile

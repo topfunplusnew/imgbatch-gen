@@ -14,6 +14,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -109,10 +112,24 @@ jobs:
           exit 1
 
       - name: Build backend image
-        run: docker build -t img-batch-agent-backend .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          tags: img-batch-agent-backend:latest
+          load: true
+          cache-from: type=gha,scope=backend-image
+          cache-to: type=gha,mode=max,scope=backend-image
 
       - name: Build frontend image
-        run: docker build -t img-batch-agent-frontend ./web
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web
+          file: ./web/Dockerfile
+          tags: img-batch-agent-frontend:latest
+          load: true
+          cache-from: type=gha,scope=frontend-image
+          cache-to: type=gha,mode=max,scope=frontend-image
 
       - name: Validate nginx configuration
         run: |

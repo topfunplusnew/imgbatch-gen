@@ -21,6 +21,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -64,8 +67,25 @@ jobs:
         working-directory: web
         run: npm run build
 
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          tags: img-batch-agent-backend:latest
+          load: true
+          cache-from: type=gha,scope=backend-image
+          cache-to: type=gha,mode=max,scope=backend-image
+
       - name: Build frontend image
-        run: docker build -t img-batch-agent-frontend ./web
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web
+          file: ./web/Dockerfile
+          tags: img-batch-agent-frontend:latest
+          load: true
+          cache-from: type=gha,scope=frontend-image
+          cache-to: type=gha,mode=max,scope=frontend-image
 
       - name: Validate docker compose file
         run: docker compose -f docker-compose.yml config
@@ -93,11 +113,24 @@ jobs:
           test -f deploy-root/web/dist/index.html
           tar czf deploy-root.tgz -C deploy-root .
 
+      - name: Export Docker images
+        run: |
+          mkdir -p image-artifacts
+          docker save img-batch-agent-backend:latest | gzip > image-artifacts/backend-image.tar.gz
+          docker save img-batch-agent-frontend:latest | gzip > image-artifacts/frontend-image.tar.gz
+          ls -lh image-artifacts
+
       - name: Upload deploy payload
         uses: actions/upload-artifact@v4
         with:
           name: deploy-root
           path: deploy-root.tgz
+
+      - name: Upload Docker images
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-images
+          path: image-artifacts/*.tar.gz
 
   deploy:
     needs: build
@@ -111,6 +144,12 @@ jobs:
         with:
           name: deploy-root
           path: artifacts
+
+      - name: Download Docker images
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-images
+          path: image-artifacts
 
       - name: Extract deployment artifacts
         run: |
@@ -212,7 +251,7 @@ jobs:
           set -euo pipefail
           ssh_cmd="ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -p $DEPLOY_PORT"
           $ssh_cmd "$DEPLOY_USER@$DEPLOY_HOST" \
-            "mkdir -p '$DEPLOY_PATH/web' '$DEPLOY_PATH/data' '$DEPLOY_PATH/logs' '$DEPLOY_PATH/storage' '$DEPLOY_PATH/src' '$DEPLOY_PATH/migrations' '$DEPLOY_PATH/sql'"
+            "mkdir -p '$DEPLOY_PATH/web' '$DEPLOY_PATH/data' '$DEPLOY_PATH/logs' '$DEPLOY_PATH/storage' '$DEPLOY_PATH/src' '$DEPLOY_PATH/migrations' '$DEPLOY_PATH/sql' '$DEPLOY_PATH/.deploy-images'"
 
       - name: Sync files
         shell: bash
@@ -255,6 +294,10 @@ jobs:
             deploy-root/web/ \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/web/"
 
+          rsync -az --delete -e "$rsync_ssh" \
+            image-artifacts/ \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/.deploy-images/"
+
       - name: Remote deploy
         shell: bash
         env:
@@ -281,9 +324,18 @@ jobs:
           fi
           frontend_port="${FRONTEND_PORT:-8080}"
 
+          mkdir -p .deploy-images
+          for archive in .deploy-images/backend-image.tar.gz .deploy-images/frontend-image.tar.gz; do
+            if [ ! -f "$archive" ]; then
+              echo "Missing Docker image archive: $archive"
+              exit 1
+            fi
+            gzip -dc "$archive" | docker load
+          done
+
           "${compose_cmd[@]}" config >/dev/null
 
-          "${compose_cmd[@]}" up -d --build --remove-orphans postgres postgres-init minio minio-init backend
+          "${compose_cmd[@]}" up -d --no-build --remove-orphans postgres postgres-init minio minio-init backend
           for i in $(seq 1 30); do
             postgres_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' img-batch-agent-postgres 2>/dev/null || true)"
             echo "Postgres status attempt $i: ${postgres_status:-missing}"
@@ -331,7 +383,7 @@ jobs:
             exit 1
           fi
 
-          "${compose_cmd[@]}" up -d --build --force-recreate frontend
+          "${compose_cmd[@]}" up -d --no-build --force-recreate frontend
           for i in $(seq 1 30); do
             frontend_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' img-batch-agent-frontend 2>/dev/null || true)"
             echo "Frontend status attempt $i: ${frontend_status:-missing}"
