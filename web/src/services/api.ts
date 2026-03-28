@@ -239,6 +239,56 @@ function buildModelAuthHeaders(): Record<string, string> {
   return headers
 }
 
+const AUTH_REDIRECT_EXEMPT_PATHS = [
+  '/api/v1/auth/login',
+  '/api/v1/auth/register',
+  '/api/v1/auth/refresh',
+  '/api/v1/auth/send-code',
+  '/api/v1/auth/reset-password',
+]
+
+let lastAuthRedirectAt = 0
+
+function getNormalizedRequestUrl(url?: string | null) {
+  return String(url || '').split('?')[0]
+}
+
+function shouldSkipGlobalAuthRedirect(url?: string | null) {
+  const normalizedUrl = getNormalizedRequestUrl(url)
+  return AUTH_REDIRECT_EXEMPT_PATHS.some((path) => normalizedUrl.includes(path))
+}
+
+async function redirectToLoginForUnauthorized(error: AxiosError) {
+  const status = error.response?.status
+  if (status !== 401 && status !== 403) return
+  if (shouldSkipGlobalAuthRedirect(error.config?.url)) return
+
+  const hasLocalAuth = Boolean(localStorage.getItem('access_token') || localStorage.getItem('user_info'))
+  if (status === 403 && hasLocalAuth) return
+
+  const now = Date.now()
+  if (now - lastAuthRedirectAt < 1500) return
+  lastAuthRedirectAt = now
+
+  const [{ useAppStore }, { useAuthStore }, { notification }] = await Promise.all([
+    import('@/store/useAppStore'),
+    import('@/store/useAuthStore'),
+    import('@/utils/notification'),
+  ])
+
+  const appStore = useAppStore()
+  const authStore = useAuthStore()
+  const title = '请先登录'
+  const message = status === 401
+    ? '登录状态已失效或尚未登录，请重新登录后继续操作。'
+    : '当前操作需要登录后才能继续。'
+
+  authStore.clearAuth()
+  appStore.setAuthRedirectNotice({ title, message })
+  appStore.goToLogin(true)
+  notification.warning(title, message, 4500)
+}
+
 // 创建axios实例
 const createApiClient = (): AxiosInstance => {
   const client = axios.create({
@@ -300,16 +350,7 @@ const createApiClient = (): AxiosInstance => {
       const errorMessage = handleApiError(error)
       console.error('[API Response Error]', errorMessage)
 
-      // 401 未授权 - 自动跳转到登录页面
-      if (error.response?.status === 401) {
-        // 动态导入 store 避免循环依赖
-        import('@/store/useAppStore').then(({ useAppStore }) => {
-          const appStore = useAppStore()
-          if (appStore.currentPage !== 'login') {
-            appStore.setCurrentPage('login')
-          }
-        })
-      }
+      void redirectToLoginForUnauthorized(error)
 
       // 可以在这里添加全局错误提示
       // 例如：showToast(errorMessage)
@@ -332,9 +373,9 @@ const handleApiError = (error: AxiosError): string => {
       case 400:
         return data?.detail || '请求参数错误'
       case 401:
-        return '未授权，请检查API密钥'
+        return data?.detail || '登录状态已失效，请重新登录'
       case 403:
-        return data?.detail || '禁止访问，需要管理员权限'
+        return data?.detail || '当前无权限访问该内容'
       case 404:
         return '请求的资源不存在'
       case 500:

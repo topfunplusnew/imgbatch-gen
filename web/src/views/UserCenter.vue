@@ -1714,7 +1714,7 @@ async function handleUpdatePassword() {
     // Logout and redirect to login
     setTimeout(async () => {
       await authStore.logout()
-      appStore.setCurrentPage('login')
+      appStore.goToLogin()
     }, 1500)
 
   } catch (error) {

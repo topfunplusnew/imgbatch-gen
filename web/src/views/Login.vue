@@ -9,6 +9,33 @@
         <p class="text-ink-500 mt-2">{{ isLoginMode ? '欢迎回来' : '创建新账户' }}</p>
       </div>
 
+      <div
+        v-if="appStore.authRedirectNotice"
+        class="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left shadow-sm"
+      >
+        <div class="flex items-start gap-3">
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+            <span class="material-symbols-outlined !text-lg">lock</span>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="text-sm font-semibold text-amber-900">{{ appStore.authRedirectNotice.title }}</p>
+                <p class="mt-1 text-sm leading-6 text-amber-800">{{ appStore.authRedirectNotice.message }}</p>
+              </div>
+              <button
+                type="button"
+                class="rounded-lg p-1 text-amber-500 transition-colors hover:bg-amber-100 hover:text-amber-700"
+                @click="appStore.clearAuthRedirectNotice()"
+              >
+                <span class="material-symbols-outlined !text-base">close</span>
+              </button>
+            </div>
+            <p class="mt-2 text-xs text-amber-700/90">登录后可继续进行图片生成、历史记录查看和账户相关操作。</p>
+          </div>
+        </div>
+      </div>
+
       <!-- 登录/注册表单 -->
       <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
         <div class="p-6">

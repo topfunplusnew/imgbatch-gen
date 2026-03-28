@@ -29,6 +29,7 @@ export interface Case {
 export const useAppStore = defineStore('app', {
   state: () => ({
     currentPage: 'agent' as PageType,
+    authRedirectNotice: null as { title: string; message: string } | null,
     selectedCase: null as Case | null,
     selectedCreation: null as any | null,
     showCreationRecords: false,
@@ -42,10 +43,25 @@ export const useAppStore = defineStore('app', {
   actions: {
     setCurrentPage(page: PageType, tab?: UserCenterTab) {
       this.currentPage = page
+      if (page !== 'login') {
+        this.authRedirectNotice = null
+      }
       // 如果切换到用户中心，可以指定默认标签页
       if (page === 'user-center' && tab) {
         this.userCenterTab = tab
       }
+    },
+    setAuthRedirectNotice(notice: { title: string; message: string } | null) {
+      this.authRedirectNotice = notice
+    },
+    clearAuthRedirectNotice() {
+      this.authRedirectNotice = null
+    },
+    goToLogin(preserveNotice: boolean = false) {
+      if (!preserveNotice) {
+        this.authRedirectNotice = null
+      }
+      this.currentPage = 'login'
     },
     setUserCenterTab(tab: UserCenterTab) {
       this.userCenterTab = tab
@@ -118,4 +134,3 @@ export const useAppStore = defineStore('app', {
     },
   },
 })
-

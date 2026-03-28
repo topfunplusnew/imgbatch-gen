@@ -191,7 +191,7 @@ const userInitial = computed(() => {
 })
 
 function goToLogin() {
-  appStore.setCurrentPage('login')
+  appStore.goToLogin()
 }
 
 function goToUserCenter() {

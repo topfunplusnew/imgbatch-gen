@@ -420,7 +420,7 @@ const handleCaseSelected = () => {
 }
 
 const handleLoginClick = () => {
-  appStore.setCurrentPage('login')
+  appStore.goToLogin()
   requestCloseIfMobile()
 }
 
