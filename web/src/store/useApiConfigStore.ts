@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 
 const API_CONFIG_STORAGE_KEY = 'apiConfig'
+const DEFAULT_MODEL = 'gemini-2.5-flash-image-preview'
 
 type StoredApiConfig = {
   apiKey?: string
@@ -12,7 +13,7 @@ export const useApiConfigStore = defineStore('apiConfig', {
   state: () => ({
     apiKey: '',
     apiEndpoint: import.meta.env.DEV ? '' : (import.meta.env.VITE_API_BASE_URL || ''),
-    defaultModel: 'Stable Diffusion XL v1.0',
+    defaultModel: DEFAULT_MODEL,
     isInitialized: false,
   }),
   actions: {
@@ -59,7 +60,7 @@ export const useApiConfigStore = defineStore('apiConfig', {
     resetConfig() {
       this.apiKey = ''
       this.apiEndpoint = ''
-      this.defaultModel = 'Stable Diffusion XL v1.0'
+      this.defaultModel = DEFAULT_MODEL
     },
     configureFromEnv() {
       const endpoint = import.meta.env.VITE_API_BASE_URL

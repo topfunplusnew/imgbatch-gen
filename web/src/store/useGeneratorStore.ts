@@ -6,6 +6,7 @@ import { mockGenerateImage, mockGetTaskStatus, isMockMode } from '@/utils/mockAp
 const ACTIVE_TASK_STATUSES = new Set(['pending', 'processing', 'running'])
 const FAILED_TASK_STATUSES = new Set(['failed', 'error', 'cancelled', 'canceled'])
 const TERMINAL_TASK_STATUSES = new Set(['completed', ...FAILED_TASK_STATUSES])
+const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-image-preview'
 
 const STAGE_LABEL_MAP: Record<string, string> = {
     request_received: '请求已接收',
@@ -259,9 +260,33 @@ function buildBatchProcessingContent(batchTask: any, fallbackTotal: number) {
     return statusDetail.currentStageMessage
 }
 
+function normalizeModelName(value: any) {
+    return String(value || '').trim().toLowerCase()
+}
+
+function isGeminiModel(model: any) {
+    const modelName = normalizeModelName(model?.model_name || model)
+    const displayName = normalizeModelName(model?.display_name)
+    const provider = normalizeModelName(model?.provider)
+
+    return modelName.includes('gemini') || displayName.includes('gemini') || provider.includes('google')
+}
+
+function pickPreferredDefaultModel(models: any[] = []) {
+    if (!Array.isArray(models) || models.length === 0) return null
+
+    const exactGemini = models.find((model) => normalizeModelName(model?.model_name) === DEFAULT_GEMINI_MODEL)
+    if (exactGemini) return exactGemini
+
+    const firstGemini = models.find((model) => isGeminiModel(model))
+    if (firstGemini) return firstGemini
+
+    return models[0]
+}
+
 export const useGeneratorStore = defineStore('generator', {
     state: () => ({
-        model: 'Stable Diffusion XL v1.0',
+        model: DEFAULT_GEMINI_MODEL,
         width: 2048,
         height: 2048,
         aspectRatio: '1:1',
@@ -316,6 +341,17 @@ export const useGeneratorStore = defineStore('generator', {
 
         setSelectedModelInfo(modelInfo) {
             this.selectedModelInfo = modelInfo
+        },
+
+        applyPreferredDefaultModel() {
+            const preferredModel = pickPreferredDefaultModel(this.availableModels)
+            const fallbackName = preferredModel?.model_name || DEFAULT_GEMINI_MODEL
+            const matchedModel = preferredModel || this.availableModels.find((model) =>
+                normalizeModelName(model?.model_name) === normalizeModelName(fallbackName)
+            )
+
+            this.model = fallbackName
+            this.selectedModelInfo = matchedModel || null
         },
 
         setPendingAutoSend(value) {
@@ -1390,7 +1426,7 @@ export const useGeneratorStore = defineStore('generator', {
                 this.clearAttachments()
 
                 // 重置生成参数到默认值
-                this.model = 'Stable Diffusion XL v1.0'
+                this.applyPreferredDefaultModel()
                 this.width = 1024
                 this.height = 1024
                 this.aspectRatio = '1:1'
@@ -1572,6 +1608,18 @@ export const useGeneratorStore = defineStore('generator', {
                         tags: typeof model.tags === 'string' ? model.tags.split(',').map(t => t.trim()) : (model.tags || []),
                         is_async: model.is_async || false
                     }))
+
+                    const matchedCurrentModel = this.availableModels.find((model) =>
+                        normalizeModelName(model.model_name) === normalizeModelName(this.model)
+                    )
+
+                    if (matchedCurrentModel) {
+                        this.model = matchedCurrentModel.model_name
+                        this.selectedModelInfo = matchedCurrentModel
+                    } else {
+                        this.applyPreferredDefaultModel()
+                    }
+
                     console.log('Available models loaded:', this.availableModels.length)
                 }
             } catch (error) {
