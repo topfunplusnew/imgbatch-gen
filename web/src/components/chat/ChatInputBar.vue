@@ -1,225 +1,176 @@
 <template>
-  <div class="bg-white/70 backdrop-blur-xl border-t border-border-dark flex flex-col shrink-0">
-    <div class="px-3 xs:px-4 md:px-6 py-2 xs:py-2.5 md:py-4">
-      <div class="w-full md:w-[65%] mx-auto">
-        <!-- 已选文件列表 -->
-        <div v-if="generatorStore.attachments.length > 0" class="mb-2 flex flex-wrap gap-2">
+  <div class="shrink-0 border-t border-border-dark bg-white/55 backdrop-blur-xl">
+    <div class="px-3 py-3 xs:px-4 md:px-6 md:py-4">
+      <div class="mx-auto w-full md:w-[68%]">
+        <div v-if="generatorStore.attachments.length > 0" class="mb-3 flex flex-wrap gap-2">
           <div
             v-for="(file, index) in generatorStore.attachments"
             :key="index"
-            class="relative flex max-w-full items-center gap-1.5 overflow-hidden rounded-lg border border-border-dark bg-white px-2 py-1 text-xs shadow-lg"
-            :class="{ 'ring-2 ring-primary': isHoveringFile === index }">
-
-            <!-- File content (z-index 10 to stay above overlay) -->
-            <div class="relative z-10 flex min-w-0 items-center gap-1.5">
-              <!-- 图片预览或文件图标 -->
+            class="relative flex max-w-full items-center gap-2 overflow-hidden rounded-2xl border border-border-dark bg-white px-2 py-2 text-xs shadow-sm"
+            :class="{ 'ring-2 ring-primary/25': isHoveringFile === index }"
+          >
+            <div class="relative z-10 flex min-w-0 items-center gap-2">
               <div v-if="isImageFile(file)" class="relative shrink-0">
                 <img
                   :src="getFilePreviewUrl(file)"
                   :alt="file.name"
-                  class="h-[60px] w-[60px] rounded-lg border border-border-dark object-cover">
+                  class="h-[56px] w-[56px] rounded-xl border border-border-dark object-cover"
+                >
               </div>
-              <span v-else class="material-symbols-outlined !text-sm text-primary">{{ getFileIcon(file) }}</span>
-
-              <!-- 文件名（图片时不显示） -->
-              <span v-if="!isImageFile(file)" class="max-w-[120px] truncate text-ink-700">{{ file.name }}</span>
-
-              <button
+              <span v-else class="material-symbols-outlined !text-base text-primary">{{ getFileIcon(file) }}</span>
+              <div class="min-w-0">
+                <div class="max-w-[140px] truncate text-sm font-medium text-ink-950">{{ file.name }}</div>
+                <div class="text-[11px] text-ink-500">{{ formatFileSize(file.size || 0) }}</div>
+              </div>
+              <el-button
+                circle
+                text
                 @click.stop="removeFile(index)"
                 @mouseenter="isHoveringFile = index"
                 @mouseleave="isHoveringFile = null"
-                class="shrink-0 text-ink-500 transition-colors hover:text-red-400">
+              >
                 <span class="material-symbols-outlined !text-sm">close</span>
-              </button>
-            </div>
-
-            <!-- Hover overlay with absolute positioning -->
-            <div
-              class="absolute inset-0 z-0 grid place-items-center transition-opacity duration-200"
-              :class="isHoveringFile === index ? 'opacity-100' : 'opacity-0'">
-              <button
-                class="max-w-[min(100%,14rem)] truncate rounded-full border-2 border-white bg-primary px-3 py-1 text-xs font-medium text-white shadow-lg transition-colors hover:bg-primary-deep">
-                {{ file.name }}
-              </button>
+              </el-button>
             </div>
           </div>
         </div>
 
-        <div
+        <el-card
           ref="inputBoxRef"
+          shadow="never"
+          class="chat-input-card"
+          :class="{ 'chat-input-card--dragging': isDragging }"
           @dragover.prevent="handleDragOver"
           @dragleave="handleDragLeave"
           @drop.prevent="handleDrop"
-          :class="[
-            'relative z-10 bg-white/95 rounded-2xl shadow-xl overflow-hidden',
-            'w-full border',
-            isDragging ? 'border-accent-purple border-2 bg-accent-purple/5' : 'border-gray-200'
-          ]">
+        >
+          <template #header>
+            <div class="flex items-center justify-between gap-3">
+              <div ref="modelButtonRef" class="relative">
+                <el-button round class="chat-input-card__model-btn" @click="showModelPopup = !showModelPopup">
+                  <span class="material-symbols-outlined !text-base text-primary shrink-0">auto_awesome</span>
+                  <span class="max-w-[160px] truncate text-sm font-medium">{{ currentModelDisplay }}</span>
+                  <span class="material-symbols-outlined !text-sm text-ink-500 shrink-0">
+                    {{ showModelPopup ? 'expand_less' : 'expand_more' }}
+                  </span>
+                </el-button>
 
-          <!-- Top Toolbar -->
-          <div class="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50/50">
-            <!-- Left: Model Selector -->
-            <div ref="modelButtonRef" class="relative">
-              <button
-                @click="showModelPopup = !showModelPopup"
-                class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
-                :title="currentModelDisplay"
-              >
-                <span class="material-symbols-outlined !text-base text-accent-purple shrink-0">auto_awesome</span>
-                <span class="text-sm font-medium text-gray-800 truncate max-w-[140px] md:max-w-[200px]">
-                  {{ currentModelDisplay }}
-                </span>
-                <span class="material-symbols-outlined !text-sm text-gray-500 shrink-0">
-                  {{ showModelPopup ? 'expand_less' : 'expand_more' }}
-                </span>
-              </button>
+                <ModelSelectorPopup
+                  :visible="showModelPopup"
+                  :current-model="generatorStore.model"
+                  :attachments="generatorStore.attachments"
+                  :trigger-element="modelButtonRef"
+                  @select="handleModelSelect"
+                  @close="showModelPopup = false"
+                />
+              </div>
 
-              <!-- Model Selector Popup -->
-              <ModelSelectorPopup
-                :visible="showModelPopup"
-                :current-model="generatorStore.model"
-                :attachments="generatorStore.attachments"
-                :trigger-element="modelButtonRef"
-                @select="handleModelSelect"
-                @close="showModelPopup = false"
-              />
+              <div class="flex items-center gap-2">
+                <el-upload
+                  ref="uploadRef"
+                  :auto-upload="false"
+                  :show-file-list="false"
+                  :multiple="true"
+                  accept=".pdf,.docx,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg"
+                  :on-change="handleUploadChange"
+                >
+                  <el-tooltip content="添加附件" placement="top">
+                    <el-button circle>
+                      <span class="material-symbols-outlined !text-lg">attach_file</span>
+                    </el-button>
+                  </el-tooltip>
+                </el-upload>
+
+                <el-tooltip content="新建对话" placement="top">
+                  <el-button circle type="primary" plain @click="handleNewConversation">
+                    <span class="material-symbols-outlined !text-base">add</span>
+                  </el-button>
+                </el-tooltip>
+              </div>
             </div>
+          </template>
 
-            <!-- Right: Attachment buttons -->
-            <div class="flex items-center gap-1">
-              <input
-                ref="fileInputRef"
-                type="file"
-                multiple
-                accept=".pdf,.docx,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg"
-                @change="handleFileSelect"
-                class="hidden">
-
-              <button
-                @click="triggerFileSelect"
-                class="p-2 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors"
-                title="添加附件">
-                <span class="material-symbols-outlined !text-lg">attach_file</span>
-              </button>
-
-              <button
-                @click="handleNewConversation"
-                class="w-7 h-7 flex items-center justify-center bg-gray-800 hover:bg-gray-700 rounded-full text-white transition-colors"
-                title="新建对话">
-                <span class="material-symbols-outlined !text-base">add</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Main Input Area -->
           <div class="relative">
-            <!-- 拖拽把手 -->
             <div
-              @mousedown.prevent="startResizeHeight"
               tabindex="-1"
-              class="w-full h-3 flex items-center justify-center cursor-ns-resize select-none hover:bg-gray-100 transition-colors"
-              title="拖拽调整高度">
-              <div class="w-8 h-0.5 bg-gray-300 rounded-full opacity-60 hover:opacity-100 transition-opacity pointer-events-none"></div>
+              class="flex h-3 w-full cursor-ns-resize items-center justify-center select-none transition-colors hover:bg-black/[0.03]"
+              title="拖拽调整高度"
+              @mousedown.prevent="startResizeHeight"
+            >
+              <div class="h-0.5 w-10 rounded-full bg-[rgba(140,42,46,0.25)]"></div>
             </div>
 
-            <textarea
+            <el-input
               ref="textareaRef"
               v-model="generatorStore.prompt"
+              type="textarea"
+              resize="none"
+              class="chat-textarea"
+              :style="{ '--chat-textarea-height': `${textareaHeight}px` }"
+              placeholder="输入内容开始聊天 (Shift + Enter 换行) ..."
               @keydown.enter.exact.prevent="handleSend"
-              @keydown.enter.shift.exact="() => {}"
               @focus="handleFocus"
-              :style="{ height: textareaHeight + 'px' }"
-              class="w-full bg-transparent border-none focus:ring-0 focus:outline-none text-sm px-4 pb-2 overflow-y-auto custom-scrollbar resize-none text-gray-900 placeholder:text-gray-400"
-              placeholder="输入内容开始聊天 (Shift + Enter 换行) ...">
-            </textarea>
+            />
           </div>
 
-          <!-- Bottom Action Bar -->
-          <div class="flex items-center justify-end px-3 py-2 border-t border-gray-100 bg-gray-50/50">
-            <!-- Right side buttons -->
-            <div class="flex flex-wrap items-center justify-end gap-2">
-              <div
-                class="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-1.5 py-1 shadow-sm"
-                title="生图数量"
-              >
-                <span class="hidden lg:inline-flex items-center gap-1 px-1 text-[11px] font-semibold text-gray-500">
-                  <span class="material-symbols-outlined !text-sm text-accent-purple">imagesmode</span>
-                  生图数量
-                </span>
-                <button
-                  @click="changeBatchSize(-1)"
-                  :disabled="normalizedBatchSize <= MIN_BATCH_SIZE"
-                  class="flex h-7 w-7 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
-                  aria-label="减少生图数量"
-                >
-                  <span class="material-symbols-outlined !text-base">remove</span>
-                </button>
-                <div class="min-w-[44px] text-center">
-                  <div class="text-sm font-semibold leading-none text-gray-800">{{ normalizedBatchSize }}</div>
-                  <div class="mt-0.5 text-[10px] leading-none text-gray-400">张</div>
-                </div>
-                <button
-                  @click="changeBatchSize(1)"
-                  :disabled="normalizedBatchSize >= MAX_BATCH_SIZE"
-                  class="flex h-7 w-7 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
-                  aria-label="增加生图数量"
-                >
-                  <span class="material-symbols-outlined !text-base">add</span>
-                </button>
+          <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border-dark/70 pt-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="flex items-center gap-2 rounded-2xl bg-[rgba(140,42,46,0.05)] px-3 py-2">
+                <span class="material-symbols-outlined !text-base text-primary">imagesmode</span>
+                <span class="hidden text-xs font-semibold text-ink-500 sm:inline">生图数量</span>
+                <el-input-number
+                  :model-value="normalizedBatchSize"
+                  :min="MIN_BATCH_SIZE"
+                  :max="MAX_BATCH_SIZE"
+                  controls-position="right"
+                  class="chat-batch-input"
+                  @change="setBatchSize"
+                />
               </div>
 
-              <div class="hidden md:flex items-center gap-1">
-                <button
+              <div class="hidden items-center gap-2 md:flex">
+                <el-button
                   v-for="preset in batchSizePresets"
                   :key="preset"
+                  :type="normalizedBatchSize === preset ? 'primary' : 'default'"
+                  :plain="normalizedBatchSize !== preset"
                   @click="setBatchSize(preset)"
-                  :class="[
-                    'rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
-                    normalizedBatchSize === preset
-                      ? 'bg-accent-purple/10 text-accent-purple'
-                      : 'bg-white text-gray-500 hover:bg-gray-200 hover:text-gray-700'
-                  ]"
                 >
                   {{ preset }}张
-                </button>
+                </el-button>
               </div>
+            </div>
 
-              <!-- Purchase button -->
-              <button
-                @click="goToRecharge"
-                class="hidden sm:flex items-center gap-1 px-2.5 py-1.5 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                <span class="material-symbols-outlined !text-base text-accent-purple">diamond</span>
-                <span class="text-sm font-medium text-accent-purple">购买</span>
-              </button>
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              <el-button text class="hidden sm:inline-flex" @click="goToRecharge">
+                <span class="material-symbols-outlined !text-base text-primary">diamond</span>
+                <span class="text-sm font-medium text-primary">购买</span>
+              </el-button>
 
-              <!-- Expand/Fullscreen button -->
-              <button
-                @click="toggleExpand"
-                class="hidden md:flex p-1.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600 rounded-lg transition-colors"
-                title="全屏模式">
-                <span class="material-symbols-outlined !text-lg">{{ isExpanded ? 'close_fullscreen' : 'open_in_full' }}</span>
-              </button>
+              <el-button circle class="hidden md:inline-flex" @click="toggleExpand" title="全屏模式">
+                <span class="material-symbols-outlined !text-lg">
+                  {{ isExpanded ? 'close_fullscreen' : 'open_in_full' }}
+                </span>
+              </el-button>
 
-              <!-- Send button -->
-              <button
+              <el-button
+                type="primary"
+                round
+                class="chat-send-button"
+                :loading="generatorStore.isGenerating"
+                :disabled="!canSend"
                 @click="handleSend"
-                :disabled="generatorStore.isGenerating || (!generatorStore.prompt.trim() && generatorStore.attachments.length === 0)"
-                :class="[
-                  'p-2 rounded-xl transition-all shrink-0',
-                  (generatorStore.prompt.trim() || generatorStore.attachments.length > 0) && !generatorStore.isGenerating
-                    ? 'bg-accent-purple text-white hover:bg-accent-purple-dark shadow-md'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                ]">
+              >
                 <span class="material-symbols-outlined !text-lg">
                   {{ generatorStore.isGenerating ? 'hourglass_empty' : 'send' }}
                 </span>
-              </button>
+                <span class="hidden sm:inline">发送</span>
+              </el-button>
             </div>
           </div>
-        </div>
+        </el-card>
 
-        <div class="hidden md:block text-[10px] text-gray-400 text-center mt-2">
+        <div class="mt-2 hidden text-center text-[10px] text-gray-400 md:block">
           支持格式：PDF、Word (.docx)、图片 (.jpg, .png, .gif, .webp, .bmp, .svg)
         </div>
       </div>
@@ -246,7 +197,7 @@ const emit = defineEmits(['update:showModelSelector'])
 
 const generatorStore = useGeneratorStore();
 const appStore = useAppStore();
-const fileInputRef = ref(null);
+const uploadRef = ref(null);
 const inputBoxRef = ref(null);
 const isDragging = ref(false);
 const isHoveringFile = ref(null);
@@ -267,6 +218,10 @@ const currentModelDisplay = computed(() => {
     return generatorStore.selectedModelInfo.display_name;
   }
   return generatorStore.model || '选择模型';
+});
+
+const canSend = computed(() => {
+  return !generatorStore.isGenerating && Boolean(generatorStore.prompt.trim() || generatorStore.attachments.length > 0);
 });
 
 const MIN_BATCH_SIZE = 1;
@@ -330,11 +285,6 @@ const startResizeHeight = (e) => {
   window.addEventListener('mouseup', onUp)
 }
 
-// 触发文件选择
-const triggerFileSelect = () => {
-  fileInputRef.value?.click();
-};
-
 // 拖拽处理
 const handleDragOver = (e) => {
   isDragging.value = true;
@@ -358,24 +308,18 @@ const handleDrop = (e) => {
 };
 
 // 处理文件选择
-const handleFileSelect = (event) => {
-  const files = Array.from(event.target.files || []);
+const handleUploadChange = (uploadFile) => {
+  const file = uploadFile?.raw || uploadFile;
+  if (!file) return;
 
-  files.forEach(file => {
-    // 验证文件格式
-    if (!generatorStore.validateFileType(file)) {
-      alert(`文件 "${file.name}" 格式不支持。\n支持格式：PDF、Word (.doc, .docx)、图片 (.jpg, .png, .gif, .webp, .bmp, .svg)`);
-      return;
-    }
-
-    // 添加文件（支持任意大小）
-    generatorStore.addAttachment(file);
-  });
-
-  // 清空 input，以便可以重复选择同一文件
-  if (fileInputRef.value) {
-    fileInputRef.value.value = '';
+  if (!generatorStore.validateFileType(file)) {
+    alert(`文件 "${file.name}" 格式不支持。\n支持格式：PDF、Word (.doc, .docx)、图片 (.jpg, .png, .gif, .webp, .bmp, .svg)`);
+    uploadRef.value?.clearFiles?.();
+    return;
   }
+
+  generatorStore.addAttachment(file);
+  uploadRef.value?.clearFiles?.();
 };
 
 // 移除文件
@@ -974,18 +918,57 @@ watch(
 </script>
 
 <style scoped>
-/* 自定义滚动条样式，如果全局没有定义的话 */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
+.chat-input-card {
+  border-radius: 28px;
+  border: 1px solid var(--color-border-dark);
+  background: rgba(255, 253, 252, 0.96);
+  box-shadow: 0 24px 48px rgba(88, 28, 32, 0.12);
 }
-.custom-scrollbar::-webkit-scrollbar-track {
+
+.chat-input-card--dragging {
+  border-color: rgba(140, 42, 46, 0.5);
+  background: rgba(140, 42, 46, 0.04);
+}
+
+.chat-input-card :deep(.el-card__header) {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(232, 215, 214, 0.8);
+}
+
+.chat-input-card :deep(.el-card__body) {
+  padding: 0 16px 16px;
+}
+
+.chat-input-card__model-btn {
+  max-width: min(100%, 260px);
+}
+
+.chat-textarea :deep(.el-textarea__inner) {
+  min-height: var(--chat-textarea-height) !important;
+  height: var(--chat-textarea-height) !important;
+  padding: 8px 0 0;
+  border: none;
+  box-shadow: none !important;
   background: transparent;
+  color: var(--color-ink-950);
+  font-size: 14px;
+  line-height: 1.7;
 }
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #d1d8d3;
-  border-radius: 10px;
+
+.chat-textarea :deep(.el-textarea__inner::placeholder) {
+  color: var(--color-ink-500);
 }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #b7c0ba;
+
+.chat-batch-input {
+  width: 124px;
+}
+
+.chat-batch-input :deep(.el-input__wrapper) {
+  box-shadow: none !important;
+  background: rgba(255, 253, 252, 0.9);
+}
+
+.chat-send-button {
+  min-width: 110px;
 }
 </style>

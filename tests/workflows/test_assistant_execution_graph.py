@@ -83,6 +83,26 @@ async def test_plan_assistant_execution_uses_chat_model_for_attachment_chat(monk
 
 
 @pytest.mark.asyncio
+async def test_plan_assistant_execution_forces_chat_when_text_model_is_selected():
+    plan = await graph.plan_assistant_execution(
+        messages=[{"role": "user", "content": "帮我画一只猫"}],
+        files=[],
+        user_instruction="帮我画一只猫",
+        request_model="gpt-4o-mini",
+        request_model_type="chat",
+        requested_count=1,
+        db_manager=object(),
+        app_state=SimpleNamespace(model_registry=None),
+        api_key=None,
+    )
+
+    assert plan.mode == "chat"
+    assert plan.intent_type == "chat"
+    assert plan.source == "model-selection"
+    assert plan.effective_model == "gpt-4o-mini"
+
+
+@pytest.mark.asyncio
 async def test_plan_assistant_execution_builds_page_matched_pdf_prompts(monkeypatch):
     async def fake_load_attachment_descriptors(files, db_manager, api_key=None):
         return [
@@ -195,6 +215,49 @@ async def test_plan_assistant_execution_matches_all_pdf_pages_when_count_is_equa
     assert "第一页内容" in plan.metadata["_batch_prompts"][0]
     assert "第二页内容" in plan.metadata["_batch_prompts"][1]
     assert "第三页内容" in plan.metadata["_batch_prompts"][2]
+
+
+@pytest.mark.asyncio
+async def test_build_image_plan_wraps_prompt_with_context_and_system_prompt(monkeypatch):
+    async def fake_build_contextual_image_instruction(*, user_instruction, messages, api_key):
+        return "重写后的生图需求"
+
+    async def fake_build_image_prompt_from_attachments(user_instruction, attachments, api_key=None):
+        return "保留海报主标题与主体人物，生成一张电影感海报"
+
+    monkeypatch.setattr(graph, "_build_contextual_image_instruction", fake_build_contextual_image_instruction)
+    monkeypatch.setattr(graph, "_build_image_prompt_from_attachments", fake_build_image_prompt_from_attachments)
+
+    route_decision = graph.RequestRouteDecision(
+        route="image",
+        intent_type="single_generate",
+        batch_count=1,
+        confidence=0.9,
+        reasoning="image request",
+        source="test",
+        planning_basis="text",
+    )
+
+    plan = await graph._build_image_plan(
+        user_instruction="做成电影海报风格",
+        messages=[
+            {"role": "user", "content": "先分析一下这张海报的风格"},
+            {"role": "assistant", "content": "这是一张偏电影宣传物料的海报。"},
+            {"role": "user", "content": "做成电影海报风格"},
+        ],
+        attachments=[],
+        route_decision=route_decision,
+        request_model="gpt-image-1",
+        request_model_type="image",
+        app_state=SimpleNamespace(model_registry=None),
+        api_key=None,
+    )
+
+    assert plan.mode == "image"
+    assert "系统提示词:" in plan.prompt
+    assert "最近对话上下文:" in plan.prompt
+    assert "用户最新输入:\n做成电影海报风格" in plan.prompt
+    assert "最终生图提示词:\n保留海报主标题与主体人物，生成一张电影感海报" in plan.prompt
 
 
 @pytest.mark.asyncio

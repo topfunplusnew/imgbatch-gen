@@ -1,99 +1,66 @@
 <template>
   <div class="relative">
-    <button
-      @click="isOpen = true"
-      class="card-popup-btn flex items-center gap-1 xs:gap-1.5 px-2 py-2 xs:px-2.5 bg-white border border-border-dark rounded-lg hover:border-primary/50 transition-colors"
-      :title="currentResolutionLabel">
-      <div class="btn-icon flex items-center justify-center">
-        <span class="material-symbols-outlined !text-lg text-primary">high_quality</span>
-      </div>
-      <div class="btn-label text-xs xs:text-sm font-medium text-gray-800 hidden xs:inline">{{ currentQuality?.label || '2K' }}</div>
-      <span class="material-symbols-outlined !text-xl text-gray-500 arrow transition-transform duration-200 hidden xs:inline" :class="{ 'rotate-180': isOpen }">
-        expand_more
-      </span>
-    </button>
+    <el-button round class="landing-select-trigger" @click="isOpen = true" :title="currentResolutionLabel">
+      <span class="material-symbols-outlined !text-lg text-primary">high_quality</span>
+      <span class="hidden text-sm font-medium xs:inline">{{ currentQuality?.label || '2K' }}</span>
+    </el-button>
 
-    <!-- Teleport Modal -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div
-          v-if="isOpen"
-          @click="isOpen = false"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/10 backdrop-blur-sm p-4">
-          <div
-            @click.stop
-            class="bg-white border border-border-dark rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
-            <!-- Header -->
-            <div class="flex items-center justify-between px-4 py-3 border-b border-border-dark">
-              <h3 class="text-sm font-bold text-ink-950">图像质量</h3>
-              <button @click="isOpen = false" class="text-ink-500 hover:text-ink-950 transition-colors">
-                <span class="material-symbols-outlined !text-xl">close</span>
-              </button>
+    <el-dialog
+      v-model="isOpen"
+      align-center
+      append-to-body
+      class="landing-resolution-dialog"
+      width="min(460px, calc(100vw - 32px))"
+    >
+      <template #header>
+        <div>
+          <h3 class="text-lg font-semibold text-ink-950">图像质量</h3>
+          <p class="mt-1 text-sm text-ink-500">切换质量时会同步调整当前尺寸上限。</p>
+        </div>
+      </template>
+
+      <div class="space-y-3">
+        <el-card
+          v-for="quality in qualityOptions"
+          :key="quality.value"
+          shadow="hover"
+          class="resolution-option cursor-pointer"
+          :class="{ 'resolution-option--active': generatorStore.quality === quality.value }"
+          @click="selectQuality(quality.value)"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <div class="text-sm font-semibold text-ink-950">{{ quality.label }}</div>
+              <div class="mt-1 text-xs text-ink-500">{{ quality.desc }}</div>
             </div>
-
-            <!-- Quality Options -->
-            <div class="p-4 space-y-3">
-              <button
-                v-for="quality in qualityOptions"
-                :key="quality.value"
-                @click="selectQuality(quality.value)"
-                :class="[
-                  'w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors',
-                  generatorStore.quality === quality.value
-                    ? 'bg-primary-strong text-white shadow-sm'
-                    : 'bg-white text-ink-700 border border-border-dark hover:bg-primary/5'
-                ]">
-                <div class="flex flex-col items-start">
-                  <span class="text-sm font-bold">{{ quality.label }}</span>
-                  <span class="text-xs opacity-80">{{ quality.desc }}</span>
-                </div>
-                <div class="text-right">
-                  <div class="text-xs opacity-80">最大尺寸</div>
-                  <div class="text-sm font-bold">{{ getMaxDim(quality.value) }}px</div>
-                </div>
-              </button>
-
-              <!-- Custom Resolution -->
-              <div class="border-t border-border-dark pt-3 mt-3">
-                <button
-                  @click="showCustomInput = !showCustomInput"
-                  class="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border-dark hover:bg-primary/5 transition-colors">
-                  <div class="flex flex-col items-start">
-                    <span class="text-sm font-medium text-ink-700">自定义尺寸</span>
-                    <span class="text-xs text-ink-500">{{ generatorStore.width }}×{{ generatorStore.height }}</span>
-                  </div>
-                  <span class="material-symbols-outlined !text-lg text-ink-500">
-                    {{ showCustomInput ? 'expand_less' : 'expand_more' }}
-                  </span>
-                </button>
-
-                <div v-if="showCustomInput" class="grid grid-cols-2 gap-2 mt-3">
-                  <input
-                    v-model.number="customWidth"
-                    type="number"
-                    placeholder="宽度"
-                    min="64"
-                    max="8192"
-                    class="w-full px-3 py-2 border border-border-dark rounded-lg text-sm focus:ring-1 focus:ring-primary focus:outline-none">
-                  <input
-                    v-model.number="customHeight"
-                    type="number"
-                    placeholder="高度"
-                    min="64"
-                    max="8192"
-                    class="w-full px-3 py-2 border border-border-dark rounded-lg text-sm focus:ring-1 focus:ring-primary focus:outline-none">
-                  <button
-                    @click="applyCustomResolution"
-                    class="col-span-2 px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-strong transition-colors">
-                    应用自定义尺寸
-                  </button>
-                </div>
-              </div>
+            <div class="text-right">
+              <div class="text-[11px] text-ink-500">最大尺寸</div>
+              <div class="text-sm font-semibold text-primary">{{ getMaxDim(quality.value) }}px</div>
             </div>
           </div>
+        </el-card>
+
+        <div class="space-y-3 border-t border-border-dark pt-4">
+          <el-button class="w-full justify-between" @click="showCustomInput = !showCustomInput">
+            <div class="flex flex-col items-start">
+              <span class="text-sm font-medium text-ink-700">自定义尺寸</span>
+              <span class="text-xs text-ink-500">{{ generatorStore.width }}×{{ generatorStore.height }}</span>
+            </div>
+            <span class="material-symbols-outlined !text-lg text-ink-500">
+              {{ showCustomInput ? 'expand_less' : 'expand_more' }}
+            </span>
+          </el-button>
+
+          <div v-if="showCustomInput" class="space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <el-input-number v-model="customWidth" :min="64" :max="8192" controls-position="right" />
+              <el-input-number v-model="customHeight" :min="64" :max="8192" controls-position="right" />
+            </div>
+            <el-button type="primary" class="w-full" @click="applyCustomResolution">应用自定义尺寸</el-button>
+          </div>
         </div>
-      </Transition>
-    </Teleport>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -109,18 +76,19 @@ const customHeight = ref(1024)
 
 const qualityOptions = [
   { value: '720p', label: '720P', desc: '快速生成，适合预览' },
-  { value: '2k',   label: '2K',   desc: '标准质量，平衡速度' },
-  { value: '4k',   label: '4K',   desc: '超清质量，细节丰富' },
+  { value: '2k', label: '2K', desc: '标准质量，平衡速度' },
+  { value: '4k', label: '4K', desc: '超清质量，细节丰富' }
 ]
 
 const currentResolutionLabel = computed(() => {
-  const quality = qualityOptions.find(q => q.value === generatorStore.quality)
+  const quality = qualityOptions.find((item) => item.value === generatorStore.quality)
   const maxDimMap = { '720p': 1280, '2k': 2048, '4k': 3840 }
   const maxDim = maxDimMap[generatorStore.quality]
 
-  // Check if current dimensions match the expected dimensions for this quality
   const ratio = generatorStore.width / generatorStore.height
-  let expectedWidth, expectedHeight
+  let expectedWidth
+  let expectedHeight
+
   if (ratio >= 1) {
     expectedWidth = maxDim
     expectedHeight = Math.round(maxDim / ratio)
@@ -129,17 +97,15 @@ const currentResolutionLabel = computed(() => {
     expectedWidth = Math.round(maxDim * ratio)
   }
 
-  // If dimensions match expected, show quality label
   if (generatorStore.width === expectedWidth && generatorStore.height === expectedHeight && quality) {
     return `${quality.label} ${quality.desc}`
   }
 
-  // Otherwise show actual dimensions
   return `${generatorStore.width}×${generatorStore.height}`
 })
 
 const currentQuality = computed(() => {
-  return qualityOptions.find(q => q.value === generatorStore.quality)
+  return qualityOptions.find((item) => item.value === generatorStore.quality)
 })
 
 const getMaxDim = (qualityValue) => {
@@ -151,11 +117,8 @@ const selectQuality = (qualityValue) => {
   generatorStore.quality = qualityValue
   isOpen.value = false
 
-  // Adjust dimensions based on new quality
   const maxDimMap = { '720p': 1280, '2k': 2048, '4k': 3840 }
   const maxDim = maxDimMap[qualityValue]
-
-  // Calculate current ratio
   const ratio = generatorStore.width / generatorStore.height
 
   if (ratio >= 1) {
@@ -168,8 +131,7 @@ const selectQuality = (qualityValue) => {
 }
 
 const applyCustomResolution = () => {
-  if (customWidth.value >= 64 && customWidth.value <= 8192 &&
-      customHeight.value >= 64 && customHeight.value <= 8192) {
+  if (customWidth.value >= 64 && customWidth.value <= 8192 && customHeight.value >= 64 && customHeight.value <= 8192) {
     generatorStore.width = customWidth.value
     generatorStore.height = customHeight.value
     isOpen.value = false
@@ -178,31 +140,21 @@ const applyCustomResolution = () => {
 </script>
 
 <style scoped>
-/* Modal transition */
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.2s ease;
-}
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-.modal-enter-to,
-.modal-leave-from {
-  opacity: 1;
+.landing-select-trigger {
+  border-radius: 999px;
 }
 
-/* Scale animation */
-.modal-enter-active > div > div:last-child,
-.modal-leave-active > div > div:last-child {
-  transition: transform 0.2s ease;
+.resolution-option {
+  border-radius: 20px;
+  border-color: var(--color-border-dark);
 }
-.modal-enter-from > div > div:last-child,
-.modal-leave-to > div > div:last-child {
-  transform: scale(0.95);
+
+.resolution-option--active {
+  border-color: rgba(140, 42, 46, 0.3);
+  background: rgba(140, 42, 46, 0.06);
 }
-.modal-enter-to > div > div:last-child,
-.modal-leave-from > div > div:last-child {
-  transform: scale(1);
+
+.resolution-option :deep(.el-card__body) {
+  padding: 14px 16px;
 }
 </style>

@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 
 export type PageType = 'agent' | 'login' | 'user-center' | 'admin'
 export type UserCenterTab = 'account' | 'balance' | 'orders' | 'generations' | 'contact' | 'notifications'
-export type ViewType = 'chat' | 'landing'
+export type ViewType = 'chat' | 'landing' | 'templates'
 
 export interface Case {
   id: string
@@ -37,7 +37,7 @@ export const useAppStore = defineStore('app', {
     showProfileModal: false,
     userCenterTab: 'account' as UserCenterTab, // 新增：用户中心当前标签页
     // View state for navigation
-    currentView: 'landing' as ViewType,  // 'chat' | 'landing'
+    currentView: 'landing' as ViewType,  // 'chat' | 'landing' | 'templates'
     selectedMenuItem: 'generate' as string,  // Current selected menu item
   }),
   actions: {
@@ -111,6 +111,8 @@ export const useAppStore = defineStore('app', {
         this.selectedMenuItem = 'landing'
       } else if (view === 'chat') {
         this.selectedMenuItem = 'generate'
+      } else if (view === 'templates') {
+        this.selectedMenuItem = 'templates'
       }
     },
     setSelectedMenuItem(item: string) {
@@ -120,14 +122,8 @@ export const useAppStore = defineStore('app', {
         this.currentView = 'landing'
       } else if (item === 'generate') {
         this.currentView = 'chat'
-      }
-      // Handle action-based menu items
-      if (item === 'templates') {
-        this.toggleTemplateDrawer()
-      } else if (item === 'history') {
-        // Will be handled by the component that opens history drawer
-      } else if (item === 'creations') {
-        this.toggleCreationRecords()
+      } else if (item === 'templates') {
+        this.currentView = 'templates'
       } else if (item === 'settings') {
         this.showProfileModal = true
       }

@@ -1,8 +1,6 @@
 <template>
   <main class="flex-1 flex flex-col relative bg-white/60 min-w-0 xs:min-w-[300px] md:min-w-[400px] lg:min-w-[500px] h-screen overflow-hidden">
     <TopHeader
-      @openHistory="$emit('openHistory')"
-      @openTemplates="$emit('openTemplates')"
       @toggleSettings="$emit('toggleSettings')"
       @toggleSidebar="$emit('toggleSidebar')"
       @openModelSelector="showModelSelector = true"
@@ -20,7 +18,7 @@
       <!-- 创作记录详情面板 -->
       <CreationDetailPanel />
 
-      <div ref="messageListRef" class="max-w-full md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto space-y-6 md:space-y-8">
+      <div class="max-w-full md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto space-y-6 md:space-y-8">
         <MessageItem v-for="msg in generatorStore.messages" :key="msg.id" :msg="msg" />
         <div ref="chatBottomRef" class="h-px w-full"></div>
       </div>
@@ -59,7 +57,7 @@ import { notification } from '@/utils/notification'
 const generatorStore = useGeneratorStore()
 
 // Define emits
-defineEmits(['openHistory', 'openTemplates', 'toggleSettings', 'toggleSidebar'])
+defineEmits(['toggleSettings', 'toggleSidebar'])
 
 // 模型选择器状态
 const showModelSelector = ref(false)
@@ -82,11 +80,9 @@ const handleModelSelect = (model) => {
 // 对话区域高度拖拽（通过 chatAreaStyle 控制，这里保持 flex-1 自动）
 const chatAreaStyle = computed(() => ({}))
 const chatAreaRef = ref(null)
-const messageListRef = ref(null)
 const chatBottomRef = ref(null)
 
 let scrollFrameId = 0
-let resizeObserver = null
 
 const scheduleScrollToBottom = () => {
   if (scrollFrameId) {
@@ -115,31 +111,24 @@ watch(
 )
 
 watch(
-  () => generatorStore.messages,
-  async () => {
+  () => generatorStore.messages.length,
+  async (newLength, oldLength) => {
+    if (newLength === oldLength) return
     await nextTick()
     scheduleScrollToBottom()
   },
-  { deep: true, flush: 'post' }
+  { flush: 'post' }
 )
 
 onMounted(async () => {
   await nextTick()
   scheduleScrollToBottom()
-
-  if (typeof ResizeObserver !== 'undefined' && messageListRef.value) {
-    resizeObserver = new ResizeObserver(() => {
-      scheduleScrollToBottom()
-    })
-    resizeObserver.observe(messageListRef.value)
-  }
 })
 
 onBeforeUnmount(() => {
   if (scrollFrameId) {
     cancelAnimationFrame(scrollFrameId)
   }
-  resizeObserver?.disconnect?.()
 })
 </script>
 

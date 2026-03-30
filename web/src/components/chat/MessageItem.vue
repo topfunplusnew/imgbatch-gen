@@ -19,8 +19,7 @@
       <div
         v-if="msg.role === 'assistant' && msg.status === 'processing' && !msg.content"
         :class="[
-          'leading-relaxed mb-2 px-3 xs:px-4 py-2.5 xs:py-3 rounded-2xl block text-left',
-          'bg-primary/10 text-ink-950 border border-primary/20 max-w-[90%] xs:max-w-[85%] sm:max-w-[80%]'
+          'assistant-message assistant-message--thinking mb-2 block max-w-[90%] text-left xs:max-w-[85%] sm:max-w-[80%]'
         ]">
         <div class="flex items-center gap-3">
           <div class="flex items-center gap-1.5">
@@ -35,11 +34,11 @@
       <!-- 文本内容 -->
       <div v-if="msg.content"
            :class="[
-             'leading-relaxed mb-2 px-3 xs:px-4 py-2.5 xs:py-3 rounded-2xl block text-left',
+             'leading-relaxed mb-2 block text-left',
              'text-sm xs:text-base md:text-base',
              msg.role === 'user'
-               ? 'bg-white text-ink-950 border border-primary/20 shadow-sm ml-auto max-w-[90%] xs:max-w-[85%] sm:max-w-[80%]'
-               : getStatusClasses(msg.status) + ' max-w-[90%] xs:max-w-[85%] sm:max-w-[80%]'
+               ? 'user-message-bubble px-3 xs:px-4 py-2.5 xs:py-3 rounded-2xl ml-auto max-w-[90%] xs:max-w-[85%] sm:max-w-[80%]'
+               : getAssistantTextClasses(msg.status) + ' assistant-message max-w-[90%] xs:max-w-[85%] sm:max-w-[80%]'
            ]">
         <span v-if="msg.role === 'assistant'" class="markdown-body" v-html="renderMarkdown(msg.content)"></span>
         <!-- 流式输出时的闪烁光标 -->
@@ -67,7 +66,7 @@
             <button
               v-if="msg.content"
               @click="copyContent"
-              class="inline-flex items-center gap-1.5 px-2 py-1.5 bg-white/90 hover:bg-primary/5 text-ink-500 hover:text-ink-950 border border-border-dark rounded-lg text-xs transition-colors"
+              class="assistant-action-button"
               title="复制内容">
               <span class="material-symbols-outlined !text-base">
                 {{ copied ? 'check' : 'content_copy' }}
@@ -77,10 +76,10 @@
             <!-- Like button -->
             <button
               @click="toggleLike"
-              class="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-colors"
+              class="assistant-action-button"
               :class="isLiked
-                ? 'bg-primary/10 text-primary border-2 border-primary/30'
-                : 'bg-white/90 text-ink-500 hover:bg-pink-50 hover:text-pink-600 border border-border-dark'"
+                ? 'assistant-action-button--active text-primary'
+                : 'text-ink-500 hover:text-pink-600'"
               title="喜欢">
               <span class="material-symbols-outlined !text-base">thumb_up</span>
             </button>
@@ -88,10 +87,10 @@
             <!-- Dislike button -->
             <button
               @click="toggleDislike"
-              class="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-colors"
+              class="assistant-action-button"
               :class="isDisliked
-                ? 'bg-red-500/10 text-red-600 border-2 border-red-500/30'
-                : 'bg-white/90 text-ink-500 hover:bg-red-50 hover:text-red-600 border border-border-dark'"
+                ? 'assistant-action-button--active text-red-600'
+                : 'text-ink-500 hover:text-red-600'"
               title="不喜欢">
               <span class="material-symbols-outlined !text-base">thumb_down</span>
             </button>
@@ -99,7 +98,7 @@
             <!-- Share button -->
             <button
               @click="shareMessage"
-              class="inline-flex items-center gap-1.5 px-2 py-1.5 bg-white/90 hover:bg-primary/5 text-ink-500 hover:text-ink-950 border border-border-dark rounded-lg text-xs transition-colors"
+              class="assistant-action-button"
               title="分享对话">
               <span class="material-symbols-outlined !text-base">share</span>
             </button>
@@ -108,7 +107,7 @@
             <button
               v-if="msg.content"
               @click="quoteMessage"
-              class="inline-flex items-center gap-1.5 px-2 py-1.5 bg-white/90 hover:bg-primary/5 text-ink-500 hover:text-ink-950 border border-border-dark rounded-lg text-xs transition-colors"
+              class="assistant-action-button"
               title="引用">
               <span class="material-symbols-outlined !text-base">format_quote</span>
             </button>
@@ -117,7 +116,7 @@
             <button
               v-if="msg.status === 'error' || msg.status === 'timeout'"
               @click="retryMessage"
-              class="inline-flex items-center gap-1.5 px-2 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 border border-amber-500/30 rounded-lg text-xs transition-colors"
+              class="assistant-action-button text-amber-600 hover:text-amber-700"
               title="重试">
               <span class="material-symbols-outlined !text-base">refresh</span>
             </button>
@@ -126,7 +125,7 @@
             <div class="relative" data-model-dropdown>
               <button
                 @click="toggleModelDropdown"
-                class="inline-flex items-center gap-1.5 px-2 py-1.5 bg-white/90 hover:bg-primary/5 text-ink-500 hover:text-ink-950 border border-border-dark rounded-lg text-xs transition-colors"
+                class="assistant-action-button"
                 title="切换模型">
                 <span class="material-symbols-outlined !text-base">auto_awesome</span>
                 <span class="material-symbols-outlined !text-sm" :class="showModelDropdown ? 'rotate-180' : ''">expand_more</span>
@@ -1176,13 +1175,13 @@ const getImageUrl = (image, useThumbnail = false) => {
   return url
 }
 
-// 获取状态样式
-function getStatusClasses(status) {
+// 获取助手文本状态样式
+function getAssistantTextClasses(status) {
   const classes = {
-    processing: 'bg-primary/10 text-ink-950 border border-primary/20',
-    completed: 'bg-primary/10 text-ink-950 border border-primary/20',
-    error: 'bg-red-500/10 text-red-500 border border-red-500/20',
-    timeout: 'bg-amber-500/10 text-amber-700 border border-amber-500/20'
+    processing: 'text-ink-950',
+    completed: 'text-ink-950',
+    error: 'text-red-600',
+    timeout: 'text-amber-700'
   }
   return classes[status] || 'text-ink-950'
 }
@@ -1400,6 +1399,46 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.user-message-bubble {
+  background: rgba(255, 253, 252, 0.96);
+  color: var(--color-ink-950);
+  border: 1px solid rgba(140, 42, 46, 0.18);
+  box-shadow: 0 10px 24px rgba(88, 28, 32, 0.06);
+}
+
+.assistant-message {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.assistant-message--thinking {
+  color: var(--color-ink-700);
+}
+
+.assistant-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.15rem;
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  color: var(--color-ink-500);
+  transition: color 180ms ease, background-color 180ms ease, transform 180ms ease;
+}
+
+.assistant-action-button:hover {
+  color: var(--color-ink-950);
+  background: rgba(140, 42, 46, 0.06);
+}
+
+.assistant-action-button--active {
+  background: rgba(140, 42, 46, 0.08);
+}
+
 .markdown-body :deep(p) { margin: 0.4em 0; }
 .markdown-body :deep(h1),
 .markdown-body :deep(h2),

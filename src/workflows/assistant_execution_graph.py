@@ -278,6 +278,16 @@ def _get_default_ocr_model() -> str:
     return settings.assistant_ocr_model or _get_default_text_model()
 
 
+IMAGE_MODEL_SYSTEM_PROMPT = (
+    "你是图像生成模型的提示词编排器。请严格遵循以下规则："
+    "1. 优先满足用户最新明确提出的需求；"
+    "2. 将最近对话上下文作为补充约束与消歧依据；"
+    "3. 将附件、文档与参考图中提取出的事实视为强约束；"
+    "4. 保留主体、构图、风格、文案、数字、颜色和版式等关键信息；"
+    "5. 不要输出解释，只生成符合要求的图像结果。"
+)
+
+
 def _trim_attachment_text(text: str, limit: Optional[int] = None) -> str:
     text = (text or "").strip()
     effective_limit = limit or settings.assistant_attachment_text_limit or 4000
@@ -805,12 +815,22 @@ async def _is_image_model_name(model_name: Optional[str], app_state) -> bool:
     return bool(re.search(r"(?:^|[-_/])(image|images)(?:[-_/]|$)", lowered))
 
 
+def _is_explicit_chat_model_type(model_type: Optional[str]) -> bool:
+    normalized = str(model_type or "").strip().lower()
+    return normalized in {"chat", "text", "文本"}
+
+
+def _is_explicit_image_model_type(model_type: Optional[str]) -> bool:
+    normalized = str(model_type or "").strip().lower()
+    return normalized in {"image", "图像", "图片"}
+
+
 async def _resolve_chat_model_name(
     request_model: Optional[str],
     request_model_type: Optional[str],
     app_state,
 ) -> str:
-    if request_model_type and str(request_model_type).lower() == "image":
+    if _is_explicit_image_model_type(request_model_type):
         return _get_default_text_model()
     if request_model and not await _is_image_model_name(request_model, app_state):
         return request_model
@@ -822,11 +842,35 @@ async def _resolve_image_model_name(
     request_model_type: Optional[str],
     app_state,
 ) -> Optional[str]:
-    if request_model and request_model_type and str(request_model_type).lower() == "image":
+    if request_model and _is_explicit_image_model_type(request_model_type):
         return request_model
     if request_model and await _is_image_model_name(request_model, app_state):
         return request_model
     return settings.openai_image_model or None
+
+
+def _compose_image_model_prompt(
+    *,
+    system_prompt: str,
+    recent_context: str,
+    user_prompt: str,
+    planned_prompt: str,
+) -> str:
+    sections: List[str] = []
+
+    if system_prompt.strip():
+        sections.append(f"系统提示词:\n{system_prompt.strip()}")
+    if recent_context.strip():
+        sections.append(f"最近对话上下文:\n{recent_context.strip()}")
+    if user_prompt.strip():
+        sections.append(f"用户最新输入:\n{user_prompt.strip()}")
+    if planned_prompt.strip():
+        sections.append(f"最终生图提示词:\n{planned_prompt.strip()}")
+
+    return _trim_attachment_text(
+        "\n\n".join(sections),
+        limit=settings.assistant_attachment_text_limit or 12000,
+    )
 
 
 def _normalize_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -1109,6 +1153,17 @@ async def _decide_execution_route(
     app_state,
     api_key: Optional[str],
 ) -> RequestRouteDecision:
+    if _is_explicit_chat_model_type(request_model_type):
+        return RequestRouteDecision(
+            route="chat",
+            intent_type="chat",
+            batch_count=1,
+            confidence=1.0,
+            reasoning="The selected model is a text model, so the request is forced into chat mode.",
+            source="model-selection",
+            planning_basis="text",
+        )
+
     model_hint = request_model_type
     if not model_hint and request_model:
         model_hint = "image" if await _is_image_model_name(request_model, app_state) else "chat"
@@ -1601,6 +1656,17 @@ async def _build_image_plan(
         messages=messages,
         api_key=api_key,
     )
+    recent_context = _build_recent_conversation_context(messages)
+    latest_user_prompt = (user_instruction or contextual_user_instruction or "").strip()
+
+    def _wrap_image_prompt(prompt_text: str) -> str:
+        return _compose_image_model_prompt(
+            system_prompt=IMAGE_MODEL_SYSTEM_PROMPT,
+            recent_context=recent_context,
+            user_prompt=latest_user_prompt,
+            planned_prompt=prompt_text,
+        )
+
     requested_batch_count = max(1, route_decision.batch_count or 1)
     pdf_page_items = _flatten_pdf_page_items(attachments)
     pdf_page_prompts = await _build_pdf_page_matched_prompts(
@@ -1623,20 +1689,24 @@ async def _build_image_plan(
             requested_count=requested_batch_count,
             api_key=api_key,
         )
+    wrapped_batch_prompts: List[str] = []
     if pdf_page_prompts:
-        final_prompt = pdf_page_prompts[0]
-        effective_batch_count = len(pdf_page_prompts)
+        wrapped_batch_prompts = [_wrap_image_prompt(prompt) for prompt in pdf_page_prompts]
+        final_prompt = wrapped_batch_prompts[0]
+        effective_batch_count = len(wrapped_batch_prompts)
         effective_intent_type = "batch_generate" if effective_batch_count > 1 else "single_generate"
     elif word_section_prompts:
-        final_prompt = word_section_prompts[0]
-        effective_batch_count = len(word_section_prompts)
+        wrapped_batch_prompts = [_wrap_image_prompt(prompt) for prompt in word_section_prompts]
+        final_prompt = wrapped_batch_prompts[0]
+        effective_batch_count = len(wrapped_batch_prompts)
         effective_intent_type = "batch_generate" if effective_batch_count > 1 else "single_generate"
     else:
-        final_prompt = await _build_image_prompt_from_attachments(
+        raw_prompt = await _build_image_prompt_from_attachments(
             contextual_user_instruction,
             attachments,
             api_key=api_key,
         )
+        final_prompt = _wrap_image_prompt(raw_prompt)
         effective_batch_count = route_decision.batch_count
         effective_intent_type = route_decision.intent_type
     attachment_text_count = sum(1 for attachment in attachments if attachment.text_excerpt)
@@ -1663,14 +1733,15 @@ async def _build_image_plan(
             "reference_image_sources": reference_image_sources,
             "planning_basis": route_decision.planning_basis,
             "conversation_context_used": contextual_user_instruction != (user_instruction or "").strip(),
+            "image_prompt_system_prompt_included": True,
+            "image_prompt_context_included": bool(recent_context),
             "pdf_page_match_enabled": bool(pdf_page_prompts),
             "pdf_total_pages": len(pdf_page_items),
             "pdf_page_match_count": len(pdf_page_prompts),
             "word_section_match_enabled": bool(word_section_prompts),
             "word_total_sections": len(word_section_items),
             "word_section_match_count": len(word_section_prompts),
-            **({"_batch_prompts": pdf_page_prompts} if len(pdf_page_prompts) > 1 else {}),
-            **({"_batch_prompts": word_section_prompts} if not pdf_page_prompts and len(word_section_prompts) > 1 else {}),
+            **({"_batch_prompts": wrapped_batch_prompts} if len(wrapped_batch_prompts) > 1 else {}),
         },
     )
 

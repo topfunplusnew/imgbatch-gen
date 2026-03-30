@@ -5,13 +5,10 @@
       <NotificationCarousel ref="notificationCarouselRef" :autoplay="true" :autoplay-interval="5000" :max-items="3" />
     </div>
 
-    <div class="md:hidden sticky top-0 z-20 px-4 xs:px-6 py-3 bg-white/80 backdrop-blur-xl border-b border-border-dark flex items-center justify-between gap-3">
-      <button
-        @click="emit('toggleSidebar')"
-        class="flex items-center justify-center p-1.5 rounded-lg border border-border-dark bg-white/90 hover:bg-primary/5 text-ink-700 min-h-[44px] min-w-[44px]"
-        aria-label="Open sidebar">
+    <div class="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border-dark bg-white/80 px-4 py-3 backdrop-blur-xl md:hidden xs:px-6">
+      <el-button circle @click="emit('toggleSidebar')" aria-label="Open sidebar">
         <span class="material-symbols-outlined !text-xl">menu</span>
-      </button>
+      </el-button>
       <div class="min-h-[44px] min-w-[44px] shrink-0"></div>
     </div>
 
@@ -29,82 +26,83 @@
 
       <!-- Quick Input Area -->
       <div class="w-full max-w-[85%] mx-auto min-w-[320px]">
-        <div
-          class="bg-white rounded-xl shadow-lg border border-border-dark p-4"
+        <el-card
+          shadow="never"
+          class="landing-input-card"
           @mouseenter="handleInputFocus"
-          @mouseleave="handleInputBlur">
+          @mouseleave="handleInputBlur"
+        >
           <!-- Quick input with file attachment -->
-          <div class="flex items-center mb-4">
-            <input
-              ref="fileInputRef"
-              type="file"
-              multiple
+          <div class="mb-4 flex items-center justify-between gap-3">
+            <el-upload
+              ref="uploadRef"
+              :auto-upload="false"
+              :show-file-list="false"
+              :multiple="true"
               accept=".pdf,.docx,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg"
-              @change="handleFileSelect"
-              class="hidden">
+              :on-change="handleUploadChange"
+            >
+              <el-button>
+                <span class="material-symbols-outlined !text-lg">attach_file</span>
+                <span>上传文件</span>
+              </el-button>
+            </el-upload>
 
-            <div class="flex items-center gap-2">
-              <button
-                @click="triggerFileSelect"
-                class="flex items-center justify-center size-[24px] rounded-[8px] text-[20px] text-gray-600 hover:bg-gray-100 transition-colors"
-                title="上传文件">
-                <span class="material-symbols-outlined !text-xl">attach_file</span>
-              </button>
-              <span class="text-sm text-gray-600">上传文件</span>
-            </div>
+            <el-tag round effect="plain" class="hidden sm:inline-flex">支持 PDF / Word / 图片</el-tag>
           </div>
 
           <!-- File attachments preview -->
-          <div v-if="attachments.length > 0" class="flex flex-wrap gap-2 mb-4">
+          <div v-if="attachments.length > 0" class="mb-4 flex flex-wrap gap-2">
             <div
               v-for="(file, index) in attachments"
               :key="index"
-              class="relative flex items-center gap-2 px-3 py-2 bg-primary-soft border border-primary/20 rounded-lg">
+              class="relative flex items-center gap-2 rounded-2xl border border-primary/20 bg-primary-soft px-3 py-2">
               <span class="material-symbols-outlined !text-lg text-primary">
                 {{ getFileIcon(file) }}
               </span>
-              <span class="text-xs text-ink-700 max-w-[100px] truncate">{{ file.name }}</span>
-              <button
-                @click="removeFile(index)"
-                class="text-ink-500 hover:text-red-500 transition-colors">
+              <span class="max-w-[120px] truncate text-xs text-ink-700">{{ file.name }}</span>
+              <el-button circle text @click="removeFile(index)">
                 <span class="material-symbols-outlined !text-sm">close</span>
-              </button>
+              </el-button>
             </div>
           </div>
 
           <!-- Text input -->
-          <textarea
+          <el-input
             ref="promptInputRef"
             v-model="promptInput"
-            @input="handlePromptInput"
+            type="textarea"
+            :rows="9"
             @focus="handleInputFocus"
             @blur="handleInputBlur"
-            class="w-full bg-gray-50 border border-border-dark rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
-            rows="9"
-            placeholder="描述您想要创建的图像，或点击上传参考文件..."
-          ></textarea>
+            placeholder="您有什么想法"
+            @input="handlePromptInput"
+          />
 
           <!-- Parameter Controls & Start Button Row -->
-          <div class="flex items-center gap-2 mt-3 flex-wrap xs:flex-nowrap">
+          <div class="mt-4 flex flex-wrap items-center gap-2 xs:flex-nowrap">
             <ModelDropdown class="shrink-0" />
-            <div class="hidden xs:block w-px h-6 bg-border-dark mx-1"></div>
+            <el-divider direction="vertical" class="!hidden xs:!block" />
             <RatioDropdown class="shrink-0" />
             <ResolutionDropdown class="shrink-0" />
             <div class="flex-1 min-w-0"></div>
-            <button
+            <el-button
               @click="startGeneration"
               :disabled="!promptInput.trim() && attachments.length === 0"
-              class="flex items-center gap-2 px-3 xs:px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-strong disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shrink-0">
+              type="primary"
+              round
+              class="shrink-0"
+            >
               <span class="material-symbols-outlined !text-xl">auto_awesome</span>
-              <span class="font-medium hidden xs:inline">开始生成</span>
-            </button>
+              <span class="font-medium hidden xs:inline">发送</span>
+            </el-button>
           </div>
 
           <!-- Supported formats hint -->
           <div class="text-xs text-ink-500 mt-2">
             支持：PDF、Word、图片等格式
           </div>
-        </div>
+        </el-card>
       </div>
     </div>
 
@@ -114,37 +112,27 @@
         <!-- Header with view all button -->
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-semibold text-ink-950">模板分类</h3>
-          <button
-            @click="openTemplates"
-            class="text-sm text-primary hover:text-primary-strong font-medium">
-            查看全部 →
-          </button>
+          <el-button text @click="openTemplates">查看全部</el-button>
         </div>
 
         <!-- Category Filter Buttons -->
         <div class="flex items-center gap-2 mb-6 flex-wrap">
-          <button
+          <el-button
             @click="selectedCategory = null"
-            :class="[
-              'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-              selectedCategory === null
-                ? 'bg-primary text-white'
-                : 'bg-white text-ink-700 border border-border-dark hover:bg-primary/5'
-            ]">
+            :type="selectedCategory === null ? 'primary' : 'default'"
+            :plain="selectedCategory !== null"
+          >
             全部
-          </button>
-          <button
+          </el-button>
+          <el-button
             v-for="category in categories"
             :key="category"
             @click="selectedCategory = category"
-            :class="[
-              'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-              selectedCategory === category
-                ? 'bg-primary text-white'
-                : 'bg-white text-ink-700 border border-border-dark hover:bg-primary/5'
-            ]">
+            :type="selectedCategory === category ? 'primary' : 'default'"
+            :plain="selectedCategory !== category"
+          >
             {{ category }}
-          </button>
+          </el-button>
         </div>
 
         <!-- Loading state -->
@@ -161,11 +149,12 @@
             </h4>
             <!-- Horizontal scroll cards -->
             <div v-if="filteredCases.length > 0" class="flex gap-4 overflow-x-auto pb-4 scrollbar-hide scroll-smooth -mx-4 px-4">
-              <div
+              <el-card
                 v-for="caseItem in filteredCases.slice(0, 10)"
                 :key="caseItem.id"
                 @click="selectTemplate(caseItem)"
-                class="flex-shrink-0 w-48 xs:w-56 group relative rounded-lg overflow-hidden border border-border-dark hover:border-primary/50 hover:shadow-lg transition-all duration-200 bg-white cursor-pointer"
+                shadow="hover"
+                class="landing-template-card group relative w-48 flex-shrink-0 cursor-pointer overflow-hidden xs:w-56"
               >
                 <div class="aspect-video relative">
                   <img
@@ -186,7 +175,7 @@
                   <h5 class="text-sm font-medium text-ink-950 line-clamp-1 mb-1">{{ caseItem.title }}</h5>
                   <p class="text-xs text-ink-500 line-clamp-2">{{ caseItem.description }}</p>
                 </div>
-              </div>
+              </el-card>
             </div>
             <el-empty v-else description="暂无模板" :image-size="60" />
           </div>
@@ -214,11 +203,12 @@ const emit = defineEmits(['toggleSidebar', 'toggleSettings'])
 
 const promptInput = ref('')
 const promptInputRef = ref(null)
-const fileInputRef = ref(null)
+const uploadRef = ref(null)
 const notificationCarouselRef = ref(null)
 const attachments = ref([])
 const hasStartedTyping = ref(false)
 const selectedCategory = ref(null)
+let uploadSwitchTimer = null
 
 // Get categories from caseStore
 const categories = computed(() => caseStore.categories || [])
@@ -274,37 +264,30 @@ watch(() => appStore.currentView, (newView) => {
   }
 })
 
-// Trigger file selection
-const triggerFileSelect = () => {
-  fileInputRef.value?.click()
-}
-
 // Handle file selection
-const handleFileSelect = (event) => {
-  const files = Array.from(event.target.files || [])
+const handleUploadChange = (uploadFile) => {
+  const file = uploadFile?.raw || uploadFile
+  if (!file) return
 
-  files.forEach(file => {
-    // Validate file type
-    if (!validateFileType(file)) {
-      alert(`文件 "${file.name}" 格式不支持。\n支持格式：PDF、Word (.docx)、图片 (.jpg, .png, .gif, .webp, .bmp, .svg)`)
-      return
+  if (!validateFileType(file)) {
+    alert(`文件 "${file.name}" 格式不支持。\n支持格式：PDF、Word (.docx)、图片 (.jpg, .png, .gif, .webp, .bmp, .svg)`)
+    uploadRef.value?.clearFiles?.()
+    return
+  }
+
+  attachments.value.push(file)
+  uploadRef.value?.clearFiles?.()
+
+  if (uploadSwitchTimer) clearTimeout(uploadSwitchTimer)
+  uploadSwitchTimer = setTimeout(() => {
+    if (attachments.value.length > 0 && appStore.currentView === 'landing') {
+      appStore.setCurrentView('chat')
+      attachments.value.forEach(file => {
+        generatorStore.addAttachment(file)
+      })
+      attachments.value = []
     }
-    attachments.value.push(file)
-  })
-
-  // Clear input
-  if (fileInputRef.value) {
-    fileInputRef.value.value = ''
-  }
-
-  // Switch to chat view when files are added
-  if (attachments.value.length > 0 && appStore.currentView === 'landing') {
-    appStore.setCurrentView('chat')
-    attachments.value.forEach(file => {
-      generatorStore.addAttachment(file)
-    })
-    attachments.value = []
-  }
+  }, 0)
 }
 
 // Validate file type
@@ -366,7 +349,7 @@ const startGeneration = () => {
 
 // Open templates
 const openTemplates = () => {
-  appStore.toggleTemplateDrawer()
+  appStore.setCurrentView('templates')
 }
 
 // Initialize cases on mount
@@ -382,6 +365,25 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.landing-input-card {
+  border-radius: 28px;
+  border-color: var(--color-border-dark);
+  box-shadow: 0 28px 56px rgba(88, 28, 32, 0.12);
+}
+
+.landing-input-card :deep(.el-card__body) {
+  padding: 18px;
+}
+
+.landing-template-card {
+  border-radius: 22px;
+  border-color: var(--color-border-dark);
+}
+
+.landing-template-card :deep(.el-card__body) {
+  padding: 0;
+}
+
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
