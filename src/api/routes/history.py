@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Request, Depends
 from loguru import logger
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import select, and_, desc, func
 
 from ...database import get_db_manager
@@ -35,8 +35,8 @@ class ConversationInfo(BaseModel):
     """对话信息模型"""
     session_id: str = Field(..., description="会话ID")
     title: str = Field(..., description="对话标题")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
+    created_at: str = Field(..., description="创建时间")
+    updated_at: str = Field(..., description="更新时间")
     message_count: int = Field(..., description="消息数量")
     image_count: int = Field(..., description="图片数量")
 
@@ -45,7 +45,7 @@ class ConversationSummary(BaseModel):
     """对话摘要模型"""
     session_id: str = Field(..., description="会话ID")
     title: str = Field(..., description="对话标题（第一条用户消息）")
-    created_at: datetime = Field(..., description="创建时间")
+    created_at: str = Field(..., description="创建时间")
     message_count: int = Field(..., description="消息数量")
     last_message: Optional[str] = Field(None, description="最后一条消息")
 
@@ -76,6 +76,19 @@ class SaveMessageRequest(BaseModel):
 def _get_client_id(http_request: Request) -> str:
     """从 Cookie 中获取客户端 ID"""
     return http_request.cookies.get("client_id", "anonymous")
+
+
+def _serialize_utc_datetime(value: Optional[datetime]) -> Optional[str]:
+    """将数据库中的 UTC 时间统一序列化为带 Z 的 ISO 字符串。"""
+    if value is None:
+        return None
+
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    else:
+        value = value.astimezone(timezone.utc)
+
+    return value.isoformat().replace("+00:00", "Z")
 
 
 @router.post("/history/create_session")
@@ -194,8 +207,8 @@ async def list_conversations(
             summaries.append({
                 "session_id": session.session_id,
                 "title": session.title,
-                "created_at": session.created_at,
-                "updated_at": session.updated_at,
+                "created_at": _serialize_utc_datetime(session.created_at),
+                "updated_at": _serialize_utc_datetime(session.updated_at),
                 "message_count": message_count,
                 "image_count": session.image_count or 0
             })
@@ -265,7 +278,7 @@ async def get_conversation(
                 "content": msg.content,
                 "model": msg.model,
                 "provider": msg.provider,
-                "created_at": msg.created_at.strftime("%Y-%m-%d %H:%M:%S") if msg.created_at else None
+                "created_at": _serialize_utc_datetime(msg.created_at)
             }
             if msg.images:
                 try:
@@ -289,14 +302,14 @@ async def get_conversation(
                 "file_size": file.file_size,
                 "file_type": file.file_type,
                 "category": file.category,
-                "created_at": file.created_at.strftime("%Y-%m-%d %H:%M:%S") if file.created_at else None
+                "created_at": _serialize_utc_datetime(file.created_at)
             })
 
         return {
             "session_id": session_id,
             "title": session_obj.title,
-            "created_at": session_obj.created_at,
-            "updated_at": session_obj.updated_at,
+            "created_at": _serialize_utc_datetime(session_obj.created_at),
+            "updated_at": _serialize_utc_datetime(session_obj.updated_at),
             "message_count": len(messages),
             "image_count": session_obj.image_count or 0,
             "file_count": len(files),

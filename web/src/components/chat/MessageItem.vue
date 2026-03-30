@@ -167,15 +167,15 @@
         <transition name="status-card">
           <div v-if="progressCard" class="mt-3">
             <div
-              class="status-card relative overflow-hidden rounded-[1.1rem] border px-3 py-2.5 sm:px-3.5"
+              class="status-card relative overflow-hidden rounded-[1rem] border px-2.5 py-2 sm:px-3"
               :class="statusCardThemeClass"
             >
               <div v-if="isProgressActive" class="status-card__ambient"></div>
 
-              <div class="relative flex items-start gap-2.5 sm:gap-3">
+              <div class="relative flex items-start gap-2.5">
                 <div class="status-card__badge" :class="statusBadgeThemeClass">
                   <span
-                    class="material-symbols-outlined !text-lg"
+                    class="material-symbols-outlined !text-base"
                     :class="{ 'status-card__icon-spin': isProgressActive }"
                   >
                     {{ progressCard.icon }}
@@ -183,10 +183,13 @@
                 </div>
 
                 <div class="min-w-0 flex-1">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <span class="text-sm font-medium text-ink-700">{{ progressCard.title }}</span>
-                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="statusTagThemeClass">
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <span class="text-[13px] font-semibold text-ink-700">{{ progressCard.title }}</span>
+                    <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold" :class="statusTagThemeClass">
                       {{ progressCard.tag }}
+                    </span>
+                    <span class="inline-flex items-center rounded-full bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-ink-500 border border-border-dark/70">
+                      {{ progressCard.percent }}%
                     </span>
                     <div v-if="isProgressActive" class="loading-dots" aria-hidden="true">
                       <span></span>
@@ -195,101 +198,97 @@
                     </div>
                   </div>
 
-                  <div class="mt-1.5 flex items-center gap-2">
-                    <p class="status-card__summary flex-1">
-                      {{ collapsedProgressSummary }}
-                    </p>
+                  <p class="status-card__summary mt-1">
+                    {{ collapsedProgressSummary }}
+                  </p>
 
-                    <button
-                      v-if="hasProgressDetails"
-                      type="button"
-                      class="status-card__toggle status-card__toggle--compact"
-                      :aria-expanded="isProgressDetailsOpen"
-                      @click="isProgressDetailsOpen = !isProgressDetailsOpen"
-                    >
-                      <span>{{ isProgressDetailsOpen ? '收起' : '过程' }}</span>
-                      <span
-                        class="material-symbols-outlined !text-[15px] transition-transform duration-200"
-                        :class="{ 'rotate-180': isProgressDetailsOpen }"
-                      >
-                        expand_more
-                      </span>
-                    </button>
-                  </div>
+                  <el-collapse
+                    v-if="hasProgressDetails"
+                    v-model="activeProgressPanel"
+                    accordion
+                    class="status-card__collapse"
+                  >
+                    <el-collapse-item name="details">
+                      <template #title>
+                        <div class="status-card__collapse-title">
+                          <span>详细过程</span>
+                          <span class="status-card__collapse-caption">{{ progressCard.caption }}</span>
+                        </div>
+                      </template>
 
-                  <transition name="status-details">
-                    <div v-if="isProgressDetailsOpen && hasProgressDetails" class="status-card__details">
-                      <p class="text-xs leading-relaxed text-ink-500">
-                        {{ progressCard.message }}
-                      </p>
+                      <div class="status-card__details">
+                        <p class="text-[11px] leading-relaxed text-ink-500">
+                          {{ progressCard.message }}
+                        </p>
 
-                      <div class="mt-3">
-                        <div class="flex items-center gap-3">
-                          <div class="status-card__progress-track flex-1">
-                            <div
-                              class="status-card__progress-fill"
-                              :class="progressFillThemeClass"
-                              :style="{ width: `${progressCard.percent}%` }"
-                            >
-                              <span v-if="isProgressActive" class="status-card__progress-shine"></span>
+                        <div class="mt-2.5">
+                          <div class="flex items-center gap-2.5">
+                            <div class="status-card__progress-track flex-1">
+                              <div
+                                class="status-card__progress-fill"
+                                :class="progressFillThemeClass"
+                                :style="{ width: `${progressCard.percent}%` }"
+                              >
+                                <span v-if="isProgressActive" class="status-card__progress-shine"></span>
+                              </div>
                             </div>
+                            <span class="text-[11px] font-medium text-ink-500">{{ progressCard.percent }}%</span>
                           </div>
-                          <span class="text-[11px] font-medium text-ink-500">{{ progressCard.percent }}%</span>
-                        </div>
-                        <div class="mt-2 flex items-center justify-between gap-3 text-[11px] text-ink-400">
-                          <span class="min-w-0 truncate">{{ progressCard.caption }}</span>
-                          <span v-if="progressMetaSummary" class="status-card__meta-summary">{{ progressMetaSummary }}</span>
-                        </div>
-                      </div>
-
-                      <div v-if="progressStatChips.length > 0" class="flex flex-wrap gap-2">
-                        <div
-                          v-for="chip in progressStatChips"
-                          :key="chip.label"
-                          class="status-chip"
-                        >
-                          <span class="text-[10px] uppercase tracking-[0.12em] text-ink-400">{{ chip.label }}</span>
-                          <span class="text-xs font-medium text-ink-500">{{ chip.value }}</span>
-                        </div>
-                      </div>
-
-                      <div v-if="progressStagePills.length > 0" class="mt-3 flex flex-wrap gap-2">
-                        <div
-                          v-for="item in progressStagePills"
-                          :key="`${item.stage}-${item.countText}`"
-                          class="stage-pill"
-                          :class="{
-                            'stage-pill--active': item.isActive,
-                            'stage-pill--done': item.isDone,
-                            'stage-pill--error': item.isError
-                          }"
-                        >
-                          <span class="material-symbols-outlined !text-sm">{{ item.icon }}</span>
-                          <span class="font-medium">{{ item.label }}</span>
-                          <span v-if="item.countText">{{ item.countText }}</span>
-                        </div>
-                      </div>
-
-                      <div v-if="progressTimeline.length > 0" class="mt-3 space-y-2">
-                        <div
-                          v-for="event in progressTimeline"
-                          :key="`${event.stage}-${event.timestamp || event.label}`"
-                          class="timeline-item"
-                          :class="{ 'timeline-item--active': event.isActive }"
-                        >
-                          <span class="timeline-item__dot"></span>
-                          <div class="min-w-0 flex-1">
-                            <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                              <span class="text-xs font-medium text-ink-600">{{ event.label }}</span>
-                              <span class="text-[10px] text-ink-400">{{ event.progressPercent }}%</span>
-                              <span v-if="event.timestamp" class="text-[10px] text-ink-400">{{ event.timestamp }}</span>
-                            </div>
-                            <p class="mt-0.5 text-[11px] leading-relaxed text-ink-500">{{ event.message }}</p>
+                          <div class="mt-1.5 flex items-center justify-between gap-3 text-[10px] text-ink-400">
+                            <span class="min-w-0 truncate">{{ progressCard.caption }}</span>
+                            <span v-if="progressMetaSummary" class="status-card__meta-summary">{{ progressMetaSummary }}</span>
                           </div>
                         </div>
+
+                        <div v-if="progressStatChips.length > 0" class="mt-2.5 flex flex-wrap gap-1.5">
+                          <div
+                            v-for="chip in progressStatChips"
+                            :key="chip.label"
+                            class="status-chip"
+                          >
+                            <span class="text-[10px] uppercase tracking-[0.12em] text-ink-400">{{ chip.label }}</span>
+                            <span class="text-xs font-medium text-ink-500">{{ chip.value }}</span>
+                          </div>
+                        </div>
+
+                        <div v-if="progressStagePills.length > 0" class="mt-2.5 flex flex-wrap gap-1.5">
+                          <div
+                            v-for="item in progressStagePills"
+                            :key="`${item.stage}-${item.countText}`"
+                            class="stage-pill"
+                            :class="{
+                              'stage-pill--active': item.isActive,
+                              'stage-pill--done': item.isDone,
+                              'stage-pill--error': item.isError
+                            }"
+                          >
+                            <span class="material-symbols-outlined !text-sm">{{ item.icon }}</span>
+                            <span class="font-medium">{{ item.label }}</span>
+                            <span v-if="item.countText">{{ item.countText }}</span>
+                          </div>
+                        </div>
+
+                        <div v-if="progressTimeline.length > 0" class="mt-2.5 space-y-1.5">
+                          <div
+                            v-for="event in progressTimeline"
+                            :key="`${event.stage}-${event.timestamp || event.label}`"
+                            class="timeline-item"
+                            :class="{ 'timeline-item--active': event.isActive }"
+                          >
+                            <span class="timeline-item__dot"></span>
+                            <div class="min-w-0 flex-1">
+                              <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                <span class="text-xs font-medium text-ink-600">{{ event.label }}</span>
+                                <span class="text-[10px] text-ink-400">{{ event.progressPercent }}%</span>
+                                <span v-if="event.timestamp" class="text-[10px] text-ink-400">{{ event.timestamp }}</span>
+                              </div>
+                              <p class="mt-0.5 text-[11px] leading-relaxed text-ink-500">{{ event.message }}</p>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </transition>
+                    </el-collapse-item>
+                  </el-collapse>
                 </div>
               </div>
             </div>
@@ -462,14 +461,14 @@
                 <div class="generated-skeleton__orb generated-skeleton__orb--two"></div>
                 <div class="generated-skeleton__panel"></div>
               </div>
-              <div class="absolute inset-x-0 bottom-0 p-3">
-                <div class="inline-flex items-center gap-1.5 rounded-full bg-white/85 px-2.5 py-1 text-[11px] font-medium text-emerald-700 shadow-sm">
-                  <span class="material-symbols-outlined !text-sm animate-spin">progress_activity</span>
+              <div class="absolute inset-x-0 bottom-0 p-2.5">
+                <div class="inline-flex items-center gap-1 rounded-full border border-primary/10 bg-white/90 px-2 py-1 text-[10px] font-medium text-primary shadow-sm">
+                  <span class="material-symbols-outlined !text-xs animate-spin">progress_activity</span>
                   生成中
                 </div>
-                <div class="mt-2 space-y-2">
-                  <div class="h-2.5 w-3/4 rounded-full bg-white/80"></div>
-                  <div class="h-2.5 w-1/2 rounded-full bg-white/60"></div>
+                <div class="mt-1.5 space-y-1.5">
+                  <div class="h-2 w-2/3 rounded-full bg-white/80"></div>
+                  <div class="h-2 w-2/5 rounded-full bg-white/60"></div>
                 </div>
               </div>
             </template>
@@ -517,7 +516,7 @@ const isDownloading = ref(false)
 const downloadProgress = ref({})
 const copied = ref(false)
 const imagePreviewModalRef = ref(null)
-const isProgressDetailsOpen = ref(false)
+const activeProgressPanel = ref('')
 
 // Message interaction state
 const isLiked = ref(false)
@@ -601,9 +600,17 @@ const generatedGalleryCountLabel = computed(() => {
   return `共 ${generatedImageEntries.value.length} 张图片`
 })
 const generatedGalleryGridClass = computed(() =>
-  generatedGallerySlots.value.length <= 1
-    ? 'grid grid-cols-1 max-w-xs md:max-w-md gap-2 xs:gap-3 md:gap-4'
-    : 'grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 xs:gap-3 md:gap-4'
+  hasPendingGeneratedSlots.value
+    ? (
+        generatedGallerySlots.value.length <= 1
+          ? 'grid grid-cols-1 max-w-[180px] md:max-w-[220px] gap-2.5'
+          : 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-w-4xl'
+      )
+    : (
+        generatedGallerySlots.value.length <= 1
+          ? 'grid grid-cols-1 max-w-xs md:max-w-md gap-2 xs:gap-3 md:gap-4'
+          : 'grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 xs:gap-3 md:gap-4'
+      )
 )
 const batchProgressPercent = computed(() => {
   const explicitPercent = Number(props.msg?.batchProgress?.progressPercent)
@@ -803,9 +810,14 @@ const progressFillThemeClass = computed(() => {
   return 'status-card__progress-fill--active'
 })
 const hasProgressDetails = computed(() =>
-  progressStatChips.value.length > 0
+  Boolean(progressCard.value)
+  && (
+    Boolean(progressCard.value?.message)
+    || Boolean(progressCard.value?.caption)
+    || progressStatChips.value.length > 0
   || progressStagePills.value.length > 0
   || progressTimeline.value.length > 0
+  )
 )
 const progressMetaSummary = computed(() => {
   if (!progressStatChips.value.length) return ''
@@ -1464,17 +1476,17 @@ onUnmounted(() => {
 
 .status-card {
   backdrop-filter: blur(10px);
-  box-shadow: 0 6px 18px rgba(16, 19, 18, 0.05);
+  box-shadow: 0 6px 16px rgba(88, 28, 32, 0.05);
 }
 
 .status-card--active {
-  border-color: rgba(0, 187, 111, 0.16);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.97) 0%, rgba(245, 252, 248, 0.96) 56%, rgba(236, 249, 242, 0.94) 100%);
+  border-color: rgba(140, 42, 46, 0.15);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(252, 246, 245, 0.96) 56%, rgba(247, 238, 237, 0.94) 100%);
 }
 
 .status-card--success {
-  border-color: rgba(16, 185, 129, 0.18);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.97) 0%, rgba(241, 252, 247, 0.95) 100%);
+  border-color: rgba(140, 42, 46, 0.12);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 243, 242, 0.95) 100%);
 }
 
 .status-card--error {
@@ -1484,12 +1496,12 @@ onUnmounted(() => {
 
 .status-card__ambient {
   position: absolute;
-  left: -2.4rem;
-  top: -2.8rem;
-  width: 8rem;
-  height: 8rem;
+  left: -2rem;
+  top: -2.4rem;
+  width: 6.5rem;
+  height: 6.5rem;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(0, 187, 111, 0.08) 0%, rgba(0, 187, 111, 0) 70%);
+  background: radial-gradient(circle, rgba(140, 42, 46, 0.08) 0%, rgba(140, 42, 46, 0) 70%);
   animation: status-orbit 5s ease-in-out infinite;
   pointer-events: none;
 }
@@ -1497,12 +1509,12 @@ onUnmounted(() => {
 .status-card__badge {
   position: relative;
   display: flex;
-  width: 2rem;
-  height: 2rem;
+  width: 1.8rem;
+  height: 1.8rem;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border-radius: 0.75rem;
+  border-radius: 0.7rem;
   overflow: hidden;
 }
 
@@ -1514,20 +1526,20 @@ onUnmounted(() => {
 }
 
 .status-card__badge--active {
-  color: #00a86b;
-  background: linear-gradient(145deg, rgba(0, 187, 111, 0.12), rgba(255, 255, 255, 0.88));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 6px 18px rgba(0, 187, 111, 0.1);
+  color: var(--color-primary);
+  background: linear-gradient(145deg, rgba(140, 42, 46, 0.12), rgba(255, 255, 255, 0.88));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 6px 16px rgba(140, 42, 46, 0.08);
 }
 
 .status-card__badge--active::after {
-  border: 1px solid rgba(0, 187, 111, 0.2);
+  border: 1px solid rgba(140, 42, 46, 0.18);
   animation: status-pulse-ring 1.8s ease-out infinite;
 }
 
 .status-card__badge--success {
-  color: #047857;
-  background: linear-gradient(145deg, rgba(16, 185, 129, 0.12), rgba(255, 255, 255, 0.88));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 6px 18px rgba(16, 185, 129, 0.08);
+  color: var(--color-primary);
+  background: linear-gradient(145deg, rgba(140, 42, 46, 0.12), rgba(255, 255, 255, 0.88));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 6px 16px rgba(140, 42, 46, 0.06);
 }
 
 .status-card__badge--error {
@@ -1542,7 +1554,7 @@ onUnmounted(() => {
 
 .status-card__progress-track {
   position: relative;
-  height: 0.45rem;
+  height: 0.38rem;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.78);
@@ -1586,11 +1598,11 @@ onUnmounted(() => {
 }
 
 .status-card__progress-fill--active {
-  background: linear-gradient(90deg, #00b26d 0%, #00cf85 52%, #8ef3c7 100%);
+  background: linear-gradient(90deg, #8c2a2e 0%, #a24246 55%, #d9a2a5 100%);
 }
 
 .status-card__progress-fill--success {
-  background: linear-gradient(90deg, #059669 0%, #10b981 55%, #6ee7b7 100%);
+  background: linear-gradient(90deg, #8c2a2e 0%, #a24246 55%, #d9a2a5 100%);
 }
 
 .status-card__progress-fill--error {
@@ -1607,13 +1619,13 @@ onUnmounted(() => {
 
 .status-chip {
   display: flex;
-  min-width: 4.1rem;
+  min-width: 3.8rem;
   flex-direction: column;
-  gap: 0.2rem;
-  border-radius: 0.85rem;
-  border: 1px solid rgba(16, 19, 18, 0.06);
-  background: rgba(255, 255, 255, 0.7);
-  padding: 0.48rem 0.62rem;
+  gap: 0.14rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(140, 42, 46, 0.08);
+  background: rgba(255, 255, 255, 0.76);
+  padding: 0.4rem 0.55rem;
 }
 
 .stage-pill {
@@ -1621,24 +1633,24 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.35rem;
   border-radius: 999px;
-  border: 1px solid rgba(16, 19, 18, 0.06);
+  border: 1px solid rgba(140, 42, 46, 0.08);
   background: rgba(255, 255, 255, 0.72);
-  padding: 0.34rem 0.62rem;
-  font-size: 0.7rem;
-  color: rgba(16, 19, 18, 0.58);
+  padding: 0.28rem 0.55rem;
+  font-size: 0.68rem;
+  color: rgba(88, 28, 32, 0.58);
   transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease, color 220ms ease;
 }
 
 .stage-pill--active {
-  color: #007c4a;
-  border-color: rgba(0, 187, 111, 0.22);
-  box-shadow: 0 10px 22px rgba(0, 187, 111, 0.12);
+  color: var(--color-primary);
+  border-color: rgba(140, 42, 46, 0.2);
+  box-shadow: 0 8px 18px rgba(140, 42, 46, 0.1);
   transform: translateY(-1px);
 }
 
 .stage-pill--done {
-  color: #047857;
-  border-color: rgba(16, 185, 129, 0.18);
+  color: var(--color-primary);
+  border-color: rgba(140, 42, 46, 0.16);
 }
 
 .stage-pill--error {
@@ -1649,24 +1661,24 @@ onUnmounted(() => {
 .timeline-item {
   display: flex;
   align-items: flex-start;
-  gap: 0.7rem;
-  border-radius: 0.9rem;
-  background: rgba(255, 255, 255, 0.48);
-  padding: 0.5rem 0.65rem;
+  gap: 0.6rem;
+  border-radius: 0.8rem;
+  background: rgba(255, 255, 255, 0.54);
+  padding: 0.42rem 0.58rem;
 }
 
 .timeline-item__dot {
-  width: 0.55rem;
-  height: 0.55rem;
-  margin-top: 0.35rem;
+  width: 0.48rem;
+  height: 0.48rem;
+  margin-top: 0.32rem;
   flex-shrink: 0;
   border-radius: 999px;
-  background: rgba(0, 187, 111, 0.18);
-  box-shadow: 0 0 0 0.3rem rgba(0, 187, 111, 0.05);
+  background: rgba(140, 42, 46, 0.18);
+  box-shadow: 0 0 0 0.28rem rgba(140, 42, 46, 0.05);
 }
 
 .timeline-item--active .timeline-item__dot {
-  background: #00b26d;
+  background: var(--color-primary);
   animation: timeline-pulse 1.45s ease-out infinite;
 }
 
@@ -1677,10 +1689,10 @@ onUnmounted(() => {
 }
 
 .loading-dots span {
-  width: 0.35rem;
-  height: 0.35rem;
+  width: 0.28rem;
+  height: 0.28rem;
   border-radius: 999px;
-  background: #00b26d;
+  background: var(--color-primary);
   animation: loading-dots 1.1s ease-in-out infinite;
 }
 
@@ -1697,12 +1709,12 @@ onUnmounted(() => {
   height: 0.42rem;
   flex-shrink: 0;
   border-radius: 999px;
-  background: #00b26d;
+  background: var(--color-primary);
   animation: streaming-pulse 1.1s ease-in-out infinite;
 }
 
 .status-card__meta-summary {
-  max-width: 46%;
+  max-width: 44%;
   flex-shrink: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1712,42 +1724,41 @@ onUnmounted(() => {
 
 .status-card__summary {
   min-width: 0;
+  font-size: 0.72rem;
+  line-height: 1.2rem;
+  color: rgba(88, 28, 32, 0.54);
+}
+
+.status-card__collapse {
+  margin-top: 0.45rem;
+  --el-collapse-border-color: rgba(140, 42, 46, 0.08);
+}
+
+.status-card__collapse-title {
+  min-width: 0;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-right: 0.35rem;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(88, 28, 32, 0.62);
+}
+
+.status-card__collapse-caption {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.75rem;
-  line-height: 1.25rem;
-  color: rgba(16, 19, 18, 0.5);
-}
-
-.status-card__toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  border-radius: 999px;
-  border: 1px solid rgba(16, 19, 18, 0.04);
-  background: rgba(255, 255, 255, 0.58);
-  padding: 0.24rem 0.56rem;
-  font-size: 0.71rem;
+  font-size: 10px;
   font-weight: 500;
-  color: rgba(16, 19, 18, 0.48);
-  transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease;
-}
-
-.status-card__toggle:hover {
-  color: rgba(16, 19, 18, 0.68);
-  background: rgba(255, 255, 255, 0.8);
-  border-color: rgba(16, 19, 18, 0.08);
-}
-
-.status-card__toggle--compact {
-  flex-shrink: 0;
+  color: rgba(88, 28, 32, 0.4);
 }
 
 .status-card__details {
-  margin-top: 0.65rem;
-  border-top: 1px solid rgba(16, 19, 18, 0.06);
-  padding-top: 0.7rem;
+  padding-top: 0.15rem;
 }
 
 .generated-skeleton {
@@ -1756,8 +1767,8 @@ onUnmounted(() => {
   height: 100%;
   overflow: hidden;
   background:
-    radial-gradient(circle at top left, rgba(16, 185, 129, 0.16), transparent 38%),
-    linear-gradient(145deg, rgba(247, 250, 249, 0.98), rgba(228, 239, 235, 0.92));
+    radial-gradient(circle at top left, rgba(140, 42, 46, 0.14), transparent 38%),
+    linear-gradient(145deg, rgba(250, 247, 247, 0.98), rgba(241, 232, 231, 0.94));
 }
 
 .generated-skeleton__shine {
@@ -1776,31 +1787,31 @@ onUnmounted(() => {
 }
 
 .generated-skeleton__orb--one {
-  width: 44%;
-  height: 44%;
-  left: 10%;
-  top: 12%;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.28), rgba(16, 185, 129, 0));
+  width: 38%;
+  height: 38%;
+  left: 12%;
+  top: 14%;
+  background: radial-gradient(circle, rgba(140, 42, 46, 0.22), rgba(140, 42, 46, 0));
   animation: skeleton-float 3.8s ease-in-out infinite;
 }
 
 .generated-skeleton__orb--two {
-  width: 54%;
-  height: 54%;
+  width: 46%;
+  height: 46%;
   right: -8%;
   top: -4%;
-  background: radial-gradient(circle, rgba(52, 211, 153, 0.24), rgba(52, 211, 153, 0));
+  background: radial-gradient(circle, rgba(194, 125, 129, 0.24), rgba(194, 125, 129, 0));
   animation: skeleton-float 4.8s ease-in-out infinite reverse;
 }
 
 .generated-skeleton__panel {
   position: absolute;
-  inset: 18% 12% 18% 12%;
-  border-radius: 1.2rem;
+  inset: 24% 18% 24% 18%;
+  border-radius: 0.95rem;
   border: 1px solid rgba(255, 255, 255, 0.85);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.34)),
-    linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(255, 255, 255, 0.2));
+    linear-gradient(135deg, rgba(140, 42, 46, 0.08), rgba(255, 255, 255, 0.2));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
@@ -1868,13 +1879,13 @@ onUnmounted(() => {
 
 @keyframes timeline-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(0, 178, 109, 0.2);
+    box-shadow: 0 0 0 0 rgba(140, 42, 46, 0.2);
   }
   70% {
-    box-shadow: 0 0 0 0.55rem rgba(0, 178, 109, 0);
+    box-shadow: 0 0 0 0.55rem rgba(140, 42, 46, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(0, 178, 109, 0);
+    box-shadow: 0 0 0 0 rgba(140, 42, 46, 0);
   }
 }
 
@@ -1938,6 +1949,32 @@ onUnmounted(() => {
 .status-details-leave-to {
   opacity: 0;
   transform: translateY(-4px);
+}
+
+.status-card :deep(.el-collapse) {
+  border-top: 0;
+  border-bottom: 0;
+}
+
+.status-card :deep(.el-collapse-item__header) {
+  min-height: 28px;
+  line-height: 1.2;
+  border-bottom: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.status-card :deep(.el-collapse-item__wrap) {
+  border-bottom: 0;
+  background: transparent;
+}
+
+.status-card :deep(.el-collapse-item__content) {
+  padding-bottom: 0;
+}
+
+.status-card :deep(.el-collapse-item__arrow) {
+  color: rgba(88, 28, 32, 0.4);
 }
 
 @media (prefers-reduced-motion: reduce) {

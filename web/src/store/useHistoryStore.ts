@@ -1,6 +1,34 @@
 import { defineStore } from 'pinia'
 import { api } from '@/services/api'
 
+function parseHistoryTimestamp(value: string | number | null | undefined): number {
+  if (value === null || value === undefined || value === '') {
+    return 0
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0
+  }
+
+  const normalizedValue = value.trim()
+  if (!normalizedValue) {
+    return 0
+  }
+
+  const hasExplicitTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(normalizedValue)
+  const normalizedIsoValue = hasExplicitTimezone
+    ? normalizedValue
+    : `${normalizedValue.replace(' ', 'T')}Z`
+
+  const parsedTimestamp = Date.parse(normalizedIsoValue)
+  if (Number.isFinite(parsedTimestamp)) {
+    return parsedTimestamp
+  }
+
+  const fallbackTimestamp = new Date(normalizedValue).getTime()
+  return Number.isFinite(fallbackTimestamp) ? fallbackTimestamp : 0
+}
+
 export interface HistorySession {
   id: string
   title: string
@@ -90,8 +118,8 @@ export const useHistoryStore = defineStore('history', {
           const serverSessions = data.conversations.map((conv: any) => ({
             id: conv.session_id,
             title: conv.title || '无标题会话',
-            createdAt: new Date(conv.created_at).getTime(),
-            updatedAt: conv.updated_at ? new Date(conv.updated_at).getTime() : undefined,
+            createdAt: parseHistoryTimestamp(conv.created_at),
+            updatedAt: conv.updated_at ? parseHistoryTimestamp(conv.updated_at) : undefined,
             model: conv.model || 'unknown',
             messages: [],  // 详细消息需要单独获取
             imageCount: Number(conv.image_count || 0),
@@ -126,7 +154,7 @@ export const useHistoryStore = defineStore('history', {
             content: msg.content,
             model: msg.model,
             provider: msg.provider,
-            createdAt: new Date(msg.created_at).getTime(),
+            createdAt: parseHistoryTimestamp(msg.created_at),
             images: msg.images ? msg.images.map((url: string) => ({ url, alt: '生成的图像' })) : [],
             files: msg.files || []
           }))
@@ -138,7 +166,7 @@ export const useHistoryStore = defineStore('history', {
             this.sessions[sessionIndex].imageCount = data.image_count || 0
             this.sessions[sessionIndex].totalFiles = data.file_count || 0
             this.sessions[sessionIndex].messageCount = data.message_count || messages.length
-            this.sessions[sessionIndex].updatedAt = data.updated_at ? new Date(data.updated_at).getTime() : this.sessions[sessionIndex].updatedAt
+            this.sessions[sessionIndex].updatedAt = data.updated_at ? parseHistoryTimestamp(data.updated_at) : this.sessions[sessionIndex].updatedAt
           }
 
           return { messages, files: data.files || [] }
