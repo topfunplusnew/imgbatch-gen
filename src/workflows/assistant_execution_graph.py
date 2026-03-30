@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import re
 from typing import Any, Dict, List, Optional, TypedDict
 from urllib.parse import unquote, urlsplit
@@ -279,12 +280,38 @@ def _get_default_ocr_model() -> str:
 
 
 IMAGE_MODEL_SYSTEM_PROMPT = (
-    "你是图像生成模型的提示词编排器。请严格遵循以下规则："
-    "1. 优先满足用户最新明确提出的需求；"
-    "2. 将最近对话上下文作为补充约束与消歧依据；"
-    "3. 将附件、文档与参考图中提取出的事实视为强约束；"
-    "4. 保留主体、构图、风格、文案、数字、颜色和版式等关键信息；"
-    "5. 不要输出解释，只生成符合要求的图像结果。"
+    "You are an expert prompt orchestrator for image generation models. "
+    "Write production-ready prompts in English. "
+    "Follow the user's latest explicit request first, use recent conversation only as supporting context, "
+    "and treat attachment-derived facts as grounded constraints. "
+    "Preserve the main subject, composition, layout, visible text, numbers, colors, branding, and key visual hierarchy "
+    "unless the user explicitly asks to change them. "
+    "Favor coherent composition, accurate perspective, clean edges, natural lighting, plausible materials, "
+    "readable typography, and no irrelevant extra objects, duplicated elements, or distorted details. "
+    "When OCR text is provided, preserve the wording, casing, punctuation, numbers, and hierarchy faithfully unless "
+    "the user explicitly requests a rewrite. "
+    "Output only prompt content intended for the image model."
+)
+
+VISUAL_ANALYSIS_SYSTEM_PROMPT = (
+    "You analyze a reference image for downstream image generation. "
+    "Return concise grounded facts about subject, composition, layout, typography placement, color palette, "
+    "lighting, materials, camera angle, scene structure, and notable constraints. "
+    "Do not invent missing details."
+)
+
+IMAGE_OCR_SYSTEM_PROMPT = (
+    "You perform OCR for reference images used in image generation. "
+    "Extract all visible text faithfully, preserving numbers, punctuation, casing, brand names, slogans, and useful line breaks. "
+    "If some text is unreadable, say so instead of guessing."
+)
+
+IMAGE_PROMPT_TRANSLATION_SYSTEM_PROMPT = (
+    "You translate image-generation prompts into high-quality English prompts. "
+    "Preserve all constraints, composition details, layout instructions, visual hierarchy, brand names, product names, "
+    "numbers, and any literal text that should appear in the generated image. "
+    "Keep OCR-derived visible text unchanged unless the source explicitly asks to translate it. "
+    "Do not add new facts. Return valid JSON only."
 )
 
 
@@ -449,44 +476,109 @@ async def _download_file_bytes(url: str) -> bytes:
         return content
 
 
-async def _extract_visual_excerpt(
+async def _run_visual_grounding_prompt(
     *,
     image_urls: List[str],
     instruction: str,
     api_key: Optional[str],
+    system_prompt: str,
+    model: Optional[str],
+    log_label: str,
+    limit: Optional[int] = None,
 ) -> str:
-    if (
-        not image_urls
-        or not LANGCHAIN_ASSISTANT_AVAILABLE
-        or HumanMessage is None
-        or SystemMessage is None
-        or not _has_llm_credentials(api_key)
-    ):
+    if not image_urls or not LANGCHAIN_ASSISTANT_AVAILABLE or HumanMessage is None or SystemMessage is None:
         return ""
 
     try:
-        llm = await _build_model(api_key=api_key, model=_get_default_ocr_model())
+        llm = await _build_model(api_key=api_key, model=model)
         content: List[Dict[str, Any]] = [{"type": "text", "text": instruction}]
         for image_url in image_urls:
             content.append({"type": "image_url", "image_url": {"url": image_url}})
 
         response = await llm.ainvoke(
             [
-                SystemMessage(
-                    content=(
-                        "You extract grounded content from visual attachments. "
-                        "Return concise plain text that preserves visible text, key entities, "
-                        "important numbers, and a short visual summary when useful."
-                    )
-                ),
+                SystemMessage(content=system_prompt),
                 HumanMessage(content=content),
             ]
         )
         raw_text = response.content if isinstance(response.content, str) else _extract_message_text(response.content)
-        return _trim_attachment_text(raw_text)
+        return _trim_attachment_text(raw_text, limit=limit)
     except Exception as exc:
-        logger.warning("Visual attachment extraction failed: {}", exc)
+        logger.warning("{} failed: {}", log_label, exc)
         return ""
+
+
+async def _extract_visual_excerpt(
+    *,
+    image_urls: List[str],
+    instruction: str,
+    api_key: Optional[str],
+) -> str:
+    return await _run_visual_grounding_prompt(
+        image_urls=image_urls,
+        instruction=instruction,
+        api_key=api_key,
+        system_prompt=(
+            "You extract grounded content from visual attachments. "
+            "Return concise plain text that preserves visible text, key entities, "
+            "important numbers, and a short visual summary when useful."
+        ),
+        model=_get_default_ocr_model(),
+        log_label="Visual attachment extraction",
+    )
+
+
+def _build_image_grounding_excerpt(visual_analysis: str, ocr_text: str) -> str:
+    sections: List[str] = []
+    if visual_analysis:
+        sections.append(f"[Visual analysis]\n{visual_analysis}")
+    if ocr_text:
+        sections.append(f"[OCR]\n{ocr_text}")
+    return _trim_attachment_text(
+        "\n\n".join(section for section in sections if section),
+        limit=settings.assistant_attachment_text_limit or 12000,
+    )
+
+
+async def _extract_image_grounding_bundle(
+    file_bytes: bytes,
+    extension: str,
+    api_key: Optional[str],
+) -> Dict[str, str]:
+    mime_extension = "jpeg" if extension == "jpg" else extension
+    data_url = f"data:image/{mime_extension};base64,{base64.b64encode(file_bytes).decode('ascii')}"
+
+    visual_analysis = await _run_visual_grounding_prompt(
+        image_urls=[data_url],
+        instruction=(
+            "Analyze this reference image for downstream image generation. "
+            "Describe the subject, composition, spatial structure, scene, style, typography placement, "
+            "key objects, lighting, colors, materials, and any visual constraints that should be preserved."
+        ),
+        api_key=api_key,
+        system_prompt=VISUAL_ANALYSIS_SYSTEM_PROMPT,
+        model=_get_default_planner_model(),
+        log_label="Reference image analysis",
+        limit=2400,
+    )
+    ocr_text = await _run_visual_grounding_prompt(
+        image_urls=[data_url],
+        instruction=(
+            "Perform OCR on this reference image. Extract visible text faithfully and preserve line breaks, "
+            "numbers, punctuation, casing, brand names, slogans, and typographic hierarchy when possible."
+        ),
+        api_key=api_key,
+        system_prompt=IMAGE_OCR_SYSTEM_PROMPT,
+        model=_get_default_ocr_model(),
+        log_label="Reference image OCR",
+        limit=2400,
+    )
+
+    return {
+        "visual_analysis": visual_analysis,
+        "ocr_text": ocr_text,
+        "combined_excerpt": _build_image_grounding_excerpt(visual_analysis, ocr_text),
+    }
 
 
 def _extract_pdf_native_pages(file_bytes: bytes) -> List[str]:
@@ -745,12 +837,19 @@ async def _load_attachment_descriptors(
             continue
 
         if extension in {"jpg", "jpeg", "png", "gif", "webp", "bmp"}:
+            excerpt = ""
+            visual_analysis = ""
+            ocr_text = ""
             try:
-                excerpt = await _extract_attachment_excerpt(
-                    url=resolved["url"],
-                    extension=extension,
-                    api_key=api_key,
+                file_bytes = await _download_file_bytes(resolved["url"])
+                grounding_bundle = await _extract_image_grounding_bundle(
+                    file_bytes,
+                    extension,
+                    api_key,
                 )
+                excerpt = grounding_bundle.get("combined_excerpt", "")
+                visual_analysis = grounding_bundle.get("visual_analysis", "")
+                ocr_text = grounding_bundle.get("ocr_text", "")
             except Exception as exc:
                 logger.warning(
                     "Failed to extract image attachment context {} ({}): {}",
@@ -765,6 +864,8 @@ async def _load_attachment_descriptors(
                     kind="image",
                     source=resolved["url"],
                     text_excerpt=excerpt or None,
+                    visual_analysis=visual_analysis or None,
+                    ocr_text=ocr_text or None,
                 )
             )
 
@@ -849,6 +950,63 @@ async def _resolve_image_model_name(
     return settings.openai_image_model or None
 
 
+def _is_gemini_native_image_model_name(model_name: Optional[str]) -> bool:
+    if not model_name:
+        return False
+    lowered = model_name.lower()
+    return "gemini" in lowered and "imagen" not in lowered
+
+
+def _build_reference_image_system_context(attachments: List[AttachmentDescriptor]) -> str:
+    blocks: List[str] = []
+    reference_index = 0
+
+    for attachment in attachments:
+        if attachment.kind != "image":
+            continue
+        if not attachment.visual_analysis and not attachment.ocr_text:
+            continue
+
+        reference_index += 1
+        if reference_index > 3:
+            break
+
+        sections: List[str] = []
+        if attachment.visual_analysis:
+            sections.append(
+                f"Reference image {reference_index} analysis:\n"
+                f"{_trim_attachment_text(attachment.visual_analysis, limit=1800)}"
+            )
+        if attachment.ocr_text:
+            sections.append(
+                f"Reference image {reference_index} OCR text to preserve when relevant:\n"
+                f"{_trim_attachment_text(attachment.ocr_text, limit=1800)}"
+            )
+
+        if sections:
+            blocks.append("\n\n".join(sections))
+
+    return "\n\n".join(blocks)
+
+
+def _build_effective_image_system_prompt(
+    *,
+    attachments: List[AttachmentDescriptor],
+    model_name: Optional[str],
+) -> str:
+    sections = [IMAGE_MODEL_SYSTEM_PROMPT.strip()]
+
+    if _is_gemini_native_image_model_name(model_name):
+        reference_context = _build_reference_image_system_context(attachments)
+        if reference_context:
+            sections.append(
+                "Reference image grounding to honor while generating:\n"
+                f"{reference_context}"
+            )
+
+    return "\n\n".join(section for section in sections if section)
+
+
 def _compose_image_model_prompt(
     *,
     system_prompt: str,
@@ -859,18 +1017,66 @@ def _compose_image_model_prompt(
     sections: List[str] = []
 
     if system_prompt.strip():
-        sections.append(f"系统提示词:\n{system_prompt.strip()}")
+        sections.append(f"System instructions:\n{system_prompt.strip()}")
     if recent_context.strip():
-        sections.append(f"最近对话上下文:\n{recent_context.strip()}")
+        sections.append(f"Recent conversation context:\n{recent_context.strip()}")
     if user_prompt.strip():
-        sections.append(f"用户最新输入:\n{user_prompt.strip()}")
+        sections.append(f"Latest user request:\n{user_prompt.strip()}")
     if planned_prompt.strip():
-        sections.append(f"最终生图提示词:\n{planned_prompt.strip()}")
+        sections.append(f"Final grounded generation brief:\n{planned_prompt.strip()}")
 
     return _trim_attachment_text(
         "\n\n".join(sections),
         limit=settings.assistant_attachment_text_limit or 12000,
     )
+
+
+async def _translate_prompts_to_english(
+    prompts: List[str],
+    api_key: Optional[str],
+) -> List[str]:
+    normalized_prompts = [str(prompt or "").strip() for prompt in prompts]
+    if not normalized_prompts or not LANGCHAIN_ASSISTANT_AVAILABLE or HumanMessage is None or SystemMessage is None:
+        return normalized_prompts
+
+    try:
+        llm = await _build_model(api_key=api_key, model=_get_default_planner_model())
+        response = await llm.ainvoke(
+            [
+                SystemMessage(content=IMAGE_PROMPT_TRANSLATION_SYSTEM_PROMPT),
+                HumanMessage(
+                    content=(
+                        "Translate the following image-generation prompts into English for better model accuracy. "
+                        "Return JSON only in the shape {\"prompts\": [...]} and keep the array length unchanged.\n\n"
+                        f"{json.dumps({'prompts': normalized_prompts}, ensure_ascii=False)}"
+                    )
+                ),
+            ]
+        )
+        raw_text = response.content if isinstance(response.content, str) else _extract_message_text(response.content)
+        cleaned = (raw_text or "").strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.strip("`")
+            if cleaned.startswith("json"):
+                cleaned = cleaned[4:].strip()
+
+        start = cleaned.find("{")
+        end = cleaned.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            raise ValueError("Translation response is not valid JSON")
+
+        payload = json.loads(cleaned[start : end + 1])
+        translated_prompts = payload.get("prompts")
+        if (
+            isinstance(translated_prompts, list)
+            and len(translated_prompts) == len(normalized_prompts)
+            and all(str(item or "").strip() for item in translated_prompts)
+        ):
+            return [str(item).strip() for item in translated_prompts]
+        raise ValueError("Translation response has an unexpected prompts array")
+    except Exception as exc:
+        logger.warning("Image prompt translation failed, using original prompt text: {}", exc)
+        return normalized_prompts
 
 
 def _normalize_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -1658,10 +1864,15 @@ async def _build_image_plan(
     )
     recent_context = _build_recent_conversation_context(messages)
     latest_user_prompt = (user_instruction or contextual_user_instruction or "").strip()
+    effective_model = await _resolve_image_model_name(request_model, request_model_type, app_state)
+    effective_system_prompt = _build_effective_image_system_prompt(
+        attachments=attachments,
+        model_name=effective_model,
+    )
 
     def _wrap_image_prompt(prompt_text: str) -> str:
         return _compose_image_model_prompt(
-            system_prompt=IMAGE_MODEL_SYSTEM_PROMPT,
+            system_prompt=effective_system_prompt,
             recent_context=recent_context,
             user_prompt=latest_user_prompt,
             planned_prompt=prompt_text,
@@ -1709,7 +1920,20 @@ async def _build_image_plan(
         final_prompt = _wrap_image_prompt(raw_prompt)
         effective_batch_count = route_decision.batch_count
         effective_intent_type = route_decision.intent_type
+
+    prompts_to_translate = wrapped_batch_prompts if wrapped_batch_prompts else [final_prompt]
+    translated_prompts = await _translate_prompts_to_english(prompts_to_translate, api_key)
+    translation_applied = translated_prompts != prompts_to_translate
+    if wrapped_batch_prompts:
+        wrapped_batch_prompts = translated_prompts
+        final_prompt = wrapped_batch_prompts[0]
+    else:
+        final_prompt = translated_prompts[0]
+
     attachment_text_count = sum(1 for attachment in attachments if attachment.text_excerpt)
+    reference_analysis_count = sum(1 for attachment in attachments if attachment.visual_analysis)
+    reference_ocr_count = sum(1 for attachment in attachments if attachment.ocr_text)
+    reference_system_context = _build_reference_image_system_context(attachments)
     logger.info(
         "Prepared grounded image prompt: chars={}, attachments={}, text_attachments={}",
         len(final_prompt or ""),
@@ -1721,7 +1945,7 @@ async def _build_image_plan(
         confidence=route_decision.confidence,
         reasoning=route_decision.reasoning,
         source=route_decision.source,
-        effective_model=await _resolve_image_model_name(request_model, request_model_type, app_state),
+        effective_model=effective_model,
         prompt=final_prompt,
         intent_type=effective_intent_type,
         batch_count=effective_batch_count,
@@ -1729,12 +1953,19 @@ async def _build_image_plan(
             "attachment_route": "image" if attachments else "none",
             "attachment_count": len(attachments),
             "attachment_text_count": attachment_text_count,
+            "reference_analysis_count": reference_analysis_count,
+            "reference_ocr_count": reference_ocr_count,
             "reference_image_count": len(reference_image_sources),
             "reference_image_sources": reference_image_sources,
             "planning_basis": route_decision.planning_basis,
             "conversation_context_used": contextual_user_instruction != (user_instruction or "").strip(),
             "image_prompt_system_prompt_included": True,
+            "image_prompt_system_prompt_language": "en",
             "image_prompt_context_included": bool(recent_context),
+            "image_prompt_translated_to_english": translation_applied,
+            "gemini_reference_system_grounding_included": bool(
+                reference_system_context and _is_gemini_native_image_model_name(effective_model)
+            ),
             "pdf_page_match_enabled": bool(pdf_page_prompts),
             "pdf_total_pages": len(pdf_page_items),
             "pdf_page_match_count": len(pdf_page_prompts),

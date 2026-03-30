@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from src.models.image import ImageParams
 from src.models.task import BatchTask, ImageTask, TaskStage, TaskStatus
 
@@ -102,3 +104,18 @@ def test_batch_task_marks_failed_when_all_tasks_fail():
     assert batch.stage == TaskStage.FAILED
     assert batch.failed == 1
     assert batch.status_detail.current_stage == TaskStage.FAILED.value
+
+
+def test_task_response_serializes_naive_timestamps_as_utc_iso():
+    task = ImageTask(
+        task_id="task-time",
+        params=ImageParams(prompt="test prompt"),
+        created_at=datetime(2026, 3, 30, 8, 0, 0),
+        updated_at=datetime(2026, 3, 30, 8, 5, 0),
+    )
+
+    response = task.to_response_dict()
+
+    assert response["created_at"] == "2026-03-30T08:00:00Z"
+    assert response["updated_at"] == "2026-03-30T08:05:00Z"
+    assert response["stage_history"][0]["timestamp"] == "2026-03-30T08:05:00Z"

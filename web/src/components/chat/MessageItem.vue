@@ -891,7 +891,17 @@ function getStageIcon(stage) {
 function formatProgressTime(value) {
   if (!value) return ''
   try {
-    return new Date(value).toLocaleTimeString('zh-CN', {
+    const rawValue = typeof value === 'string' ? value.trim() : value
+    const normalizedValue = typeof rawValue === 'string'
+      && rawValue
+      && !/(?:Z|[+-]\d{2}:\d{2})$/i.test(rawValue)
+      ? `${rawValue.replace(' ', 'T')}Z`
+      : rawValue
+
+    const parsedDate = new Date(normalizedValue)
+    if (Number.isNaN(parsedDate.getTime())) return ''
+
+    return parsedDate.toLocaleTimeString('zh-CN', {
       hour: '2-digit',
       minute: '2-digit'
     })

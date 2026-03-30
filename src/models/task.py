@@ -1,7 +1,7 @@
 """任务模型定义"""
 
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional, List, Dict, Any
 
@@ -95,7 +95,15 @@ def get_stage_default_message(stage: TaskStage | str) -> str:
 
 
 def _isoformat(dt: Optional[datetime]) -> Optional[str]:
-    return dt.isoformat() if dt else None
+    if not dt:
+        return None
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+
+    return dt.isoformat().replace("+00:00", "Z")
 
 
 def _sanitize_for_response(value: Any) -> Any:

@@ -28,6 +28,8 @@ class AttachmentDescriptor(BaseModel):
     source: Optional[str] = None
     text_excerpt: Optional[str] = None
     page_excerpts: Optional[List[str]] = None
+    visual_analysis: Optional[str] = None
+    ocr_text: Optional[str] = None
 
 
 class AttachmentRouteDecision(BaseModel):

@@ -11,6 +11,14 @@ from src.workflows.multimodal_attachment_graph import (
 )
 
 
+@pytest.fixture(autouse=True)
+def disable_image_prompt_translation(monkeypatch):
+    async def fake_translate_prompts_to_english(prompts, api_key):
+        return prompts
+
+    monkeypatch.setattr(graph, "_translate_prompts_to_english", fake_translate_prompts_to_english)
+
+
 def test_normalize_messages_strips_placeholder_assistant_messages():
     messages = [
         {"role": "assistant", "content": "图像生成完成！"},
@@ -254,10 +262,61 @@ async def test_build_image_plan_wraps_prompt_with_context_and_system_prompt(monk
     )
 
     assert plan.mode == "image"
-    assert "系统提示词:" in plan.prompt
-    assert "最近对话上下文:" in plan.prompt
-    assert "用户最新输入:\n做成电影海报风格" in plan.prompt
-    assert "最终生图提示词:\n保留海报主标题与主体人物，生成一张电影感海报" in plan.prompt
+    assert "System instructions:" in plan.prompt
+    assert "Recent conversation context:" in plan.prompt
+    assert "Latest user request:\n做成电影海报风格" in plan.prompt
+    assert "Final grounded generation brief:\n保留海报主标题与主体人物，生成一张电影感海报" in plan.prompt
+
+
+@pytest.mark.asyncio
+async def test_build_image_plan_includes_reference_analysis_and_ocr_for_gemini(monkeypatch):
+    async def fake_build_contextual_image_instruction(*, user_instruction, messages, api_key):
+        return user_instruction
+
+    async def fake_build_image_prompt_from_attachments(user_instruction, attachments, api_key=None):
+        return "请基于参考图生成一张品牌KV海报"
+
+    monkeypatch.setattr(graph, "_build_contextual_image_instruction", fake_build_contextual_image_instruction)
+    monkeypatch.setattr(graph, "_build_image_prompt_from_attachments", fake_build_image_prompt_from_attachments)
+
+    route_decision = graph.RequestRouteDecision(
+        route="image",
+        intent_type="single_generate",
+        batch_count=1,
+        confidence=0.94,
+        reasoning="image request",
+        source="test",
+        planning_basis="attachments",
+    )
+
+    plan = await graph._build_image_plan(
+        user_instruction="参考这张图出一版更高级的海报",
+        messages=[{"role": "user", "content": "参考这张图出一版更高级的海报"}],
+        attachments=[
+            AttachmentDescriptor(
+                name="poster.png",
+                kind="image",
+                source="http://example.com/poster.png",
+                text_excerpt="[Visual analysis]\nRed poster with a centered bottle",
+                visual_analysis="A premium poster with a centered beverage bottle, bold red background, metallic highlights, and strong vertical composition.",
+                ocr_text="超级果饮\n新品上市\nNOW OPEN",
+            )
+        ],
+        route_decision=route_decision,
+        request_model="gemini-3.1-flash-image",
+        request_model_type="image",
+        app_state=SimpleNamespace(model_registry=None),
+        api_key=None,
+    )
+
+    assert plan.mode == "image"
+    assert "Reference image grounding to honor while generating:" in (plan.prompt or "")
+    assert "Reference image 1 analysis:" in (plan.prompt or "")
+    assert "Reference image 1 OCR text to preserve when relevant:" in (plan.prompt or "")
+    assert "超级果饮" in (plan.prompt or "")
+    assert plan.metadata["reference_analysis_count"] == 1
+    assert plan.metadata["reference_ocr_count"] == 1
+    assert plan.metadata["gemini_reference_system_grounding_included"] is True
 
 
 @pytest.mark.asyncio
