@@ -95,9 +95,9 @@ class GeminiProvider(SyncRelayProvider):
             enhanced_prompt = f"{enhanced_prompt}, generate {params.n} images"
             logger.info(f"[Gemini] 添加数量参数: {params.n}")
 
-        # 构建generationConfig
+        # 构建generationConfig — Gemini API 文档统一使用 TEXT+IMAGE
         generation_config = {
-            "responseModalities": ["IMAGE"]
+            "responseModalities": ["TEXT", "IMAGE"]
         }
 
         # 添加实际图片尺寸参数 - 按照Gemini API文档设置
@@ -146,15 +146,15 @@ class GeminiProvider(SyncRelayProvider):
             mime_type = extra.get("reference_image_mime_type") or "image/png"
             try:
                 if isinstance(image_val, (bytes, bytearray)):
-                    parts.append(
-                        {
-                            "inlineData": {
-                                "mimeType": mime_type,
-                                "data": base64.b64encode(bytes(image_val)).decode("ascii"),
-                            }
+                    inline_part = {
+                        "inlineData": {
+                            "mimeType": mime_type,
+                            "data": base64.b64encode(bytes(image_val)).decode("ascii"),
                         }
-                    )
-                    logger.info("[Gemini] 已添加参考图片输入，mimeType={}", mime_type)
+                    }
+                    # 参照图生图：text 在前，inline_data 在后（与 Gemini API 文档示例一致）
+                    parts.append(inline_part)
+                    logger.info("[Gemini] 参照图生图模式，已添加参考图片 mimeType={}", mime_type)
                 else:
                     logger.warning("[Gemini] 参考图片不是 bytes，已跳过多模态图片输入")
             except Exception as exc:

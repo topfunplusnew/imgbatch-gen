@@ -168,6 +168,17 @@ def _strengthen_prompt_with_reference_image(prompt_text: str, reference_count: i
     return f"{base_prompt}\n\n{reference_instruction}"
 
 
+def _is_gemini_native_image_model(model_name: Optional[str]) -> bool:
+    """判断模型是否属于 Gemini 系列原生图像模型（支持 inline_data 参照图）。
+
+    匹配 gemini-*-image-*、gemini-*-flash-image 等，不包括 imagen 系列。
+    """
+    if not model_name:
+        return False
+    lowered = model_name.lower()
+    return "gemini" in lowered and "imagen" not in lowered
+
+
 def _build_generation_extra_params(
     image_params: Optional[ImageParamsInput],
     reference_image_input: Optional[Dict[str, Any]],
@@ -513,7 +524,7 @@ async def handle_single_generate(message: ChatMessage, intent: Intent, task_mana
         ip = image_params or ImageParamsInput()
         prompt_text = intent.parameters.get("prompt", message.content)
         reference_image_input = await _resolve_reference_image_input(reference_image_sources)
-        if reference_image_input:
+        if reference_image_input and not _is_gemini_native_image_model(request_model):
             prompt_text = _strengthen_prompt_with_reference_image(
                 prompt_text,
                 int(reference_image_input.get("count") or 1),
@@ -748,7 +759,7 @@ async def handle_batch_generate(message: ChatMessage, intent: Intent, task_manag
             # 生成多个不同的提示词
             prompts = await generate_batch_prompts(original_prompt, count)
 
-        if reference_image_input:
+        if reference_image_input and not _is_gemini_native_image_model(model_name):
             prompts = [
                 _strengthen_prompt_with_reference_image(
                     prompt,
