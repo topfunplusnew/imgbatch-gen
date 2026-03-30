@@ -1,5 +1,5 @@
 <template>
-  <main class="flex-1 flex flex-col bg-background-dark min-h-screen overflow-y-auto">
+  <main class="flex-1 flex h-full min-h-0 flex-col bg-background-dark overflow-y-auto">
     <!-- 系统公告 - 页面顶部 -->
     <div class="flex-shrink-0">
       <NotificationCarousel ref="notificationCarouselRef" :autoplay="true" :autoplay-interval="5000" :max-items="3" />
@@ -14,18 +14,17 @@
 
     <!-- Hero Section -->
     <div class="px-4 xs:px-6 md:px-8 pt-8 md:pt-12 pb-8 md:pb-12">
-      <!-- Logo -->
       <div class="text-center mb-6 md:mb-8">
-        <div class="flex items-center justify-center mb-3 w-[40%] mx-auto">
-          <img src="/photo/logo.png" alt="Logo" class="w-full h-auto object-contain" />
-        </div>
+        <h1 class="mx-auto max-w-3xl text-2xl font-semibold tracking-tight text-ink-950 md:text-4xl">
+          {{ heroPrompt }}
+        </h1>
         <p class="text-sm md:text-base text-ink-500 max-w-2xl mx-auto">
           强大的AI图像生成工具，支持多种模型和风格，轻松创建您想要的图像
         </p>
       </div>
 
       <!-- Quick Input Area -->
-      <div class="w-full max-w-[85%] mx-auto min-w-[320px]">
+      <div class="mx-auto w-full min-w-[320px] max-w-[960px] md:max-w-[72%] xl:max-w-[68%]">
         <el-card
           shadow="never"
           class="landing-input-card"
@@ -72,7 +71,7 @@
             ref="promptInputRef"
             v-model="promptInput"
             type="textarea"
-            :rows="9"
+            :rows="7"
             @focus="handleInputFocus"
             @blur="handleInputBlur"
             placeholder="您有什么想法"
@@ -208,7 +207,17 @@ const notificationCarouselRef = ref(null)
 const attachments = ref([])
 const hasStartedTyping = ref(false)
 const selectedCategory = ref(null)
+const heroPrompt = ref('你在做什么？')
 let uploadSwitchTimer = null
+
+const heroPrompts = [
+  '你在做什么？',
+  '今天想生成什么画面？',
+  '把脑海里的灵感说给我听。',
+  '这次想尝试什么新风格？',
+  '你想先从一句描述开始吗？',
+  '有没有一张你一直想做出来的图？'
+]
 
 // Get categories from caseStore
 const categories = computed(() => caseStore.categories || [])
@@ -261,6 +270,7 @@ watch(() => appStore.currentView, (newView) => {
     // Clear local state when returning to landing
     promptInput.value = ''
     hasStartedTyping.value = false
+    heroPrompt.value = heroPrompts[Math.floor(Math.random() * heroPrompts.length)]
   }
 })
 
@@ -354,6 +364,7 @@ const openTemplates = () => {
 
 // Initialize cases on mount
 onMounted(() => {
+  heroPrompt.value = heroPrompts[Math.floor(Math.random() * heroPrompts.length)]
   if (caseStore.cases.length === 0) {
     caseStore.initialize()
   }
@@ -372,7 +383,7 @@ onMounted(() => {
 }
 
 .landing-input-card :deep(.el-card__body) {
-  padding: 18px;
+  padding: 14px;
 }
 
 .landing-template-card {

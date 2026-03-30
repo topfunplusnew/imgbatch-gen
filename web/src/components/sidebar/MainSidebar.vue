@@ -2,12 +2,18 @@
   <aside :class="asideClass">
     <div v-if="!hideLogo" class="shrink-0 px-3 pt-4 pb-3">
       <div :class="['flex items-center gap-3 rounded-[20px] bg-white/90 px-3 py-3 shadow-sm', props.mobileDrawer ? 'justify-between' : 'justify-center']">
-        <img
-          src="/photo/logo.png"
-          alt="Logo"
-          class="h-auto w-[76%] object-contain"
-          style="aspect-ratio: 240/160;"
-        />
+        <button
+          type="button"
+          class="flex flex-1 items-center justify-center rounded-[16px] transition-colors hover:bg-primary/5"
+          @click="navigateHome"
+        >
+          <img
+            src="/photo/logo.png"
+            alt="Logo"
+            class="h-auto w-[76%] object-contain"
+            style="aspect-ratio: 240/160;"
+          />
+        </button>
         <el-button
           v-if="props.mobileDrawer"
           circle
@@ -349,8 +355,8 @@ const showCustomSize = ref(false)
 
 const asideClass = computed(() => {
   return props.mobileDrawer
-    ? 'flex h-full w-full flex-col bg-white/95 backdrop-blur-xl'
-    : 'hidden h-screen w-full flex-col bg-white/82 backdrop-blur-xl md:flex'
+    ? 'flex h-full w-full flex-col overflow-hidden bg-white/95 backdrop-blur-xl'
+    : 'hidden h-full w-full flex-col overflow-hidden bg-white/82 backdrop-blur-xl md:flex'
 })
 
 const userSectionClass = computed(() => {
@@ -360,7 +366,6 @@ const userSectionClass = computed(() => {
 })
 
 const menuItems = [
-  { icon: 'home', iconClass: 'k-shouye1', text: '首页', value: 'landing' },
   { iconComponent: AIGenerateIcon, text: 'AI图片生成', value: 'generate' },
   { icon: 'dashboard', text: '模版列表', value: 'templates' }
 ]
@@ -481,6 +486,11 @@ const requestCloseIfMobile = () => {
 
 const handleMenuSelect = (index) => {
   appStore.setSelectedMenuItem(index)
+  requestCloseIfMobile()
+}
+
+const navigateHome = () => {
+  appStore.setCurrentView('landing')
   requestCloseIfMobile()
 }
 

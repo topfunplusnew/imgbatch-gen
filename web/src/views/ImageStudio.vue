@@ -175,13 +175,15 @@ onUnmounted(() => {
 
 <style scoped>
 .image-studio-shell {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background:
     radial-gradient(circle at top right, rgba(140, 42, 46, 0.1), transparent 28%),
     linear-gradient(180deg, rgba(255, 252, 251, 0.86) 0%, rgba(246, 239, 238, 0.96) 100%);
 }
 
 .image-studio-shell__aside {
+  height: 100vh;
   position: relative;
   z-index: 20;
   background: rgba(255, 253, 252, 0.78);
@@ -191,6 +193,8 @@ onUnmounted(() => {
 
 .image-studio-shell__main {
   min-width: 0;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .studio-mobile-sidebar :deep(.el-drawer) {

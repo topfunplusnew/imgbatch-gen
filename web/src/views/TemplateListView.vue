@@ -1,5 +1,5 @@
 <template>
-  <main class="flex min-h-screen flex-1 flex-col overflow-hidden bg-white/55">
+  <main class="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-white/55">
     <TopHeader
       @toggleSettings="$emit('toggleSettings')"
       @toggleSidebar="$emit('toggleSidebar')"
