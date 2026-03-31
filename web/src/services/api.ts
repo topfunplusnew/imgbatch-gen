@@ -5,207 +5,62 @@
 
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
 import { useApiConfigStore } from '@/store/useApiConfigStore'
-
-// API响应类型定义
-export interface TaskStageEvent {
-  stage: string
-  label: string
-  message: string
-  status: string
-  progress: number
-  attempt: number
-  timestamp: string
-}
-
-export interface ImageTask {
-  task_id: string
-  status: 'pending' | 'processing' | 'running' | 'completed' | 'failed' | 'cancelled'
-  params?: any
-  result?: any
-  images?: any[]
-  error?: string
-  progress?: number
-  stage?: string
-  stage_label?: string
-  stage_message?: string
-  attempt?: number
-  updated_at?: string
-  stage_history?: TaskStageEvent[]
-  metadata?: Record<string, any>
-}
-
-export interface BatchStageOverviewItem {
-  stage: string
-  label: string
-  count: number
-}
-
-export interface BatchStatusDetail {
-  current_stage: string
-  current_stage_label: string
-  current_stage_message: string
-  progress_percent: number
-  pending_tasks: number
-  running_tasks: number
-  completed_tasks: number
-  failed_tasks: number
-  stage_overview: BatchStageOverviewItem[]
-}
-
-export interface BatchTaskStatus {
-  batch_id: string
-  status: 'pending' | 'processing' | 'running' | 'completed' | 'failed' | 'cancelled'
-  tasks?: ImageTask[]
-  total: number
-  completed: number
-  failed: number
-  pending?: number
-  running?: number
-  progress?: number
-  stage?: string
-  stage_label?: string
-  stage_message?: string
-  status_detail?: BatchStatusDetail
-  created_at?: string
-  completed_at?: string
-  updated_at?: string
-}
-
-export interface ChatMessage {
-  role: string
-  content: string
-  images?: string[]
-  metadata?: Record<string, any>
-}
-
-export interface ChatRequest {
-  messages: ChatMessage[]
-  session_id?: string
-  enable_context?: boolean
-  files?: string[]
-  stream?: boolean
-  model?: string
-  model_type?: string
-  // 图像生成参数
-  image_params?: {
-    width?: number
-    height?: number
-    style?: string
-    quality?: string
-    n?: number
-    negative_prompt?: string
-    seed?: number
-  }
-}
-
-export interface ConversationHistorySummary {
-  session_id: string
-  title: string
-  created_at: string
-  updated_at: string
-  message_count: number
-  image_count: number
-}
-
-export interface ConversationHistoryMessage {
-  id: number
-  role: 'user' | 'assistant'
-  content: string
-  model?: string
-  provider?: string
-  created_at?: string
-  images?: string[]
-  files?: Array<{
-    id?: number
-    original_filename?: string
-    file_url?: string
-    file_size?: number
-    file_type?: string
-    category?: string
-    created_at?: string
-  }>
-}
-
-export interface ConversationHistoryDetail {
-  session_id: string
-  title: string
-  created_at: string
-  updated_at: string
-  message_count: number
-  image_count: number
-  file_count: number
-  messages: ConversationHistoryMessage[]
-  files: Array<{
-    id?: number
-    original_filename?: string
-    file_url?: string
-    file_size?: number
-    file_type?: string
-    category?: string
-    created_at?: string
-  }>
-}
-
-export interface BillingInfo {
-  status: 'frozen' | 'deducted' | 'refunded' | 'insufficient' | 'error'
-  freeze_id?: string | null
-  points_amount: number
-  money_amount: number
-  cost_type: string
-  description: string
-  balance_after?: {
-    points: number
-    gift_points: number
-    balance: number
-  }
-}
-
-export interface Intent {
-  type: string
-  confidence: number
-  parameters: Record<string, any>
-  reasoning: string
-}
-
-export interface ChatResponse {
-  message: ChatMessage
-  intent?: Intent
-  task_id?: string
-  batch_id?: string
-  requires_action: boolean
-  metadata?: Record<string, any> & { billing?: BillingInfo }
-}
-
-export interface GenerateRequest {
-  prompt: string
-  width?: number
-  height?: number
-  style?: string
-  quality?: string
-  n?: number
-  provider?: string
-  model_name?: string
-  extra_params?: Record<string, any>
-}
-
-export interface ModelInfo {
-  id: string
-  name: string
-  provider: string
-  type: 'image' | 'llm' | 'embedding'
-}
-
-export interface BatchGenerateRequest {
-  prompts?: string[]
-  file?: File
-  provider?: string
-  default_params?: {
-    width?: number
-    height?: number
-    style?: string
-    quality?: string
-  }
-}
+import type {
+  AccountInfo,
+  AdminStatistics,
+  AdminUserDetail,
+  AdminUserListItem,
+  AdminWithdrawalRecord,
+  BatchGenerateRequest,
+  BatchTaskStatus,
+  BillingConfig,
+  Case,
+  ChatRequest,
+  ChatResponse,
+  ConsumptionRecord,
+  ConversationHistoryDetail,
+  ConversationHistorySummary,
+  GenerateRequest,
+  ImageTask,
+  Order,
+  RechargeOption,
+  SystemConfigItem,
+  UnifiedGenerationRecord,
+  User,
+  WithdrawalRecord,
+} from '@/types/api'
+export type {
+  AccountInfo,
+  AdminStatistics,
+  AdminUserDetail,
+  AdminUserListItem,
+  AdminWithdrawalRecord,
+  BatchGenerateRequest,
+  BatchTaskStatus,
+  BillingConfig,
+  Case,
+  ChatMessage,
+  ChatRequest,
+  ChatResponse,
+  ConsumptionRecord,
+  ConversationHistoryDetail,
+  ConversationHistoryMessage,
+  ConversationHistorySummary,
+  GenerateRequest,
+  GenerationRecord,
+  ImageTask,
+  Intent,
+  ModelInfo,
+  ModelPrice,
+  Order,
+  RechargeOption,
+  SystemConfigItem,
+  TaskStageEvent,
+  Transaction,
+  UnifiedGenerationRecord,
+  User,
+  WithdrawalRecord,
+} from '@/types/api'
 
 // 生成或获取持久化的 client_id cookie
 function ensureClientId(): string {
@@ -237,6 +92,39 @@ function buildModelAuthHeaders(): Record<string, string> {
   }
 
   return headers
+}
+
+async function uploadFileToMinio(file: File, onProgress?: (progress: number) => void): Promise<{ file_id: string; filename: string; url: string; size: number }> {
+  console.log(`[MinIO上传] 开始上传文件: ${file.name}, 大小: ${(file.size / 1024 / 1024).toFixed(2)}MB`)
+
+  const presignedResponse = await apiClient.post('/api/v1/files/minio/presigned-url', null, {
+    params: { filename: file.name }
+  })
+  const { upload_url, file_url, filename } = presignedResponse.data
+
+  console.log(`[MinIO上传] 获取预签名URL成功: ${upload_url}`)
+
+  const uploadResponse = await fetch(upload_url, {
+    method: 'PUT',
+    body: file,
+    headers: {
+      'Content-Type': file.type || 'application/octet-stream',
+    },
+  })
+
+  if (!uploadResponse.ok) {
+    throw new Error(`MinIO上传失败: ${uploadResponse.status} ${uploadResponse.statusText}`)
+  }
+
+  console.log(`[MinIO上传] 上传成功: ${file_url}`)
+  if (onProgress) onProgress(100)
+
+  return {
+    file_id: filename,
+    filename: file.name,
+    url: file_url,
+    size: file.size
+  }
 }
 
 const AUTH_REDIRECT_EXEMPT_PATHS = [
@@ -469,22 +357,6 @@ export const api = {
   },
 
   /**
-   * 获取指定模型详细信息
-   */
-  async getModelInfo(modelName: string): Promise<ModelInfo & { vendor_id?: string; supported_endpoint_types?: string[] }> {
-    const response = await apiClient.get(`/api/v1/models/${modelName}`)
-    return response.data
-  },
-
-  /**
-   * 刷新模型配置
-   */
-  async refreshModels(): Promise<{ message: string; total_models: number; last_update: string | null }> {
-    const response = await apiClient.post('/api/v1/models/refresh')
-    return response.data
-  },
-
-  /**
    * 批量生成图像（支持文件上传或prompts列表）
    */
   async batchGenerate(request: BatchGenerateRequest, onProgress?: (progress: number) => void): Promise<any> {
@@ -532,17 +404,6 @@ export const api = {
    */
   async getBatchTaskStatus(batchId: string): Promise<BatchTaskStatus> {
     const response = await apiClient.get(`/api/v1/batch/${batchId}`)
-    return response.data
-  },
-
-  /**
-   * 列出所有任务
-   */
-  async listTasks(status?: string): Promise<ImageTask[]> {
-    const params: any = {}
-    if (status) params.status = status
-
-    const response = await apiClient.get('/api/v1/tasks', { params })
     return response.data
   },
 
@@ -663,74 +524,6 @@ export const api = {
   },
 
   /**
-   * 查询助手任务状态
-   */
-  async getAssistantTask(taskId: string): Promise<ImageTask> {
-    const response = await apiClient.get(`/api/v1/assistant/tasks/${taskId}`)
-    return response.data
-  },
-
-  /**
-   * 查询助手批量任务状态
-   */
-  async getAssistantBatchTask(batchId: string): Promise<any> {
-    const response = await apiClient.get(`/api/v1/assistant/batch/${batchId}`)
-    return response.data
-  },
-
-  /**
-   * 上传文件到MinIO（直传，无大小限制）
-   */
-  async uploadFileToMinio(file: File, onProgress?: (progress: number) => void): Promise<{ file_id: string; filename: string; url: string; size: number }> {
-    try {
-      console.log(`[MinIO上传] 开始上传文件: ${file.name}, 大小: ${(file.size / 1024 / 1024).toFixed(2)}MB`)
-
-      // 1. 获取MinIO预签名上传URL
-      const presignedResponse = await apiClient.post('/api/v1/files/minio/presigned-url', null, {
-        params: { filename: file.name }
-      })
-      const { upload_url, file_url, filename } = presignedResponse.data
-
-      console.log(`[MinIO上传] 获取预签名URL成功: ${upload_url}`)
-
-      // 2. 直接上传到MinIO
-      const uploadResponse = await fetch(upload_url, {
-        method: 'PUT',
-        body: file,
-        headers: {
-          'Content-Type': file.type || 'application/octet-stream',
-        },
-      })
-
-      if (!uploadResponse.ok) {
-        throw new Error(`MinIO上传失败: ${uploadResponse.status} ${uploadResponse.statusText}`)
-      }
-
-      console.log(`[MinIO上传] 上传成功: ${file_url}`)
-      if (onProgress) onProgress(100)
-
-      // 3. 返回文件信息
-      return {
-        file_id: filename,
-        filename: file.name,
-        url: file_url,
-        size: file.size
-      }
-    } catch (error: any) {
-      console.error('[MinIO上传] 失败:', error)
-      throw error
-    }
-  },
-
-  /**
-   * 上传文件（优先使用MinIO直传，无大小限制）
-   */
-  async uploadFile(file: File, onProgress?: (progress: number) => void): Promise<{ file_id: string; filename: string; url: string; size: number }> {
-    // 使用MinIO直传（无大小限制），不再回退到传统上传
-    return await this.uploadFileToMinio(file, onProgress)
-  },
-
-  /**
    * 批量上传多个文件（使用MinIO直传）
    */
   async uploadFiles(files: File[], onProgress?: (progress: number, current: number, total: number) => void): Promise<Array<{ file_id: string; filename: string; url: string; size: number }>> {
@@ -740,7 +533,7 @@ export const api = {
       const file = files[i]
 
       try {
-        const result = await this.uploadFile(file, (progress) => {
+        const result = await uploadFileToMinio(file, (progress) => {
           if (onProgress) {
             const totalProgress = Math.round(((i * 100 + progress) / files.length))
             onProgress(totalProgress, i + 1, files.length)
@@ -933,14 +726,6 @@ export const api = {
     return response.data
   },
 
-  /**
-   * 获取下载记录总数
-   */
-  async getDownloadRecordsCount(): Promise<{ count: number }> {
-    const response = await apiClient.get('/api/v1/download/records/count')
-    return response.data
-  },
-
   // ==================== 账户相关API ====================
 
   /**
@@ -948,14 +733,6 @@ export const api = {
    */
   async getAccountInfo(): Promise<AccountInfo> {
     const response = await apiClient.get('/api/v1/account')
-    return response.data
-  },
-
-  /**
-   * 获取交易记录
-   */
-  async getTransactions(limit: number = 50, offset: number = 0): Promise<Transaction[]> {
-    const response = await apiClient.get('/api/v1/account/transactions', { params: { limit, offset } })
     return response.data
   },
 
@@ -968,26 +745,10 @@ export const api = {
   },
 
   /**
-   * 获取模型价格列表
-   */
-  async getModelPricing(): Promise<ModelPrice[]> {
-    const response = await apiClient.get('/api/v1/account/models/pricing')
-    return response.data
-  },
-
-  /**
    * 获取充值选项
    */
   async getRechargeOptions(): Promise<RechargeOption[]> {
     const response = await apiClient.get('/api/v1/account/recharge/options')
-    return response.data
-  },
-
-  /**
-   * 获取计费配置
-   */
-  async getBillingConfig(): Promise<BillingConfig> {
-    const response = await apiClient.get('/api/v1/account/billing/config')
     return response.data
   },
 
@@ -1007,30 +768,6 @@ export const api = {
     const response = await apiClient.post('/api/v1/payment/create', {
       recharge_option_id: rechargeOptionId,
       payment_method: paymentMethod
-    })
-    return response.data
-  },
-
-  /**
-   * 创建H5支付订单（手机网页支付）
-   */
-  async createH5RechargeOrder(rechargeOptionId: string, clientIp: string): Promise<{
-    order_id: string
-    user_id: string
-    order_type: string
-    amount: number
-    amount_yuan: number
-    payment_method: string
-    status: string
-    subject: string
-    created_at: string
-    expire_time: string | null
-    qr_code_url: string | null
-    pay_url: string | null
-  }> {
-    const response = await apiClient.post('/api/v1/payment/create-h5', {
-      recharge_option_id: rechargeOptionId,
-      client_ip: clientIp
     })
     return response.data
   },
@@ -1082,28 +819,6 @@ export const api = {
   },
 
   // ==================== 生成历史相关API ====================
-
-  /**
-   * 获取生成历史记录
-   */
-  async getGenerationHistory(limit: number = 20, offset: number = 0, status?: string): Promise<GenerationRecord[]> {
-    const params: any = { limit, offset }
-    if (status) params.status = status
-
-    const response = await apiClient.get('/api/v1/generate/history', { params })
-    return response.data
-  },
-
-  /**
-   * 获取生成历史记录总数
-   */
-  async getGenerationHistoryCount(status?: string): Promise<{ count: number }> {
-    const params: any = {}
-    if (status) params.status = status
-
-    const response = await apiClient.get('/api/v1/generate/history/count', { params })
-    return response.data
-  },
 
   /**
    * 获取统一生成历史（对话 + 异步）
@@ -1284,26 +999,6 @@ export const api = {
   },
 
   /**
-   * 获取单个系统配置
-   */
-  async getSystemConfig(configKey: string): Promise<SystemConfigItem> {
-    const response = await apiClient.get(`/api/v1/admin/system-config/get/${configKey}`)
-    return response.data
-  },
-
-  /**
-   * 更新单个系统配置
-   */
-  async updateSystemConfig(data: {
-    config_key: string
-    config_value: string
-    description?: string
-  }): Promise<{ success: boolean; message: string }> {
-    const response = await apiClient.post('/api/v1/admin/system-config/update', data)
-    return response.data
-  },
-
-  /**
    * 批量更新系统配置
    */
   async batchUpdateSystemConfigs(configs: Record<string, string>): Promise<{ success: boolean; message: string }> {
@@ -1335,14 +1030,6 @@ export const api = {
     offset?: number
   }): Promise<WithdrawalRecord[]> {
     const response = await apiClient.get('/api/v1/withdrawal/my-withdrawals', { params })
-    return response.data
-  },
-
-  /**
-   * 获取我的提现记录总数
-   */
-  async getMyWithdrawalsCount(): Promise<{ count: number }> {
-    const response = await apiClient.get('/api/v1/withdrawal/my-withdrawals/count')
     return response.data
   },
 
@@ -1447,14 +1134,6 @@ export const api = {
   },
 
   /**
-   * 获取所有行业分类
-   */
-  async getCaseCategories(): Promise<{ categories: Array<{ value: string; label: string }> }> {
-    const response = await apiClient.get('/api/v1/cases/categories')
-    return response.data
-  },
-
-  /**
    * 获取案例详情
    */
   async getCaseById(caseId: string): Promise<Case> {
@@ -1529,14 +1208,6 @@ export const api = {
     keyword?: string
   }): Promise<{ count: number }> {
     const response = await apiClient.get('/api/v1/admin/cases/count', { params })
-    return response.data
-  },
-
-  /**
-   * 获取案例详情（管理员）
-   */
-  async getAdminCaseById(caseId: string): Promise<Case> {
-    const response = await apiClient.get(`/api/v1/admin/cases/${caseId}`)
     return response.data
   },
 
@@ -1678,26 +1349,6 @@ export const api = {
     const response = await apiClient.get('/api/v1/notifications/public', {
       params: { page, page_size: pageSize }
     })
-    return response.data
-  },
-
-  /**
-   * 获取公开公告详情
-   */
-  async getPublicAnnouncementById(announcementId: string): Promise<{
-    id: string
-    title: string
-    content: string
-    priority: string
-    announcement_type: string
-    is_pinned: boolean
-    cover_image_url: string | null
-    published_at: string | null
-    view_count: number
-    click_count: number
-    created_at: string
-  }> {
-    const response = await apiClient.get(`/api/v1/notifications/public/${announcementId}`)
     return response.data
   },
 
@@ -1885,292 +1536,6 @@ export const api = {
     return response.data
   },
 
-  // ==================== 用户配置相关API ====================
-
-  /**
-   * 获取用户API配置
-   */
-  async getUserConfig(): Promise<{
-    api_key_hint: string | null
-    default_model: string | null
-    has_api_key: boolean
-  }> {
-    const response = await apiClient.get('/api/v1/user/config')
-    return response.data
-  },
-
-  /**
-   * 保存用户API配置
-   */
-  async saveUserConfig(data: {
-    api_key: string
-    default_model?: string
-  }): Promise<{
-    success: boolean
-    message: string
-    api_key_hint: string
-  }> {
-    const response = await apiClient.post('/api/v1/user/config', data)
-    return response.data
-  },
-
-  /**
-   * 删除用户API配置
-   */
-  async deleteUserConfig(): Promise<{ success: boolean; message: string }> {
-    const response = await apiClient.delete('/api/v1/user/config')
-    return response.data
-  },
-}
-
-// ==================== 类型定义 ====================
-
-export interface User {
-  id: string
-  username: string
-  phone?: string
-  email?: string
-  role?: string
-  status: string
-  created_at?: string
-}
-
-export interface AccountInfo {
-  user_id: string
-  balance: number
-  balance_yuan: number
-  points: number  // 永久积分
-  gift_points: number  // 临时积分（签到赠送）
-  gift_points_expiry: string | null  // 临时积分过期时间
-  total_points: number  // 总可用积分 = points + gift_points
-  subscription_plan?: string
-  subscription_expires_at?: string
-  total_generated: number
-  total_spent: number
-  total_points_earned: number  // 历史累计获得积分
-}
-
-export interface Transaction {
-  id: string
-  transaction_type: string
-  amount: number
-  points_change: number
-  balance_after: number
-  points_after: number
-  description: string
-  status: string
-  created_at: string
-}
-
-export interface ConsumptionRecord {
-  id: string
-  model_name: string
-  provider: string
-  cost_type: string  // 'free' | 'subscription' | 'points' | 'balance'
-  points_used: number
-  amount: number  // 分
-  prompt?: string
-  image_count: number
-  image_urls?: string[]
-  status: 'success' | 'failed'  // 新增
-  error_reason?: string  // 新增：失败原因
-  created_at: string
-}
-
-export interface ModelPrice {
-  model_name: string
-  display_name: string
-  points: number
-  amount: number
-  amount_yuan: number
-  description: string
-}
-
-export interface RechargeOption {
-  id: string
-  name: string
-  amount: number
-  amount_yuan: number
-  points: number
-  bonus: number
-  popular: boolean
-}
-
-export interface BillingConfig {
-  billing: {
-    mode: string
-    currency: string
-    currency_symbol: string
-  }
-  initial_quota: {
-    free_generations: number
-  }
-  limits: {
-    guest: {
-      daily_limit: number
-    }
-    order_expire_minutes: number
-  }
-}
-
-export interface SystemConfigItem {
-  config_key: string
-  config_value: string
-  config_type: string
-  category: string
-  description?: string
-  updated_at?: string
-}
-
-export interface Order {
-  order_id: string
-  order_type: string
-  amount: number
-  amount_yuan: number
-  payment_method: string
-  status: string
-  subject: string
-  created_at: string
-  paid_at?: string
-}
-
-// ==================== 提现类型定义 ====================
-
-export interface WithdrawalRecord {
-  id: string
-  withdrawal_id: string
-  amount: number
-  amount_yuan: number
-  withdrawal_method: string
-  withdrawal_account: string
-  withdrawal_name: string
-  status: string
-  user_note?: string
-  review_note?: string
-  created_at?: string
-  reviewed_at?: string
-  completed_at?: string
-}
-
-export interface AdminWithdrawalRecord extends WithdrawalRecord {
-  user_id: string
-  username: string
-  phone: string
-  admin_id?: string
-  payment_proof?: string
-}
-
-// ==================== 案例类型定义 ====================
-
-export interface Case {
-  id: string
-  title: string
-  description?: string
-  category: string
-  tags?: string[]
-  thumbnail_url?: string
-  image_url?: string
-  prompt: string
-  negative_prompt?: string
-  parameters?: Record<string, any>
-  provider?: string
-  model?: string
-  is_published: boolean
-  sort_order: number
-  view_count: number
-  use_count: number
-  created_by?: string
-  created_at: string
-  updated_at: string
-}
-
-// ==================== 生成历史类型定义 ====================
-
-export interface GenerationRecord {
-  id: string
-  user_request_id: string
-  provider: string
-  model: string
-  prompt: string
-  negative_prompt: string
-  width: number
-  height: number
-  n: number
-  style?: string
-  quality?: string
-  status: 'completed' | 'failed' | 'pending' | 'processing'
-  image_urls: string[]
-  image_paths: string[]
-  processing_time?: number
-  start_time?: string
-  end_time?: string
-  created_at: string
-  extra_params?: Record<string, any>
-}
-
-export interface UnifiedGenerationRecord {
-  id: string
-  type: 'chat' | 'async'
-  model: string
-  prompt: string
-  status: 'pending' | 'processing' | 'completed' | 'failed'
-  image_urls: string[]
-  timestamp: string
-  created_at: string
-  provider?: string
-  platform?: string
-  processing_time?: number
-  error?: string
-}
-
-// ==================== 管理员类型定义 ====================
-
-export interface AdminUserListItem {
-  id: string
-  phone: string
-  username: string
-  status: string
-  role: string
-  created_at: string
-  last_login_at: string
-  points: number
-  balance: number
-  gift_points: number
-  total_generated: number
-  total_spent: number
-  invite_count: number
-}
-
-export interface AdminUserDetail {
-  id: string
-  phone: string
-  username: string
-  status: string
-  role: string
-  created_at: string
-  last_login_at: string
-  last_login_ip: string
-  phone_verified: boolean
-  points: number
-  balance: number
-  gift_points: number
-  total_generated: number
-  total_spent: number
-  invite_code: string
-  invite_count: number
-  inviter_id: string
-  last_checkin_date: string
-  consecutive_checkin_days: number
-}
-
-export interface AdminStatistics {
-  total_users: number
-  active_users: number
-  total_generated: number
-  total_revenue: number
-  today_users: number
-  today_generated: number
-  today_revenue: number
 }
 
 // 导出axios实例以供高级用法
