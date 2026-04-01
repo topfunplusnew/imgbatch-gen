@@ -1,0 +1,296 @@
+name: img-batch-agent
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: img-batch-agent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-agent_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/00-init-schema.sql:/docker-entrypoint-initdb.d/00-init-schema.sql:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  postgres-init:
+    image: postgres:16-alpine
+    container_name: img-batch-agent-postgres-init
+    restart: "no"
+    entrypoint:
+      - /bin/sh
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-agent_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+    volumes:
+      - ./sql/00-init-schema.sql:/sql/00-init-schema.sql:ro
+    command:
+      - -c
+      - |
+        set -eu
+        log() {
+          printf '[postgres-init] %s\n' "$$*"
+        }
+
+        log "Starting PostgreSQL schema initialization"
+        log "Target: $$POSTGRES_HOST:$$POSTGRES_PORT/$$POSTGRES_DB"
+        log "User: $$POSTGRES_USER"
+        log "SQL file: /sql/00-init-schema.sql"
+
+        ready_attempt=0
+        while true; do
+          ready_output="$$(pg_isready -h "$$POSTGRES_HOST" -p "$$POSTGRES_PORT" -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" 2>&1)" && break
+          ready_attempt=$$((ready_attempt + 1))
+          log "Readiness check attempt $$ready_attempt failed"
+          printf '%s\n' "$$ready_output"
+          if [ "$$ready_attempt" -ge 30 ]; then
+            log "PostgreSQL readiness failed after $$ready_attempt attempts"
+            exit 1
+          fi
+          sleep 2
+        done
+        log "PostgreSQL is ready"
+        printf '%s\n' "$$ready_output"
+
+        log "Applying schema"
+        psql \
+          -v ON_ERROR_STOP=1 \
+          -h "$$POSTGRES_HOST" \
+          -p "$$POSTGRES_PORT" \
+          -U "$$POSTGRES_USER" \
+          -d "$$POSTGRES_DB" \
+          -f /sql/00-init-schema.sql
+
+        log "PostgreSQL schema initialization completed"
+
+  minio:
+    image: minio/minio:RELEASE.2025-02-28T09-55-16Z
+    container_name: img-batch-agent-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
+    ports:
+      - "${MINIO_API_BIND_IP:-0.0.0.0}:${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_BIND_IP:-0.0.0.0}:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    container_name: img-batch-agent-minio-init
+    restart: "no"
+    entrypoint:
+      - /bin/sh
+    depends_on:
+      minio:
+        condition: service_started
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-${MINIO_ROOT_USER:-minioadmin}}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-${MINIO_ROOT_PASSWORD:-minioadmin}}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-images}
+    command:
+      - -c
+      - |
+        set -eu
+        log() {
+          printf '[minio-init] %s\n' "$$*"
+        }
+
+        log "Starting MinIO initialization"
+        mc --version
+        log "Target endpoint: http://minio:9000"
+        log "Root user: $$MINIO_ROOT_USER"
+        log "Access user: $$MINIO_ACCESS_KEY"
+        log "Bucket: $$MINIO_BUCKET_NAME"
+
+        alias_attempt=0
+        while true; do
+          alias_output="$$(mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" 2>&1)" && break
+          alias_attempt=$$((alias_attempt + 1))
+          log "Alias setup attempt $$alias_attempt failed"
+          printf '%s\n' "$$alias_output"
+          if [ "$$alias_attempt" -ge 30 ]; then
+            log "Alias setup failed after $$alias_attempt attempts"
+            exit 1
+          fi
+          sleep 2
+        done
+        log "Alias setup succeeded"
+        printf '%s\n' "$$alias_output"
+
+        ready_attempt=0
+        while true; do
+          ready_output="$$(mc ready local 2>&1)" && break
+          ready_attempt=$$((ready_attempt + 1))
+          log "Readiness check attempt $$ready_attempt failed"
+          printf '%s\n' "$$ready_output"
+          if [ "$$ready_attempt" -ge 30 ]; then
+            log "MinIO readiness failed after $$ready_attempt attempts"
+            exit 1
+          fi
+          sleep 2
+        done
+        log "MinIO is ready"
+        printf '%s\n' "$$ready_output"
+
+        log "Collecting MinIO admin info"
+        mc admin info local
+
+        log "Ensuring bucket exists"
+        mc mb --ignore-existing local/"$$MINIO_BUCKET_NAME"
+
+        log "Setting anonymous download policy on bucket"
+        anonymous_output="$$(mc anonymous set download local/"$$MINIO_BUCKET_NAME" 2>&1)" || {
+          log "Failed to set anonymous download policy"
+          printf '%s\n' "$$anonymous_output"
+          exit 1
+        }
+        printf '%s\n' "$$anonymous_output"
+
+        if [ "$$MINIO_ACCESS_KEY" != "$$MINIO_ROOT_USER" ]; then
+          log "Checking service user $$MINIO_ACCESS_KEY"
+          user_info_output="$$(mc admin user info local "$$MINIO_ACCESS_KEY" 2>&1)" || {
+            log "Service user not found, creating it"
+            printf '%s\n' "$$user_info_output"
+            user_add_output="$$(mc admin user add local "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY" 2>&1)" || {
+              log "Failed to create service user $$MINIO_ACCESS_KEY"
+              printf '%s\n' "$$user_add_output"
+              exit 1
+            }
+            printf '%s\n' "$$user_add_output"
+          }
+          if [ -n "$$user_info_output" ]; then
+            printf '%s\n' "$$user_info_output"
+          fi
+
+          log "Attaching readwrite policy to $$MINIO_ACCESS_KEY"
+          policy_output="$$(mc admin policy attach local readwrite --user "$$MINIO_ACCESS_KEY" 2>&1)" || {
+            case "$$policy_output" in
+              *"already in effect"*|*"no net effect"*)
+                log "Policy already attached"
+                printf '%s\n' "$$policy_output"
+                ;;
+              *)
+                log "Failed to attach policy"
+                printf '%s\n' "$$policy_output"
+                exit 1
+                ;;
+            esac
+          }
+          if [ -n "$$policy_output" ]; then
+            printf '%s\n' "$$policy_output"
+          fi
+        fi
+
+        log "Listing bucket state"
+        mc ls local/"$$MINIO_BUCKET_NAME" || true
+        log "MinIO initialization completed"
+
+  backend:
+    image: ${BACKEND_IMAGE:-img-batch-agent-backend:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PYPI_INDEX_URL: ${PYPI_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR:-mirrors.aliyun.com}
+    container_name: img-batch-agent-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8888
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      STORAGE_TYPE: ${STORAGE_TYPE:-minio}
+      STORAGE_PATH: ${STORAGE_PATH:-/app/storage}
+      STORAGE_URL_PREFIX: ${STORAGE_URL_PREFIX:-/storage}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-agent_db}}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DATABASE: ${POSTGRES_DB:-agent_db}
+      DEFAULT_IMAGE_PROVIDER: ${DEFAULT_IMAGE_PROVIDER:-openai}
+      DEFAULT_LLM_PROVIDER: ${DEFAULT_LLM_PROVIDER:-relay}
+      DEFAULT_EMBEDDING_PROVIDER: ${DEFAULT_EMBEDDING_PROVIDER:-relay}
+      RELAY_API_KEY: ${RELAY_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-${MINIO_ROOT_USER:-minioadmin}}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-${MINIO_ROOT_PASSWORD:-minioadmin}}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-images}
+      MINIO_SECURE: ${MINIO_SECURE:-false}
+      MINIO_URL_PREFIX: ${MINIO_URL_PREFIX:-/storage}
+    ports:
+      - "${BACKEND_BIND_IP:-0.0.0.0}:${BACKEND_PORT:-8888}:8888"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./storage:/app/storage
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8888/health', timeout=3).read()",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-img-batch-agent-frontend:latest}
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+    container_name: img-batch-agent-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_BIND_IP:-0.0.0.0}:${FRONTEND_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/nginx-health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres_data:
+  minio_data:

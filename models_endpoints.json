@@ -1,0 +1,3613 @@
+[
+  {
+    "model_name": "gpt-5.4",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5.4-pro",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gemini-3.1-flash-image-preview",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5.3-chat-latest",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "claude-sonnet-4-6",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-sonnet-4-6-thinking",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-3.1-flash-lite-preview",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-3.1-pro-preview",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-opus-4-6",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-opus-4-6-thinking",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5.2",
+    "supported_endpoint_types": [
+      "openai-response",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5.2-chat",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5.2-chat-latest",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5.2-pro",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "MiniMax-M2.5",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-opus-4-5-20251101",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-opus-4-5-20251101-thinking",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "doubao-seedream-5-0-260128",
+    "supported_endpoint_types": [
+      "image-generation"
+    ]
+  },
+  {
+    "model_name": "gemini-3-pro-image-preview",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-3-pro-preview",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5.1",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5.1-2025-11-13",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5.3-codex",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5.3-codex-high",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5.3-codex-medium",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5.3-codex-xhigh",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "grok-4.2",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "mimo-v2-flash",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "glm-4.7",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-image-1.5",
+    "supported_endpoint_types": [
+      "image-generation"
+    ]
+  },
+  {
+    "model_name": "speech-02-hd",
+    "supported_endpoint_types": [
+      "异步语音",
+      "同步语音"
+    ]
+  },
+  {
+    "model_name": "speech-02-turbo",
+    "supported_endpoint_types": [
+      "异步语音",
+      "同步语音"
+    ]
+  },
+  {
+    "model_name": "speech-2.6-turbo",
+    "supported_endpoint_types": [
+      "同步语音",
+      "异步语音"
+    ]
+  },
+  {
+    "model_name": "claude-haiku-4-5-20251001",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-v3.2",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-3-flash-preview",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "kimi-k2.5",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-2.5-flash-preview-tts",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai",
+      "geminitts"
+    ]
+  },
+  {
+    "model_name": "gemini-2.5-pro-preview-tts",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai",
+      "geminitts"
+    ]
+  },
+  {
+    "model_name": "claude-sonnet-4-5-20250929",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-v3.2-thinking",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-sonnet-4-5-20250929-thinking",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "doubao-seed-1-8-251228",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "doubao-seed-1-8-251228-thinking",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "glm-5",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "veo_3_1-components-4K",
+    "supported_endpoint_types": [
+      "openAI视频格式"
+    ]
+  },
+  {
+    "model_name": "gemini-3-pro-preview-11-2025",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-3-pro-preview-thinking",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3.5-397b-a17b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3.5-plus",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3.5-plus-2026-02-15",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen-plus",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen-plus-2025-12-01",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-max-2026-01-23",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "veo3.1-4k",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "veo3.1-components-4k",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "veo_3_1-4K",
+    "supported_endpoint_types": [
+      "openAI视频格式"
+    ]
+  },
+  {
+    "model_name": "veo_3_1-fast-4K",
+    "supported_endpoint_types": [
+      "openAI视频格式"
+    ]
+  },
+  {
+    "model_name": "veo_3_1-fast-components-4K",
+    "supported_endpoint_types": [
+      "openAI视频格式"
+    ]
+  },
+  {
+    "model_name": "claude-haiku-4-5-20251001-thinking",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-opus-4-1-20250805",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-opus-4-1-20250805-thinking",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-opus-4-20250514",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-opus-4-20250514-thinking",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-sonnet-4-20250514",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-sonnet-4-20250514-thinking",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "doubao-seedance-1-5-pro-251215",
+    "supported_endpoint_types": [
+      "豆包视频异步"
+    ]
+  },
+  {
+    "model_name": "gemini-2.5-flash-image",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-2.5-flash-image-preview",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-2.5-pro",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-2.5-pro-thinking",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "glm-4.7-thinking",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5-2025-08-07",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5-codex",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5-codex-high",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5-codex-low",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5-codex-medium",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5-mini-2025-08-07",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5-nano-2025-08-07",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5-pro",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5-search-api",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5-search-api-2025-10-14",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5.2-codex",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-image-1.5-all",
+    "supported_endpoint_types": [
+      "openai",
+      "image-generation"
+    ]
+  },
+  {
+    "model_name": "minimax-m2.1",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "veo3.1",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "veo3.1-pro",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "veo3.1-pro-4k",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "veo_3_1",
+    "supported_endpoint_types": [
+      "openAI视频格式"
+    ]
+  },
+  {
+    "model_name": "veo_3_1-components",
+    "supported_endpoint_types": [
+      "openAI视频格式"
+    ]
+  },
+  {
+    "model_name": "veo_3_1-fast",
+    "supported_endpoint_types": [
+      "openAI视频格式"
+    ]
+  },
+  {
+    "model_name": "gpt-5.1-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5.1-chat",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5.1-chat-latest",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5.1-codex-max",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5.1-thinking-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5.2-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-video-3-15s",
+    "supported_endpoint_types": [
+      "grok视频"
+    ]
+  },
+  {
+    "model_name": "qwen-plus-character",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "sora-2-all",
+    "supported_endpoint_types": [
+      "openai",
+      "视频统一格式",
+      "openAI官方视频格式"
+    ]
+  },
+  {
+    "model_name": "sora-2-pro-all",
+    "supported_endpoint_types": [
+      "视频统一格式",
+      "openAI官方视频格式"
+    ]
+  },
+  {
+    "model_name": "sora-2-vip-all",
+    "supported_endpoint_types": [
+      "openAI官方视频格式"
+    ]
+  },
+  {
+    "model_name": "wan2.6-i2v",
+    "supported_endpoint_types": [
+      "wan视频生成"
+    ]
+  },
+  {
+    "model_name": "wan2.6-i2v-flash",
+    "supported_endpoint_types": [
+      "wan视频生成"
+    ]
+  },
+  {
+    "model_name": "gemini-embedding-2-preview",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai",
+      "嵌入兼容格式",
+      "嵌入格式1"
+    ]
+  },
+  {
+    "model_name": "audio1.0",
+    "supported_endpoint_types": [
+      "vidu文生音效"
+    ]
+  },
+  {
+    "model_name": "deepseek-v3.1-thinking",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-v3.2-fast",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-2.5-flash",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-2.5-flash-nothinking",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-2.5-flash-thinking",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-embedding-001",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai",
+      "嵌入chat格式",
+      "嵌入原生格式"
+    ]
+  },
+  {
+    "model_name": "glm-4.6",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "glm-4.6-thinking",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5-chat-latest",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5-mini",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5-nano",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5.1-codex",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5.1-high",
+    "supported_endpoint_types": [
+      "openai-response",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5.1-low",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5.1-medium",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "grok-video-3-10s",
+    "supported_endpoint_types": [
+      "grok视频"
+    ]
+  },
+  {
+    "model_name": "kimi-k2-250905",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-vl-30b-a3b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-vl-30b-a3b-thinking",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-vl-32b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-vl-32b-thinking",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "veo3-pro-frames",
+    "supported_endpoint_types": [
+      "openai-response",
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "veo3.1-components",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "veo3.1-fast-components",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "vidu-tts",
+    "supported_endpoint_types": [
+      "vidu语音合成"
+    ]
+  },
+  {
+    "model_name": "vidu2.0",
+    "supported_endpoint_types": [
+      "vidu图生视频",
+      "vidu参考生视频",
+      "vidu首尾帧"
+    ]
+  },
+  {
+    "model_name": "viduq1",
+    "supported_endpoint_types": [
+      "vidu首尾帧",
+      "vidu文生视频",
+      "vidu图生视频",
+      "vidu参考生视频"
+    ]
+  },
+  {
+    "model_name": "viduq1-classic",
+    "supported_endpoint_types": [
+      "vidu图生视频",
+      "vidu首尾帧"
+    ]
+  },
+  {
+    "model_name": "viduq2",
+    "supported_endpoint_types": [
+      "vidu生图",
+      "vidu文生视频",
+      "vidu参考生视频"
+    ]
+  },
+  {
+    "model_name": "viduq2-pro",
+    "supported_endpoint_types": [
+      "vidu参考生视频"
+    ]
+  },
+  {
+    "model_name": "viduq2-turbo",
+    "supported_endpoint_types": [
+      "vidu图生视频",
+      "vidu首尾帧"
+    ]
+  },
+  {
+    "model_name": "viduq3-pro",
+    "supported_endpoint_types": [
+      "vidu文生视频",
+      "vidu图生视频"
+    ]
+  },
+  {
+    "model_name": "gemini-3-flash-preview-thinking",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-v3.1-fast",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-image-1",
+    "supported_endpoint_types": [
+      "dall-e-3"
+    ]
+  },
+  {
+    "model_name": "sora-2-characters",
+    "supported_endpoint_types": [
+      "创建角色"
+    ]
+  },
+  {
+    "model_name": "sora-2-pro",
+    "supported_endpoint_types": [
+      "openAI官方视频格式",
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "aigc-image-gem",
+    "supported_endpoint_types": [
+      "aigc-image"
+    ]
+  },
+  {
+    "model_name": "aigc-image-qwen",
+    "supported_endpoint_types": [
+      "aigc-image"
+    ]
+  },
+  {
+    "model_name": "aigc-video-hailuo",
+    "supported_endpoint_types": [
+      "aigc-video"
+    ]
+  },
+  {
+    "model_name": "aigc-video-kling",
+    "supported_endpoint_types": [
+      "aigc-video"
+    ]
+  },
+  {
+    "model_name": "aigc-video-vidu",
+    "supported_endpoint_types": [
+      "aigc-video"
+    ]
+  },
+  {
+    "model_name": "glm-4",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "glm-4.5",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-image-vip",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5-high",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5-low",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5-medium",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5-minimal",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5-pro-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5-thinking-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-5.1-codex-high",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5.1-codex-medium",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-5.1-codex-mini",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "gpt-image-1-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-image-1-mini",
+    "supported_endpoint_types": [
+      "image-generation"
+    ]
+  },
+  {
+    "model_name": "grok-4.1",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-video-3",
+    "supported_endpoint_types": [
+      "grok视频"
+    ]
+  },
+  {
+    "model_name": "o1-pro",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "o1-pro-2025-03-19",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "qwen-image-edit-2509",
+    "supported_endpoint_types": [
+      "image-generation"
+    ]
+  },
+  {
+    "model_name": "qwen-image-max",
+    "supported_endpoint_types": [
+      "dall-e-3"
+    ]
+  },
+  {
+    "model_name": "qwen-image-max-2025-12-30",
+    "supported_endpoint_types": [
+      "dall-e-3"
+    ]
+  },
+  {
+    "model_name": "qwen2.5-coder-32b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen2.5-math-7b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-30b-a3b-think",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-30b-a3b-thinking-2507",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-coder",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-coder-flash",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-max",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-rerank",
+    "supported_endpoint_types": [
+      "rerank"
+    ]
+  },
+  {
+    "model_name": "qwen3-vl-235b-a22b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "sora-2",
+    "supported_endpoint_types": [
+      "openai",
+      "openAI官方视频格式"
+    ]
+  },
+  {
+    "model_name": "sora_image",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "wan2.5-i2v-preview",
+    "supported_endpoint_types": [
+      "wan视频生成"
+    ]
+  },
+  {
+    "model_name": "z-image-turbo",
+    "supported_endpoint_types": [
+      "dall-e-3"
+    ]
+  },
+  {
+    "model_name": "MiniMax-M2",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-4-1-fast-non-reasoning",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "doubao-seedream-4-0-250828",
+    "supported_endpoint_types": [
+      "image-generation"
+    ]
+  },
+  {
+    "model_name": "doubao-seedream-4-5-251128",
+    "supported_endpoint_types": [
+      "image-generation"
+    ]
+  },
+  {
+    "model_name": "grok-4",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-4-0709",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-4-1-fast-reasoning",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-4-fast",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-4-fast-non-reasoning",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-4.1-fast",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen2.5-coder-14b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-30b-a3b-instruct-2507",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-coder-480b-a35b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-next-80b-a3b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-vl-8b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-vl-8b-thinking",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-vl-plus",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-4.2-image",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "MiniMax-Hailuo-02",
+    "supported_endpoint_types": [
+      "海螺视频生成"
+    ]
+  },
+  {
+    "model_name": "MiniMax-Hailuo-2.3",
+    "supported_endpoint_types": [
+      "海螺视频生成"
+    ]
+  },
+  {
+    "model_name": "deepseek-v3-1-think-250821",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-v3.1",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-v3.2-exp",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "doubao-seed-1-6-250615",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "doubao-seed-1-6-251015",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "doubao-seed-1-6-flash-250828",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "doubao-seed-1-6-thinking-250615",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "doubao-seed-1-6-thinking-250715",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "doubao-seedance-1-0-pro-250528",
+    "supported_endpoint_types": [
+      "豆包视频异步"
+    ]
+  },
+  {
+    "model_name": "flux-1.1-pro",
+    "supported_endpoint_types": [
+      "image-generation"
+    ]
+  },
+  {
+    "model_name": "gemini-2.5-flash-preview-09-2025",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-4-fast-reasoning",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-4.1-image",
+    "supported_endpoint_types": [
+      "openai-response",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "kimi-k2",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "kimi-k2-0711-preview",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "kimi-k2-0905",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "kimi-k2-thinking",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "mj_imagine",
+    "supported_endpoint_types": [
+      "mj想象模式"
+    ]
+  },
+  {
+    "model_name": "qwen-plus-latest",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-235b-a22b-instruct-2507",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-235b-a22b-thinking-2507",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-coder-30b-a3b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-coder-plus",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-vl-235b-a22b-thinking",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-vl-flash",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "seed-oss-36b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "speech-2.6-hd",
+    "supported_endpoint_types": [
+      "异步语音",
+      "同步语音"
+    ]
+  },
+  {
+    "model_name": "ERNIE-Functions-8K",
+    "supported_endpoint_types": []
+  },
+  {
+    "model_name": "deepseek-ocr",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-v3-1",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "ERNIE-3.5-8K",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "ERNIE-4.0-8K",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "ERNIE-Character-8K",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "ERNIE-Lite-8K",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "ERNIE-Speed-128K",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "ERNIE-Speed-8K",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "ERNIE-Tiny-8K",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "Embedding-V1",
+    "supported_endpoint_types": [
+      "embedding"
+    ]
+  },
+  {
+    "model_name": "deepseek-chat",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-r1",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-r1-0528",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "doubao-seed-1-6-vision-250815",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-2.0-flash",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-2.0-flash-preview-image-generation",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-2.5-flash-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-2.5-flash-lite",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-2.5-flash-lite-preview-06-17",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-3",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-3-deepsearch",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-3-image",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-3-mini",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-3-reasoner",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-3-reasoning",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "grok-4-image",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "mj_blend",
+    "supported_endpoint_types": [
+      "mj混合"
+    ]
+  },
+  {
+    "model_name": "mj_custom_zoom",
+    "supported_endpoint_types": [
+      "mj动作"
+    ]
+  },
+  {
+    "model_name": "mj_describe",
+    "supported_endpoint_types": [
+      "mj描述模式"
+    ]
+  },
+  {
+    "model_name": "mj_high_variation",
+    "supported_endpoint_types": [
+      "mj动作"
+    ]
+  },
+  {
+    "model_name": "mj_inpaint",
+    "supported_endpoint_types": [
+      "mj动作"
+    ]
+  },
+  {
+    "model_name": "mj_low_variation",
+    "supported_endpoint_types": [
+      "mj动作"
+    ]
+  },
+  {
+    "model_name": "mj_modal",
+    "supported_endpoint_types": [
+      "mj模态模式"
+    ]
+  },
+  {
+    "model_name": "mj_pan",
+    "supported_endpoint_types": [
+      "mj动作"
+    ]
+  },
+  {
+    "model_name": "mj_reroll",
+    "supported_endpoint_types": [
+      "mj动作"
+    ]
+  },
+  {
+    "model_name": "mj_upload",
+    "supported_endpoint_types": [
+      "mj图片上传"
+    ]
+  },
+  {
+    "model_name": "mj_upscale",
+    "supported_endpoint_types": [
+      "mj动作"
+    ]
+  },
+  {
+    "model_name": "mj_variation",
+    "supported_endpoint_types": [
+      "mj动作"
+    ]
+  },
+  {
+    "model_name": "mj_zoom",
+    "supported_endpoint_types": [
+      "mj动作"
+    ]
+  },
+  {
+    "model_name": "deepseek-v3-1-250821",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-reasoner",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "doubao-seedance-1-0-lite-i2v-250428",
+    "supported_endpoint_types": [
+      "豆包视频异步"
+    ]
+  },
+  {
+    "model_name": "doubao-seedance-1-0-lite-t2v-250428",
+    "supported_endpoint_types": [
+      "豆包视频异步"
+    ]
+  },
+  {
+    "model_name": "doubao-seedance-1-0-pro-fast-251015",
+    "supported_endpoint_types": [
+      "豆包视频异步"
+    ]
+  },
+  {
+    "model_name": "doubao-seededit-3-0-i2i-250628",
+    "supported_endpoint_types": [
+      "image-generation"
+    ]
+  },
+  {
+    "model_name": "doubao-seedream-3-0-t2i-250415",
+    "supported_endpoint_types": [
+      "image-generation"
+    ]
+  },
+  {
+    "model_name": "flux-dev",
+    "supported_endpoint_types": [
+      "image-generation"
+    ]
+  },
+  {
+    "model_name": "flux-pro",
+    "supported_endpoint_types": [
+      "image-generation"
+    ]
+  },
+  {
+    "model_name": "flux-pro-1.1-ultra",
+    "supported_endpoint_types": [
+      "image-generation"
+    ]
+  },
+  {
+    "model_name": "flux-pro-max",
+    "supported_endpoint_types": [
+      "openai",
+      "image-generation"
+    ]
+  },
+  {
+    "model_name": "flux-schnell",
+    "supported_endpoint_types": [
+      "image-generation"
+    ]
+  },
+  {
+    "model_name": "flux.1-kontext-pro",
+    "supported_endpoint_types": [
+      "image-generation"
+    ]
+  },
+  {
+    "model_name": "flux.1.1-pro",
+    "supported_endpoint_types": [
+      "openai",
+      "image-generation"
+    ]
+  },
+  {
+    "model_name": "gemini-2.5-pro-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemma-7b-it",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "kimi-k2-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "veo3.1-fast",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "veo3",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "veo3-fast",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "veo3-fast-frames",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "veo3-frames",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "veo3-pro",
+    "supported_endpoint_types": [
+      "openai-response",
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "BAAI/bge-reranker-v2-m3",
+    "supported_endpoint_types": [
+      "rerank"
+    ]
+  },
+  {
+    "model_name": "Dolphin3.0-R1-Mistral-24B",
+    "supported_endpoint_types": []
+  },
+  {
+    "model_name": "MAI-DS-R1",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "Pro/BAAI/bge-reranker-v2-m3",
+    "supported_endpoint_types": [
+      "rerank"
+    ]
+  },
+  {
+    "model_name": "Qwen/Qwen3-Reranker-0.6B",
+    "supported_endpoint_types": [
+      "rerank"
+    ]
+  },
+  {
+    "model_name": "SparkDesk-v1.1",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "SparkDesk-v2.1",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "SparkDesk-v3.1",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "SparkDesk-v3.5",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "andreasjansson/stable-diffusion-animation",
+    "supported_endpoint_types": [
+      "andreasjansson/stable-diffusion-animation异步"
+    ]
+  },
+  {
+    "model_name": "black-forest-labs/flux-1.1-pro",
+    "supported_endpoint_types": [
+      "black-forest-labs/flux-1.1-pro异步"
+    ]
+  },
+  {
+    "model_name": "black-forest-labs/flux-1.1-pro-ultra",
+    "supported_endpoint_types": [
+      "black-forest-labs/flux-1.1-pro-ultra异步"
+    ]
+  },
+  {
+    "model_name": "black-forest-labs/flux-dev",
+    "supported_endpoint_types": [
+      "black-forest-labs/flux-dev异步"
+    ]
+  },
+  {
+    "model_name": "black-forest-labs/flux-fill-dev",
+    "supported_endpoint_types": [
+      "black-forest-labs/flux-fill-dev异步"
+    ]
+  },
+  {
+    "model_name": "black-forest-labs/flux-fill-pro",
+    "supported_endpoint_types": [
+      "black-forest-labs/flux-fill-pro异步"
+    ]
+  },
+  {
+    "model_name": "black-forest-labs/flux-kontext-dev",
+    "supported_endpoint_types": [
+      "black-forest-labs/flux-kontext-dev异步"
+    ]
+  },
+  {
+    "model_name": "black-forest-labs/flux-kontext-max",
+    "supported_endpoint_types": [
+      "black-forest-labs/flux-kontext-max异步"
+    ]
+  },
+  {
+    "model_name": "black-forest-labs/flux-kontext-pro",
+    "supported_endpoint_types": [
+      "black-forest-labs/flux-kontext-pro异步"
+    ]
+  },
+  {
+    "model_name": "black-forest-labs/flux-pro",
+    "supported_endpoint_types": [
+      "black-forest-labs/flux-pro异步"
+    ]
+  },
+  {
+    "model_name": "black-forest-labs/flux-schnell",
+    "supported_endpoint_types": [
+      "black-forest-labs/flux-schnell异步"
+    ]
+  },
+  {
+    "model_name": "chatgpt-4o-latest",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "cjwbw/rembg",
+    "supported_endpoint_types": [
+      "cjwbw/rembg异步"
+    ]
+  },
+  {
+    "model_name": "claude-3-5-haiku-20241022",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-3-5-sonnet-20241022",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-3-7-sonnet-20250219",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-3-7-sonnet-20250219-thinking",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-3-7-sonnet-latest",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-3-haiku-20240307",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "claude-3-opus-20240229",
+    "supported_endpoint_types": [
+      "anthropic",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "codex-mini-2025-05-16",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "dall-e-3",
+    "supported_endpoint_types": []
+  },
+  {
+    "model_name": "davinci-002",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-r1-2025-01-20",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-r1-250120",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-r1-250528",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-r1-distill-llama-70b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-r1-distill-qwen-32b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-r1-distill-qwen-7b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-r1-searching",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-v3",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-v3-0324",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-v3-250324",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-v3-fast",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-v3-search",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "deepseek-v3.2-exp-thinking",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "fal-ai/bytedance/seedream/v4/edit",
+    "supported_endpoint_types": [
+      "fal-ai/bytedance/seedream/v4/edit异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/bytedance/seedream/v4/text-to-image",
+    "supported_endpoint_types": [
+      "fal-ai/bytedance/seedream/v4/text-to-image异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/flux-1/dev",
+    "supported_endpoint_types": [
+      "fal-ai/flux-1/dev异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/flux-1/dev/image-to-image",
+    "supported_endpoint_types": [
+      "fal-ai/flux-1/dev/image-to-image异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/flux-1/dev/redux",
+    "supported_endpoint_types": [
+      "fal-ai/flux-1/dev/redux异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/flux-1/schnell",
+    "supported_endpoint_types": [
+      "fal-ai/flux-1/schnell异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/flux-1/schnell/redux",
+    "supported_endpoint_types": [
+      "fal-ai/flux-1/schnell/redux异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/flux-lora",
+    "supported_endpoint_types": [
+      "fal-ai/flux-lora异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/flux-pro/kontext",
+    "supported_endpoint_types": [
+      "fal-ai/flux-pro/kontext异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/flux-pro/kontext/max",
+    "supported_endpoint_types": [
+      "fal-ai/flux-pro/kontext/max异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/flux-pro/kontext/max/multi",
+    "supported_endpoint_types": [
+      "fal-ai/flux-pro/kontext/max/multi异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/flux-pro/kontext/max/text-to-image",
+    "supported_endpoint_types": [
+      "fal-ai/flux-pro/kontext/max/text-to-image异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/flux-pro/kontext/multi",
+    "supported_endpoint_types": [
+      "fal-ai/flux-pro/kontext/multi异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/flux-pro/kontext/text-to-image",
+    "supported_endpoint_types": [
+      "fal-ai/flux-pro/kontext/text-to-image异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/nano-banana",
+    "supported_endpoint_types": [
+      "fal-ai/nano-banana异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/nano-banana/edit",
+    "supported_endpoint_types": [
+      "fal-ai/nano-banana/edit异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/qwen-image",
+    "supported_endpoint_types": [
+      "fal-ai/qwen-image异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/qwen-image-edit",
+    "supported_endpoint_types": [
+      "fal-ai/qwen-image-edit异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/recraft/v3/text-to-image",
+    "supported_endpoint_types": [
+      "fal-ai/recraft/v3/text-to-image异步"
+    ]
+  },
+  {
+    "model_name": "fal-ai/recraft/vectorize",
+    "supported_endpoint_types": [
+      "fal-ai/recraft/vectorize异步"
+    ]
+  },
+  {
+    "model_name": "flux-kontext-apps/multi-image-kontext-max",
+    "supported_endpoint_types": [
+      "flux-kontext-apps/multi-image-kontext-max异步"
+    ]
+  },
+  {
+    "model_name": "flux-kontext-apps/multi-image-kontext-pro",
+    "supported_endpoint_types": [
+      "flux-kontext-apps/multi-image-kontext-pro异步"
+    ]
+  },
+  {
+    "model_name": "gemini-2.0-flash-001",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-2.0-flash-lite",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-2.5-flash-lite-nothinking",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-2.5-flash-lite-preview-09-2025",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gemini-2.5-flash-lite-thinking",
+    "supported_endpoint_types": [
+      "gemini",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "glm-3-turbo",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "glm-4-air",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "glm-4-airx",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "glm-4-flash",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "glm-4-long",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "glm-4.5-air",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "glm-4.5-airx",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "glm-4.5-flash",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "glm-4.5-x",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "google/imagen-4",
+    "supported_endpoint_types": [
+      "google/imagen-4异步"
+    ]
+  },
+  {
+    "model_name": "google/imagen-4-fast",
+    "supported_endpoint_types": [
+      "google/imagen-4-fast异步"
+    ]
+  },
+  {
+    "model_name": "google/imagen-4-ultra",
+    "supported_endpoint_types": [
+      "google/imagen-4-ultra异步"
+    ]
+  },
+  {
+    "model_name": "gpt-3.5-turbo-1106",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4-0613",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4-1106-preview",
+    "supported_endpoint_types": []
+  },
+  {
+    "model_name": "gpt-4-32k",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4-32k-0613",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4-gizmo-*",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4-turbo",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4-turbo-2024-04-09",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4-turbo-preview",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4.1",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4.1-2025-04-14",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4.1-mini",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4.1-mini-2025-04-14",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4.1-nano",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4.1-nano-2025-04-14",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-2024-05-13",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-2024-08-06",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-2024-11-20",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-audio-preview",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-audio-preview-2024-10-01",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-audio-preview-2024-12-17",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-audio-preview-2025-06-03",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-mini",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-mini-2024-07-18",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-mini-audio-preview",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-mini-audio-preview-2024-12-17",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-mini-search-preview",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-mini-search-preview-2025-03-11",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-mini-transcribe",
+    "supported_endpoint_types": [
+      "语音转文字"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-mini-tts",
+    "supported_endpoint_types": [
+      "文本转语音"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-realtime-preview-2025-06-03",
+    "supported_endpoint_types": []
+  },
+  {
+    "model_name": "gpt-4o-search-preview",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-search-preview-2025-03-11",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-4o-transcribe",
+    "supported_endpoint_types": [
+      "语音转文字"
+    ]
+  },
+  {
+    "model_name": "gpt-audio-2025-08-28",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-oss-120b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "gpt-oss-20b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "ideogram-ai/ideogram-v2-turbo",
+    "supported_endpoint_types": [
+      "ideogram-ai/ideogram-v2-turbo异步"
+    ]
+  },
+  {
+    "model_name": "ideogram_describe",
+    "supported_endpoint_types": [
+      "图生文"
+    ]
+  },
+  {
+    "model_name": "ideogram_edit_V_3_DEFAULT",
+    "supported_endpoint_types": [
+      "图片编辑"
+    ]
+  },
+  {
+    "model_name": "ideogram_edit_V_3_QUALITY",
+    "supported_endpoint_types": [
+      "图片编辑"
+    ]
+  },
+  {
+    "model_name": "ideogram_edit_V_3_TURBO",
+    "supported_endpoint_types": [
+      "图片编辑"
+    ]
+  },
+  {
+    "model_name": "ideogram_generate_V_1",
+    "supported_endpoint_types": [
+      "文生图"
+    ]
+  },
+  {
+    "model_name": "ideogram_generate_V_1_TURBO",
+    "supported_endpoint_types": [
+      "文生图"
+    ]
+  },
+  {
+    "model_name": "ideogram_generate_V_2",
+    "supported_endpoint_types": [
+      "文生图"
+    ]
+  },
+  {
+    "model_name": "ideogram_generate_V_2_TURBO",
+    "supported_endpoint_types": [
+      "文生图"
+    ]
+  },
+  {
+    "model_name": "ideogram_generate_V_3_DEFAULT",
+    "supported_endpoint_types": [
+      "文生图"
+    ]
+  },
+  {
+    "model_name": "ideogram_generate_V_3_QUALITY",
+    "supported_endpoint_types": [
+      "文生图"
+    ]
+  },
+  {
+    "model_name": "ideogram_generate_V_3_TURBO",
+    "supported_endpoint_types": [
+      "文生图"
+    ]
+  },
+  {
+    "model_name": "ideogram_reframe_V_3_DEFAULT",
+    "supported_endpoint_types": [
+      "重构"
+    ]
+  },
+  {
+    "model_name": "ideogram_reframe_V_3_QUALITY",
+    "supported_endpoint_types": [
+      "重构"
+    ]
+  },
+  {
+    "model_name": "ideogram_reframe_V_3_TURBO",
+    "supported_endpoint_types": [
+      "重构"
+    ]
+  },
+  {
+    "model_name": "ideogram_remix_V_1",
+    "supported_endpoint_types": [
+      "图片重制"
+    ]
+  },
+  {
+    "model_name": "ideogram_remix_V_1_TURBO",
+    "supported_endpoint_types": [
+      "图片重制"
+    ]
+  },
+  {
+    "model_name": "ideogram_remix_V_2",
+    "supported_endpoint_types": [
+      "图片重制"
+    ]
+  },
+  {
+    "model_name": "ideogram_remix_V_2_TURBO",
+    "supported_endpoint_types": [
+      "图片重制"
+    ]
+  },
+  {
+    "model_name": "ideogram_remix_V_3_DEFAULT",
+    "supported_endpoint_types": [
+      "图片重制"
+    ]
+  },
+  {
+    "model_name": "ideogram_remix_V_3_QUALITY",
+    "supported_endpoint_types": [
+      "图片重制"
+    ]
+  },
+  {
+    "model_name": "ideogram_remix_V_3_TURBO",
+    "supported_endpoint_types": [
+      "图片重制"
+    ]
+  },
+  {
+    "model_name": "ideogram_replace_background_V_3_DEFAULT",
+    "supported_endpoint_types": [
+      "替换背景"
+    ]
+  },
+  {
+    "model_name": "ideogram_replace_background_V_3_QUALITY",
+    "supported_endpoint_types": [
+      "替换背景"
+    ]
+  },
+  {
+    "model_name": "ideogram_replace_background_V_3_TURBO",
+    "supported_endpoint_types": [
+      "替换背景"
+    ]
+  },
+  {
+    "model_name": "ideogram_upscale",
+    "supported_endpoint_types": [
+      "放大"
+    ]
+  },
+  {
+    "model_name": "kling-advanced-lip-sync",
+    "supported_endpoint_types": [
+      "对口型"
+    ]
+  },
+  {
+    "model_name": "kling-audio",
+    "supported_endpoint_types": [
+      "文生音效",
+      "视频生音效",
+      "语音合成"
+    ]
+  },
+  {
+    "model_name": "kling-avatar-image2video",
+    "supported_endpoint_types": [
+      "数字人"
+    ]
+  },
+  {
+    "model_name": "kling-custom-elements",
+    "supported_endpoint_types": [
+      "custom-elements"
+    ]
+  },
+  {
+    "model_name": "kling-custom-voices",
+    "supported_endpoint_types": [
+      "自定义音色"
+    ]
+  },
+  {
+    "model_name": "kling-effects",
+    "supported_endpoint_types": [
+      "视频特效"
+    ]
+  },
+  {
+    "model_name": "kling-image",
+    "supported_endpoint_types": [
+      "kling生图"
+    ]
+  },
+  {
+    "model_name": "kling-image-recognize",
+    "supported_endpoint_types": [
+      "图像识别"
+    ]
+  },
+  {
+    "model_name": "kling-motion-control",
+    "supported_endpoint_types": [
+      "动作控制"
+    ]
+  },
+  {
+    "model_name": "kling-multi-elements",
+    "supported_endpoint_types": [
+      "多模态视频编辑"
+    ]
+  },
+  {
+    "model_name": "kling-omni-image",
+    "supported_endpoint_types": [
+      "omni-image"
+    ]
+  },
+  {
+    "model_name": "kling-omni-video",
+    "supported_endpoint_types": [
+      "omni-video"
+    ]
+  },
+  {
+    "model_name": "kling-video",
+    "supported_endpoint_types": [
+      "文生视频",
+      "图生视频"
+    ]
+  },
+  {
+    "model_name": "kling-video-extend",
+    "supported_endpoint_types": [
+      "视频延长"
+    ]
+  },
+  {
+    "model_name": "llama-2-13b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "llama-2-70b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "llama-2-7b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "llama-3-70b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "llama-3-8b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "llama-3-sonar-large-32k-chat",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "llama-3-sonar-small-32k-chat",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "llama-3.1-405b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "llama-3.1-405b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "llama-3.1-70b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "llama-3.1-70b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "llama-3.1-8b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "llama-3.1-8b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "llama-3.2-11b-vision-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "llama-3.2-1b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "llama-3.2-3b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "llama-3.2-90b-vision-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "llama-3.3-70b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "lucataco/animate-diff",
+    "supported_endpoint_types": [
+      "lucataco/animate-diff异步"
+    ]
+  },
+  {
+    "model_name": "lucataco/flux-schnell-lora",
+    "supported_endpoint_types": [
+      "lucataco/flux-schnell-lora异步"
+    ]
+  },
+  {
+    "model_name": "lucataco/remove-bg",
+    "supported_endpoint_types": [
+      "lucataco/remove-bg异步"
+    ]
+  },
+  {
+    "model_name": "luma_video_api",
+    "supported_endpoint_types": [
+      "luma视频生成"
+    ]
+  },
+  {
+    "model_name": "luma_video_extend_api",
+    "supported_endpoint_types": [
+      "luma视频扩展"
+    ]
+  },
+  {
+    "model_name": "meta-llama/llama-4-maverick",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "meta-llama/llama-4-scout",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "minimax/video-01",
+    "supported_endpoint_types": [
+      "minimax/video-01异步"
+    ]
+  },
+  {
+    "model_name": "minimax/video-01-live",
+    "supported_endpoint_types": [
+      "minimax/video-01-live异步"
+    ]
+  },
+  {
+    "model_name": "mistral-large-latest",
+    "supported_endpoint_types": []
+  },
+  {
+    "model_name": "mistral-small-latest",
+    "supported_endpoint_types": []
+  },
+  {
+    "model_name": "moonshot-v1-128k",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "moonshot-v1-32k",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "moonshot-v1-8k",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "netease-youdao/bce-reranker-base_v1",
+    "supported_endpoint_types": [
+      "rerank"
+    ]
+  },
+  {
+    "model_name": "o1",
+    "supported_endpoint_types": [
+      "openai-response",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "o1-2024-12-17",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "o1-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "o1-mini-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "o1-pro-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "o3",
+    "supported_endpoint_types": [
+      "openai-response",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "o3-2025-04-16",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "o3-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "o3-mini",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "o3-mini-2025-01-31",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "o3-mini-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "o3-mini-high-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "o3-pro",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "o3-pro-2025-06-10",
+    "supported_endpoint_types": [
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "o3-pro-all",
+    "supported_endpoint_types": [
+      "openai-response",
+      "openai"
+    ]
+  },
+  {
+    "model_name": "o4-mini",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "o4-mini-2025-04-16",
+    "supported_endpoint_types": [
+      "openai",
+      "openai-response"
+    ]
+  },
+  {
+    "model_name": "o4-mini-all",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "prunaai/vace-14b",
+    "supported_endpoint_types": [
+      "prunaai/vace-14b异步"
+    ]
+  },
+  {
+    "model_name": "qvq-max",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qvq-max-latest",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen-flash",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen-max",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen-max-latest",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen-turbo",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen-turbo-2025-07-15",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen-vl-max",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen-vl-max-2025-08-13",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen-vl-max-latest",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen2-vl-72b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen2-vl-7b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen2.5-14b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen2.5-14b-instruct-1m",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen2.5-32b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen2.5-3b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen2.5-72b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen2.5-7b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen2.5-7b-instruct-1m",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen2.5-coder-7b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen2.5-math-72b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen2.5-vl-32b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen2.5-vl-3b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen2.5-vl-72b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen2.5-vl-7b-instruct",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-0.6b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-1.7b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-14b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-235b-a22b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-30b-a3b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-32b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-4b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-8b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-max-preview",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-max-preview-n",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwen3-next-80b-a3b-thinking",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwq-32b",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwq-32b-preview",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwq-72b-preview",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwq-plus",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "qwq-plus-2025-03-05",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "recraft-ai/recraft-v3",
+    "supported_endpoint_types": [
+      "recraft-ai/recraft-v3异步"
+    ]
+  },
+  {
+    "model_name": "recraft-ai/recraft-v3-svg",
+    "supported_endpoint_types": [
+      "recraft-ai/recraft-v3-svg异步"
+    ]
+  },
+  {
+    "model_name": "riffusion/riffusion",
+    "supported_endpoint_types": [
+      "riffusion/riffusion异步"
+    ]
+  },
+  {
+    "model_name": "runwayml-gen3a_turbo-10",
+    "supported_endpoint_types": [
+      "runway图生视频"
+    ]
+  },
+  {
+    "model_name": "runwayml-gen3a_turbo-5",
+    "supported_endpoint_types": [
+      "runway图生视频"
+    ]
+  },
+  {
+    "model_name": "runwayml-gen4_turbo-10",
+    "supported_endpoint_types": [
+      "runway图生视频"
+    ]
+  },
+  {
+    "model_name": "runwayml-gen4_turbo-5",
+    "supported_endpoint_types": [
+      "runway图生视频"
+    ]
+  },
+  {
+    "model_name": "stability-ai/sdxl",
+    "supported_endpoint_types": [
+      "stability-ai/sdxl异步"
+    ]
+  },
+  {
+    "model_name": "stability-ai/stable-diffusion",
+    "supported_endpoint_types": [
+      "stability-ai/stable-diffusion异步"
+    ]
+  },
+  {
+    "model_name": "stability-ai/stable-diffusion-img2img",
+    "supported_endpoint_types": [
+      "stability-ai/stable-diffusion-img2img异步"
+    ]
+  },
+  {
+    "model_name": "stability-ai/stable-diffusion-inpainting",
+    "supported_endpoint_types": [
+      "stability-ai/stable-diffusion-inpainting异步"
+    ]
+  },
+  {
+    "model_name": "sujaykhandekar/object-removal",
+    "supported_endpoint_types": [
+      "sujaykhandekar/object-removal异步"
+    ]
+  },
+  {
+    "model_name": "suno_lyrics",
+    "supported_endpoint_types": [
+      "suno音乐生成"
+    ]
+  },
+  {
+    "model_name": "suno_music",
+    "supported_endpoint_types": [
+      "suno音乐生成"
+    ]
+  },
+  {
+    "model_name": "suno_uploads",
+    "supported_endpoint_types": []
+  },
+  {
+    "model_name": "text-babbage-001",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "text-curie-001",
+    "supported_endpoint_types": [
+      "openai"
+    ]
+  },
+  {
+    "model_name": "text-embedding-3-large",
+    "supported_endpoint_types": [
+      "嵌入"
+    ]
+  },
+  {
+    "model_name": "text-embedding-3-small",
+    "supported_endpoint_types": [
+      "嵌入"
+    ]
+  },
+  {
+    "model_name": "text-embedding-ada-002",
+    "supported_endpoint_types": [
+      "嵌入"
+    ]
+  },
+  {
+    "model_name": "text-embedding-v1",
+    "supported_endpoint_types": [
+      "嵌入"
+    ]
+  },
+  {
+    "model_name": "text-search-ada-doc-001",
+    "supported_endpoint_types": [
+      "嵌入"
+    ]
+  },
+  {
+    "model_name": "tts-1",
+    "supported_endpoint_types": [
+      "文本转语音"
+    ]
+  },
+  {
+    "model_name": "tts-1-1106",
+    "supported_endpoint_types": [
+      "文本转语音"
+    ]
+  },
+  {
+    "model_name": "tts-1-hd",
+    "supported_endpoint_types": [
+      "文本转语音"
+    ]
+  },
+  {
+    "model_name": "tts-1-hd-1106",
+    "supported_endpoint_types": [
+      "文本转语音"
+    ]
+  },
+  {
+    "model_name": "veo2",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "veo2-fast",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "veo2-fast-components",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "veo2-fast-frames",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "veo2-pro",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "veo2-pro-components",
+    "supported_endpoint_types": [
+      "视频统一格式"
+    ]
+  },
+  {
+    "model_name": "whisper-1",
+    "supported_endpoint_types": [
+      "语音转文字"
+    ]
+  }
+]

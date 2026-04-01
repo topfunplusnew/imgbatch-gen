@@ -1,0 +1,10 @@
+diff a/web/src/services/api.ts b/web/src/services/api.ts	(rejected hunks)
+@@ -415,7 +415,7 @@
+       method: 'POST',
+       headers: {
+         'Content-Type': 'application/json',
+-        ...(apiConfig.apiKey ? { Authorization: `Bearer ${apiConfig.apiKey}` } : {}),
++        ...buildModelAuthHeaders(),
+       },
+       body: JSON.stringify({ ...request, stream: true }),
+       signal: controller.signal,

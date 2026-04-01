@@ -1,0 +1,8 @@
+# uv 配置文件
+index-url = "https://mirrors.aliyun.com/pypi/simple/"
+
+# 或者使用 index 方式（支持多个源）
+# [[index]]
+# name = "aliyun"
+# url = "https://mirrors.aliyun.com/pypi/simple/"
+# default = true

@@ -1,0 +1,451 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [release]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYPI_INDEX_URL: https://mirrors.aliyun.com/pypi/simple/
+  UV_DEFAULT_INDEX: https://mirrors.aliyun.com/pypi/simple/
+  PIP_INDEX_URL: https://mirrors.aliyun.com/pypi/simple/
+  NPM_REGISTRY: https://registry.npmmirror.com
+  NPM_CONFIG_REGISTRY: https://registry.npmmirror.com
+  DEBIAN_MIRROR: mirrors.aliyun.com
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.ref_name == 'release'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install backend dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Run backend tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          uv run pytest
+          status=$?
+          set -e
+          if [ "$status" -eq 5 ]; then
+            echo "No pytest tests were collected, continuing release build."
+            exit 0
+          fi
+          exit "$status"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+          registry-url: ${{ env.NPM_REGISTRY }}
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: |
+          npm config set registry "$NPM_REGISTRY"
+          npm ci --no-audit --no-fund
+
+      - name: Build frontend
+        working-directory: web
+        run: npm run build
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          tags: img-batch-agent-backend:latest
+          load: true
+          build-args: |
+            PYPI_INDEX_URL=${{ env.PYPI_INDEX_URL }}
+            DEBIAN_MIRROR=${{ env.DEBIAN_MIRROR }}
+          cache-from: type=gha,scope=backend-image
+          cache-to: type=gha,mode=max,scope=backend-image
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web
+          file: ./web/Dockerfile
+          tags: img-batch-agent-frontend:latest
+          load: true
+          build-args: |
+            NPM_REGISTRY=${{ env.NPM_REGISTRY }}
+          cache-from: type=gha,scope=frontend-image
+          cache-to: type=gha,mode=max,scope=frontend-image
+
+      - name: Validate docker compose file
+        run: docker compose -f docker-compose.yml config
+
+      - name: Validate nginx configuration
+        run: |
+          docker run --rm \
+            --add-host backend:127.0.0.1 \
+            --add-host minio:127.0.0.1 \
+            -v "$PWD/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
+            -v "$PWD/web/dist:/usr/share/nginx/html:ro" \
+            nginx:1.27-alpine nginx -t
+
+      - name: Prepare deploy payload
+        run: |
+          mkdir -p deploy-root/web
+          cp Dockerfile .dockerignore pyproject.toml uv.lock README.md docker-compose.yml env.example deploy-root/
+          cp -r src deploy-root/src
+          if [ -d migrations ]; then cp -r migrations deploy-root/; fi
+          if [ -d sql ]; then cp -r sql deploy-root/; fi
+          cp web/Dockerfile web/package.json web/package-lock.json web/index.html web/jsconfig.json web/postcss.config.js web/tailwind.config.js web/vite.config.js web/nginx.conf web/.env.production deploy-root/web/
+          if [ -d web/public ]; then cp -r web/public deploy-root/web/; fi
+          cp -r web/dist deploy-root/web/dist
+          cp -r web/src deploy-root/web/src
+          test -f deploy-root/web/dist/index.html
+          tar czf deploy-root.tgz -C deploy-root .
+
+      - name: Export Docker images
+        run: |
+          mkdir -p image-artifacts
+          docker save img-batch-agent-backend:latest | gzip > image-artifacts/backend-image.tar.gz
+          docker save img-batch-agent-frontend:latest | gzip > image-artifacts/frontend-image.tar.gz
+          ls -lh image-artifacts
+
+      - name: Upload deploy payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-root
+          path: deploy-root.tgz
+
+      - name: Upload Docker images
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-images
+          path: image-artifacts/*.tar.gz
+
+  deploy:
+    needs: build
+    if: github.ref_name == 'release'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Download deploy payload
+        uses: actions/download-artifact@v4
+        with:
+          name: deploy-root
+          path: artifacts
+
+      - name: Download Docker images
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-images
+          path: image-artifacts
+
+      - name: Extract deployment artifacts
+        run: |
+          mkdir -p deploy-root
+          tar xzf artifacts/deploy-root.tgz -C deploy-root
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          python - <<'PY'
+          import base64
+          import os
+          import sys
+
+          raw = os.environ["DEPLOY_SSH_KEY"].strip().strip('"').strip("'")
+          output_path = os.path.expanduser("~/.ssh/id_ed25519")
+
+          if "\\n" in raw and "BEGIN " in raw:
+              key_text = raw.replace("\\r", "").replace("\\n", "\n")
+              if not key_text.endswith("\n"):
+                  key_text += "\n"
+              key_bytes = key_text.encode("utf-8")
+          elif "BEGIN " in raw:
+              key_text = raw.replace("\r", "")
+              if not key_text.endswith("\n"):
+                  key_text += "\n"
+              key_bytes = key_text.encode("utf-8")
+          else:
+              compact = "".join(raw.replace("\r", "").split())
+              try:
+                  key_bytes = base64.b64decode(compact, validate=True)
+              except Exception as exc:
+                  sys.stderr.write(
+                      "DEPLOY_SSH_KEY is not a valid private key. "
+                      "Provide raw multiline key text, a single-line key with literal \\\\n, "
+                      "or a base64-encoded private key.\\n"
+                  )
+                  raise
+
+          with open(output_path, "wb") as fh:
+              fh.write(key_bytes)
+          PY
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
+          ssh-keyscan -p "$DEPLOY_PORT" "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Show SSH diagnostics
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          echo "Deploy target: $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PORT"
+          echo "Private key fingerprint:"
+          ssh-keygen -lf ~/.ssh/id_ed25519
+          echo "Derived public key fingerprint:"
+          ssh-keygen -lf ~/.ssh/id_ed25519.pub
+          echo "Known hosts entry:"
+          ssh-keygen -F "[$DEPLOY_HOST]:$DEPLOY_PORT" -f ~/.ssh/known_hosts || true
+          echo "SSH directory permissions:"
+          ls -ld ~/.ssh
+          ls -l ~/.ssh
+
+      - name: Test SSH connectivity
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_ed25519 \
+            -vvv \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o PreferredAuthentications=publickey \
+            -o StrictHostKeyChecking=yes \
+            -p "$DEPLOY_PORT" \
+            "$DEPLOY_USER@$DEPLOY_HOST" "echo ok"
+
+      - name: Prepare remote directories
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          ssh_cmd="ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -p $DEPLOY_PORT"
+          $ssh_cmd "$DEPLOY_USER@$DEPLOY_HOST" \
+            "mkdir -p '$DEPLOY_PATH/web' '$DEPLOY_PATH/data' '$DEPLOY_PATH/logs' '$DEPLOY_PATH/storage' '$DEPLOY_PATH/src' '$DEPLOY_PATH/migrations' '$DEPLOY_PATH/sql' && rm -rf '$DEPLOY_PATH/.deploy-images'"
+
+      - name: Sync files
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          rsync_ssh="ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -p $DEPLOY_PORT"
+
+          rsync -az -e "$rsync_ssh" \
+            deploy-root/Dockerfile \
+            deploy-root/.dockerignore \
+            deploy-root/pyproject.toml \
+            deploy-root/uv.lock \
+            deploy-root/README.md \
+            deploy-root/env.example \
+            deploy-root/docker-compose.yml \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
+
+          rsync -az --delete -e "$rsync_ssh" \
+            deploy-root/src/ \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/src/"
+
+          if [ -d deploy-root/migrations ]; then
+            rsync -az --delete -e "$rsync_ssh" \
+              deploy-root/migrations/ \
+              "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/migrations/"
+          fi
+
+          if [ -d deploy-root/sql ]; then
+            rsync -az --delete -e "$rsync_ssh" \
+              deploy-root/sql/ \
+              "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/sql/"
+          fi
+
+          rsync -az --delete -e "$rsync_ssh" \
+            deploy-root/web/ \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/web/"
+
+      - name: Remote deploy
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          ssh_cmd="ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -p $DEPLOY_PORT"
+
+          $ssh_cmd "$DEPLOY_USER@$DEPLOY_HOST" "docker image prune -f >/dev/null 2>&1 || true"
+          $ssh_cmd "$DEPLOY_USER@$DEPLOY_HOST" "df -h '$DEPLOY_PATH' || true; docker system df || true"
+
+          for archive in image-artifacts/backend-image.tar.gz image-artifacts/frontend-image.tar.gz; do
+            if [ ! -f "$archive" ]; then
+              echo "Missing Docker image archive: $archive"
+              exit 1
+            fi
+            echo "Streaming $(basename "$archive") to remote docker daemon"
+            gzip -dc "$archive" | $ssh_cmd "$DEPLOY_USER@$DEPLOY_HOST" "docker load"
+          done
+
+          $ssh_cmd "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'EOF'
+          set -euo pipefail
+
+          cd "$DEPLOY_PATH"
+          if [ -f .env ]; then
+            set -a
+            . ./.env
+            set +a
+          fi
+
+          compose_cmd=(docker compose)
+          if [ -f .env ]; then
+            compose_cmd+=(--env-file .env)
+          fi
+          frontend_port="${FRONTEND_PORT:-8080}"
+          rm -rf .deploy-images || true
+
+          "${compose_cmd[@]}" config >/dev/null
+
+          "${compose_cmd[@]}" up -d --no-build --remove-orphans postgres postgres-init minio minio-init backend
+          for i in $(seq 1 30); do
+            postgres_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' img-batch-agent-postgres 2>/dev/null || true)"
+            echo "Postgres status attempt $i: ${postgres_status:-missing}"
+            if [ "$postgres_status" = "healthy" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ "$postgres_status" != "healthy" ]; then
+            echo "Postgres did not become healthy in time"
+            "${compose_cmd[@]}" logs --tail=200 postgres postgres-init
+            exit 1
+          fi
+
+          for i in $(seq 1 30); do
+            postgres_init_status="$(docker inspect --format '{{.State.Status}}' img-batch-agent-postgres-init 2>/dev/null || true)"
+            postgres_init_exit_code="$(docker inspect --format '{{.State.ExitCode}}' img-batch-agent-postgres-init 2>/dev/null || true)"
+            echo "Postgres init attempt $i: status=${postgres_init_status:-missing} exit=${postgres_init_exit_code:-n/a}"
+            if [ "$postgres_init_status" = "exited" ] && [ "$postgres_init_exit_code" = "0" ]; then
+              break
+            fi
+            if [ "$postgres_init_status" = "exited" ] && [ "${postgres_init_exit_code:-1}" != "0" ]; then
+              echo "Postgres init failed"
+              "${compose_cmd[@]}" logs --tail=200 postgres postgres-init
+              exit 1
+            fi
+            sleep 2
+          done
+          if [ "$postgres_init_status" != "exited" ] || [ "$postgres_init_exit_code" != "0" ]; then
+            echo "Postgres init did not finish successfully in time"
+            "${compose_cmd[@]}" logs --tail=200 postgres postgres-init
+            exit 1
+          fi
+          for i in $(seq 1 60); do
+            backend_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' img-batch-agent-backend 2>/dev/null || true)"
+            echo "Backend status attempt $i: ${backend_status:-missing}"
+            if [ "$backend_status" = "healthy" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ "$backend_status" != "healthy" ]; then
+            echo "Backend did not become healthy in time"
+            "${compose_cmd[@]}" logs --tail=200 postgres postgres-init backend
+            exit 1
+          fi
+
+          "${compose_cmd[@]}" up -d --no-build --force-recreate frontend
+          for i in $(seq 1 30); do
+            frontend_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' img-batch-agent-frontend 2>/dev/null || true)"
+            echo "Frontend status attempt $i: ${frontend_status:-missing}"
+            if [ "$frontend_status" = "healthy" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ "$frontend_status" != "healthy" ]; then
+            echo "Frontend did not start in time"
+            "${compose_cmd[@]}" logs --tail=200 frontend
+            exit 1
+          fi
+
+          curl -fsS "http://127.0.0.1:${frontend_port}/nginx-health" >/dev/null || {
+            "${compose_cmd[@]}" logs --tail=200 frontend
+            exit 1
+          }
+          curl -fsS "http://127.0.0.1:${frontend_port}/" >/dev/null || {
+            "${compose_cmd[@]}" logs --tail=200 frontend
+            exit 1
+          }
+          curl -fsS "http://127.0.0.1:${frontend_port}/api/v1/health/storage" >/dev/null || {
+            "${compose_cmd[@]}" logs --tail=200 postgres postgres-init backend frontend
+            exit 1
+          }
+
+          docker image prune -f >/dev/null 2>&1 || true
+          "${compose_cmd[@]}" ps
+          EOF
+
+      - name: Collect remote logs on failure
+        if: failure()
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set +e
+          ssh -i ~/.ssh/id_ed25519 \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -p "$DEPLOY_PORT" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && docker compose --env-file .env ps && echo '--- POSTGRES LOGS ---' && docker compose --env-file .env logs --tail=200 postgres postgres-init && echo '--- MINIO LOGS ---' && docker compose --env-file .env logs --tail=200 minio minio-init && echo '--- BACKEND LOGS ---' && docker compose --env-file .env logs --tail=200 backend && echo '--- FRONTEND LOGS ---' && docker compose --env-file .env logs --tail=200 frontend"

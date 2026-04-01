@@ -1,0 +1,22 @@
+FROM node:20.19.0-alpine AS builder
+
+WORKDIR /app
+
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+
+COPY package.json package-lock.json ./
+RUN npm config set registry "${NPM_REGISTRY}" \
+    && npm config set replace-registry-host always \
+    && npm ci --no-audit --no-fund
+
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

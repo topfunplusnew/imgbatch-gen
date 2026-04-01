@@ -1,0 +1,161 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  PYPI_INDEX_URL: https://mirrors.aliyun.com/pypi/simple/
+  UV_DEFAULT_INDEX: https://mirrors.aliyun.com/pypi/simple/
+  PIP_INDEX_URL: https://mirrors.aliyun.com/pypi/simple/
+  NPM_REGISTRY: https://registry.npmmirror.com
+  NPM_CONFIG_REGISTRY: https://registry.npmmirror.com
+  DEBIAN_MIRROR: mirrors.aliyun.com
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install backend dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Run backend tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          uv run pytest
+          status=$?
+          set -e
+          if [ "$status" -eq 5 ]; then
+            echo "No pytest tests were collected, continuing CI."
+            exit 0
+          fi
+          exit "$status"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+          registry-url: ${{ env.NPM_REGISTRY }}
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: |
+          npm config set registry "$NPM_REGISTRY"
+          npm ci --no-audit --no-fund
+
+      - name: Build frontend
+        working-directory: web
+        run: npm run build
+
+      - name: Free runner disk space before Docker build
+        run: |
+          echo "Disk usage before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache
+          docker system prune -af || true
+          docker builder prune -af || true
+          echo "Disk usage after cleanup:"
+          df -h
+
+      - name: Validate docker compose file
+        run: docker compose -f docker-compose.yml config
+
+      - name: Validate postgres schema initialization
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose up -d postgres postgres-init
+          for i in $(seq 1 30); do
+            postgres_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' img-batch-agent-postgres 2>/dev/null || true)"
+            echo "Postgres status attempt $i: ${postgres_status:-missing}"
+            if [ "$postgres_status" = "healthy" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ "${postgres_status:-}" != "healthy" ]; then
+            docker compose logs --tail=200 postgres postgres-init
+            exit 1
+          fi
+
+          for i in $(seq 1 30); do
+            init_status="$(docker inspect --format '{{.State.Status}}' img-batch-agent-postgres-init 2>/dev/null || true)"
+            init_exit_code="$(docker inspect --format '{{.State.ExitCode}}' img-batch-agent-postgres-init 2>/dev/null || true)"
+            echo "Postgres init attempt $i: status=${init_status:-missing} exit=${init_exit_code:-n/a}"
+            if [ "$init_status" = "exited" ] && [ "$init_exit_code" = "0" ]; then
+              exit 0
+            fi
+            if [ "$init_status" = "exited" ] && [ "${init_exit_code:-1}" != "0" ]; then
+              docker compose logs --tail=200 postgres postgres-init
+              exit 1
+            fi
+            sleep 2
+          done
+
+          docker compose logs --tail=200 postgres postgres-init
+          exit 1
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          tags: img-batch-agent-backend:latest
+          load: true
+          build-args: |
+            PYPI_INDEX_URL=${{ env.PYPI_INDEX_URL }}
+            DEBIAN_MIRROR=${{ env.DEBIAN_MIRROR }}
+          cache-from: type=gha,scope=backend-image
+          cache-to: type=gha,mode=max,scope=backend-image
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web
+          file: ./web/Dockerfile
+          tags: img-batch-agent-frontend:latest
+          load: true
+          build-args: |
+            NPM_REGISTRY=${{ env.NPM_REGISTRY }}
+          cache-from: type=gha,scope=frontend-image
+          cache-to: type=gha,mode=max,scope=frontend-image
+
+      - name: Validate nginx configuration
+        run: |
+          docker run --rm \
+            --add-host backend:127.0.0.1 \
+            --add-host minio:127.0.0.1 \
+            -v "$PWD/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
+            -v "$PWD/web/dist:/usr/share/nginx/html:ro" \
+            nginx:1.27-alpine nginx -t
+
+      - name: Cleanup compose services
+        if: always()
+        run: docker compose down -v
