@@ -297,12 +297,15 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useAppStore } from '@/store/useAppStore'
 import { api } from '@/services/api'
 import { notification } from '@/utils/notification'
 
+const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 
@@ -342,8 +345,17 @@ function toggleMode() {
 
 // 返回首页
 function backToHome() {
-  appStore.setCurrentPage('agent')
+  router.push('/')
 }
+
+// 从 URL 读取邀请码
+onMounted(() => {
+  const code = route.query.code
+  if (code) {
+    form.value.inviteCode = String(code)
+    isLoginMode.value = false // 有邀请码自动切到注册模式
+  }
+})
 
 // 处理表单提交
 async function handleSubmit() {
@@ -367,7 +379,7 @@ async function handleSubmit() {
     }
 
     // 成功后跳转
-    appStore.setCurrentPage('agent')
+    router.push('/')
   } catch (error) {
     notification.error('操作失败', error?.response?.data?.detail || '请重试')
   } finally {

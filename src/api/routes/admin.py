@@ -241,12 +241,8 @@ async def adjust_user_points(
     if body.points_change < 0 and account.points < abs(body.points_change):
         raise HTTPException(status_code=400, detail="用户积分不足")
 
-    # 调整积分
+    # 调整积分（由 add_transaction 统一处理账户更新，避免重复加）
     old_points = account.points
-    account.points += body.points_change
-    await db_manager.update_account(account)
-
-    # 记录交易
     transaction_type = "gift" if body.points_change > 0 else "system_adjust"
     await db_manager.add_transaction(
         user_id=user_id,
@@ -255,6 +251,8 @@ async def adjust_user_points(
         amount=0,
         description=f"管理员调整: {body.reason}",
     )
+    # 重新读取最新积分
+    account = await db_manager.get_account_by_user(user_id)
 
     logger.info(
         f"管理员 {admin['id']} 调整用户 {user_id} 积分: "
@@ -292,12 +290,8 @@ async def adjust_user_balance(
     if body.points_change < 0 and account.balance < abs(body.points_change):
         raise HTTPException(status_code=400, detail="用户余额不足")
 
-    # 调整余额
+    # 调整余额（由 add_transaction 统一处理账户更新，避免重复加）
     old_balance = account.balance
-    account.balance += body.points_change
-    await db_manager.update_account(account)
-
-    # 记录交易
     transaction_type = "recharge" if body.points_change > 0 else "system_adjust"
     await db_manager.add_transaction(
         user_id=user_id,
@@ -306,6 +300,7 @@ async def adjust_user_balance(
         points_change=0,
         description=f"管理员调整: {body.reason}",
     )
+    account = await db_manager.get_account_by_user(user_id)
 
     logger.info(
         f"管理员 {admin['id']} 调整用户 {user_id} 余额: "

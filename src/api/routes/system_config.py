@@ -251,3 +251,79 @@ async def batch_update_config(
     except Exception as exc:
         logger.error(f"Failed to batch update configs: {exc}")
         raise HTTPException(status_code=500, detail="Failed to batch update configs.")
+
+
+# ==================== 场景库数据接口 ====================
+
+SCENES_CONFIG_KEY = "scenes.data"
+
+
+@router.get("/scenes", summary="获取场景库数据（公开）")
+async def get_scenes_data():
+    """公开接口，所有用户可读取场景库数据。不需要登录。"""
+    import json
+    from pathlib import Path
+
+    db_manager = get_db_manager()
+    try:
+        async with db_manager.get_session() as session:
+            config = await session.scalar(
+                select(SystemConfig).where(SystemConfig.config_key == SCENES_CONFIG_KEY)
+            )
+            if config and config.config_value:
+                return json.loads(config.config_value)
+    except Exception as exc:
+        logger.warning(f"Failed to load scenes from DB, falling back to JSON file: {exc}")
+
+    # Fallback: load from static JSON file
+    json_path = Path(__file__).parent.parent.parent.parent / "web" / "public" / "data" / "scenes.json"
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"categories": [], "scenes": []}
+
+
+class UpdateScenesRequest(BaseModel):
+    """Request body for updating scenes data."""
+    categories: list = Field(default_factory=list, description="场景分类列表")
+    scenes: list = Field(default_factory=list, description="场景列表")
+
+
+@router.post("/scenes", summary="更新场景库数据（管理员）")
+async def update_scenes_data(
+    body: UpdateScenesRequest,
+    user: dict = Depends(RequiredAuthDependency()),
+):
+    """管理员接口，更新场景库数据。"""
+    import json
+
+    if not await verify_admin(user["id"]):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+
+    db_manager = get_db_manager()
+    scenes_json = json.dumps({"categories": body.categories, "scenes": body.scenes}, ensure_ascii=False)
+
+    try:
+        async with db_manager.get_session() as session:
+            config = await session.scalar(
+                select(SystemConfig).where(SystemConfig.config_key == SCENES_CONFIG_KEY)
+            )
+            if config:
+                config.config_value = scenes_json
+                config.updated_by = user["id"]
+            else:
+                session.add(SystemConfig(
+                    config_key=SCENES_CONFIG_KEY,
+                    config_value=scenes_json,
+                    config_type="json",
+                    category="content",
+                    description="场景库数据",
+                    updated_by=user["id"],
+                ))
+            await session.commit()
+
+        return {"success": True, "message": f"场景库已更新，共 {len(body.scenes)} 个场景"}
+    except Exception as exc:
+        logger.error(f"Failed to update scenes data: {exc}")
+        raise HTTPException(status_code=500, detail="更新场景库失败")

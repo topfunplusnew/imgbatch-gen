@@ -92,6 +92,16 @@
               案例管理
             </button>
             <button
+              @click="activeTab = 'scenes'"
+              :class="[
+                'w-full px-4 py-3 rounded-xl text-left font-medium flex items-center gap-3',
+                activeTab === 'scenes' ? 'bg-primary text-white' : 'text-ink-700 hover:bg-gray-50'
+              ]"
+            >
+              <span class="material-symbols-outlined !text-xl">grid_view</span>
+              场景库管理
+            </button>
+            <button
               @click="activeTab = 'config'"
               :class="[
                 'w-full px-4 py-3 rounded-xl text-left font-medium flex items-center gap-3',
@@ -689,6 +699,117 @@
             <CaseManagement />
           </div>
 
+          <!-- 场景库管理 -->
+          <div v-if="activeTab === 'scenes'" class="space-y-6">
+            <div class="flex items-center justify-between">
+              <h2 class="text-2xl font-bold text-ink-950">场景库管理</h2>
+              <button
+                @click="showSceneForm = true; editingScene = null"
+                class="px-4 py-2 bg-primary text-white rounded-xl font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
+              >
+                <span class="material-symbols-outlined !text-lg">add</span>
+                添加场景
+              </button>
+            </div>
+
+            <!-- Scene list -->
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div v-for="scene in sceneList" :key="scene.id"
+                class="rounded-2xl border border-border-dark bg-white p-4 shadow-sm">
+                <div class="flex items-start gap-3">
+                  <div class="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary-soft text-2xl">
+                    {{ scene.icon || '📁' }}
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <h4 class="font-semibold text-ink-950">{{ scene.name }}</h4>
+                    <p class="mt-0.5 text-xs text-ink-500">{{ scene.category }} · {{ scene.templates?.length || 0 }}个模版</p>
+                    <p class="mt-1 text-xs text-ink-700 line-clamp-2">{{ scene.description }}</p>
+                  </div>
+                </div>
+                <div v-if="scene.coverImage" class="mt-3 aspect-video overflow-hidden rounded-xl">
+                  <img :src="scene.coverImage" class="h-full w-full object-cover" />
+                </div>
+                <div class="mt-3 flex gap-2">
+                  <el-button size="small" @click="editScene(scene)">
+                    <span class="material-symbols-outlined !text-sm">edit</span>编辑
+                  </el-button>
+                  <el-button size="small" @click="editSceneTemplates(scene)">
+                    <span class="material-symbols-outlined !text-sm">list</span>模版
+                  </el-button>
+                  <el-button size="small" type="danger" @click="deleteScene(scene)">
+                    <span class="material-symbols-outlined !text-sm">delete</span>
+                  </el-button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Scene form dialog -->
+            <el-dialog v-model="showSceneForm" :title="editingScene ? '编辑场景' : '添加场景'" width="min(520px, 90vw)">
+              <el-form label-position="top" class="space-y-4">
+                <el-form-item label="名称">
+                  <el-input v-model="sceneForm.name" placeholder="场景名称" />
+                </el-form-item>
+                <el-form-item label="图标 (emoji)">
+                  <el-input v-model="sceneForm.icon" placeholder="如：📚" />
+                </el-form-item>
+                <el-form-item label="分类">
+                  <el-select v-model="sceneForm.category" placeholder="选择分类">
+                    <el-option label="教育智慧" value="education" />
+                    <el-option label="创意文案" value="creative" />
+                    <el-option label="内容创作" value="content" />
+                    <el-option label="生活百科" value="life" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="描述">
+                  <el-input v-model="sceneForm.description" type="textarea" :rows="3" placeholder="场景描述" />
+                </el-form-item>
+                <el-form-item label="封面图片">
+                  <el-upload
+                    :auto-upload="false"
+                    :show-file-list="false"
+                    accept="image/*"
+                    :on-change="handleSceneCoverUpload"
+                  >
+                    <el-button>上传封面</el-button>
+                  </el-upload>
+                  <img v-if="sceneForm.coverImage" :src="sceneForm.coverImage" class="mt-2 h-24 rounded-xl object-cover" />
+                </el-form-item>
+              </el-form>
+              <template #footer>
+                <el-button @click="showSceneForm = false">取消</el-button>
+                <el-button type="primary" @click="saveScene">保存</el-button>
+              </template>
+            </el-dialog>
+
+            <!-- Template management dialog -->
+            <el-dialog v-model="showTemplateManager" :title="`${editingScene?.name} - 模版管理`" width="min(700px, 95vw)">
+              <div class="mb-4 flex items-center justify-between">
+                <span class="text-sm text-ink-500">共 {{ editingScene?.templates?.length || 0 }} 个模版</span>
+                <el-button size="small" type="primary" @click="addTemplate">
+                  <span class="material-symbols-outlined !text-sm">add</span>添加模版
+                </el-button>
+              </div>
+              <div class="space-y-3 max-h-[60vh] overflow-y-auto">
+                <div v-for="(tpl, i) in editingScene?.templates || []" :key="i"
+                  class="rounded-xl border border-border-dark p-3">
+                  <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <el-input v-model="tpl.title" placeholder="模版标题" />
+                    <el-input v-model="tpl.type" placeholder="类型（如：海报设计）" />
+                    <el-input v-model="tpl.style" placeholder="风格（如：手绘）" />
+                    <el-input v-model="tpl.prompt" type="textarea" :rows="2" placeholder="提示词模版" class="md:col-span-2" />
+                  </div>
+                  <div class="mt-2 flex justify-end">
+                    <el-button size="small" type="danger" text @click="removeTemplate(i)">删除</el-button>
+                  </div>
+                </div>
+              </div>
+              <template #footer>
+                <el-button @click="showTemplateManager = false">关闭</el-button>
+                <el-button type="primary" @click="saveSceneTemplates">保存</el-button>
+              </template>
+            </el-dialog>
+          </div>
+
           <!-- 公告管理 -->
           <div v-if="activeTab === 'announcements'" class="space-y-6">
             <div class="flex items-center justify-between">
@@ -1114,17 +1235,139 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAppStore } from '@/store/useAppStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { api, type SystemConfigItem } from '@/services/api'
 import CaseManagement from '@/components/admin/CaseManagement.vue'
 import AnnouncementForm from '@/components/admin/AnnouncementForm.vue'
 
+const router = useRouter()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 
 const activeTab = ref('overview')
 const loading = ref(false)
+
+// 场景库管理状态
+const sceneList = ref<any[]>([])
+const showSceneForm = ref(false)
+const showTemplateManager = ref(false)
+const editingScene = ref<any>(null)
+const sceneForm = ref({ name: '', icon: '', category: 'education', description: '', coverImage: '' })
+
+function editScene(scene: any) {
+  editingScene.value = scene
+  sceneForm.value = { name: scene.name, icon: scene.icon, category: scene.category, description: scene.description, coverImage: scene.coverImage || '' }
+  showSceneForm.value = true
+}
+
+function editSceneTemplates(scene: any) {
+  editingScene.value = scene
+  showTemplateManager.value = true
+}
+
+async function syncScenesToServer() {
+  try {
+    // Load default scenes from JSON to merge with admin edits
+    let defaultScenes = []
+    let defaultCategories = []
+    try {
+      const res = await fetch('/data/scenes.json')
+      const data = await res.json()
+      defaultScenes = data.scenes || []
+      defaultCategories = data.categories || []
+    } catch {}
+
+    // Merge: admin scenes override defaults by id
+    const adminIds = new Set(sceneList.value.map(s => s.id))
+    const mergedScenes = [
+      ...sceneList.value,
+      ...defaultScenes.filter(s => !adminIds.has(s.id))
+    ]
+
+    await api.updateSystemConfig({
+      config_key: 'scenes.data',
+      config_value: JSON.stringify({ categories: sceneCategories.value.length > 0 ? sceneCategories.value : defaultCategories, scenes: mergedScenes })
+    }).catch(() => {
+      // Fallback: try the scenes-specific endpoint
+      return fetch('/api/v1/admin/system-config/scenes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categories: defaultCategories, scenes: mergedScenes })
+      })
+    })
+  } catch (e) {
+    console.error('Failed to sync scenes to server:', e)
+  }
+}
+
+function saveScene() {
+  const data = { ...sceneForm.value, id: editingScene.value?.id || `scene_${Date.now()}`, templates: editingScene.value?.templates || [], templateCount: editingScene.value?.templates?.length || 0 }
+  if (editingScene.value) {
+    const idx = sceneList.value.findIndex(s => s.id === editingScene.value.id)
+    if (idx >= 0) sceneList.value[idx] = { ...sceneList.value[idx], ...data }
+    else sceneList.value.push(data)
+  } else {
+    sceneList.value.push(data)
+  }
+  showSceneForm.value = false
+  syncScenesToServer()
+}
+
+function deleteScene(scene: any) {
+  sceneList.value = sceneList.value.filter(s => s.id !== scene.id)
+  syncScenesToServer()
+}
+
+function addTemplate() {
+  if (!editingScene.value) return
+  if (!editingScene.value.templates) editingScene.value.templates = []
+  editingScene.value.templates.push({ id: `tpl_${Date.now()}`, title: '', type: '', style: '', prompt: '', exampleImage: '' })
+}
+
+function removeTemplate(index: number) {
+  editingScene.value?.templates?.splice(index, 1)
+}
+
+function saveSceneTemplates() {
+  if (!editingScene.value) return
+  editingScene.value.templateCount = editingScene.value.templates?.length || 0
+  const idx = sceneList.value.findIndex(s => s.id === editingScene.value.id)
+  if (idx >= 0) sceneList.value[idx] = { ...editingScene.value }
+  showTemplateManager.value = false
+  syncScenesToServer()
+}
+
+function handleSceneCoverUpload(uploadFile: any) {
+  const file = uploadFile?.raw || uploadFile
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (e) => { sceneForm.value.coverImage = e.target?.result as string }
+  reader.readAsDataURL(file)
+}
+
+const sceneCategories = ref([])
+
+// Load saved scenes from API
+async function loadScenesFromServer() {
+  try {
+    const res = await fetch('/api/v1/admin/system-config/scenes')
+    const data = await res.json()
+    if (data.scenes?.length) {
+      // Only load admin-created scenes (not the default ones from JSON)
+      sceneList.value = data.scenes.filter(s => s.id?.startsWith('scene_'))
+    }
+    if (data.categories?.length) sceneCategories.value = data.categories
+  } catch {
+    // Fallback to localStorage
+    try {
+      const saved = localStorage.getItem('admin_scenes')
+      if (saved) sceneList.value = JSON.parse(saved)
+    } catch {}
+  }
+}
+loadScenesFromServer()
 
 // 公告管理状态
 const showAnnouncementForm = ref(false)
@@ -1242,7 +1485,7 @@ const adjustedBalanceYuan = computed(() => {
 })
 
 function goHome() {
-  appStore.setCurrentPage('agent')
+  router.push('/')
 }
 
 function formatDate(dateStr) {

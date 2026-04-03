@@ -285,7 +285,7 @@ async function redirectToLoginForUnauthorized(error: AxiosError) {
 
   authStore.clearAuth()
   appStore.setAuthRedirectNotice({ title, message })
-  appStore.goToLogin(true)
+  window.location.href = '/login'
   notification.warning(title, message, 4500)
 }
 
@@ -691,10 +691,21 @@ export const api = {
       })
       const { upload_url, file_url, filename } = presignedResponse.data
 
-      console.log(`[MinIO上传] 获取预签名URL成功: ${upload_url}`)
+      // In dev mode, rewrite the upload URL to go through Vite proxy
+      let finalUploadUrl = upload_url
+      if (import.meta.env.DEV && upload_url) {
+        try {
+          const u = new URL(upload_url)
+          const current = new URL(window.location.href)
+          u.host = current.host
+          u.protocol = current.protocol
+          finalUploadUrl = u.toString()
+        } catch {}
+      }
+      console.log(`[MinIO上传] 获取预签名URL成功: ${finalUploadUrl}`)
 
       // 2. 直接上传到MinIO
-      const uploadResponse = await fetch(upload_url, {
+      const uploadResponse = await fetch(finalUploadUrl, {
         method: 'PUT',
         body: file,
         headers: {
@@ -726,7 +737,21 @@ export const api = {
    * 上传文件（优先使用MinIO直传，无大小限制）
    */
   async uploadFile(file: File, onProgress?: (progress: number) => void): Promise<{ file_id: string; filename: string; url: string; size: number }> {
-    // 使用MinIO直传（无大小限制），不再回退到传统上传
+    // Dev mode: use backend multipart upload (presigned URLs don't work with proxy)
+    if (import.meta.env.DEV) {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await apiClient.post('/api/v1/files/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          if (onProgress && progressEvent.total) {
+            onProgress(Math.round((progressEvent.loaded * 100) / progressEvent.total))
+          }
+        },
+      })
+      return response.data
+    }
+    // Production: MinIO presigned direct upload
     return await this.uploadFileToMinio(file, onProgress)
   },
 

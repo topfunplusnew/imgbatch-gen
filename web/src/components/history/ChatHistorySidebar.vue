@@ -65,6 +65,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useHistoryStore, type HistorySession } from '@/store/useHistoryStore'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import { useAppStore } from '@/store/useAppStore'
@@ -74,6 +75,7 @@ defineEmits<{
   collapse: []
 }>()
 
+const router = useRouter()
 const historyStore = useHistoryStore()
 const generatorStore = useGeneratorStore()
 const appStore = useAppStore()
@@ -173,7 +175,7 @@ async function deleteSession(sessionId: string) {
 }
 
 async function startNewConversation() {
-  appStore.setCurrentPage('agent')
+  router.push('/')
   appStore.setCurrentView('chat')
   await generatorStore.startNewConversation()
 }

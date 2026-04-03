@@ -117,6 +117,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import { useAuthStore } from '@/store/useAuthStore'
@@ -124,6 +125,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { useNotificationStore } from '@/store/useNotificationStore'
 import NotificationPanel from '@/components/NotificationPanel.vue'
 
+const router = useRouter()
 const generatorStore = useGeneratorStore()
 const authStore = useAuthStore()
 const appStore = useAppStore()
@@ -150,15 +152,15 @@ const notificationBadgeValue = computed(() => {
 })
 
 function goToLogin() {
-  appStore.goToLogin()
+  router.push('/login')
 }
 
 function goToUserCenter() {
-  appStore.setCurrentPage('user-center')
+  router.push('/user-center')
 }
 
 function goToAdmin() {
-  appStore.setCurrentPage('admin')
+  router.push('/admin')
 }
 
 function goToProfile() {

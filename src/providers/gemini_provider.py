@@ -66,8 +66,7 @@ class GeminiProvider(SyncRelayProvider):
             else:
                 size_desc = "tall 9:16 aspect ratio"
 
-            resolution_desc = f"{params.width}x{params.height} resolution"
-            enhanced_prompt = f"{enhanced_prompt}, {size_desc}, {resolution_desc}"
+            enhanced_prompt = f"{enhanced_prompt}, {size_desc}"
             logger.info(f"[Gemini] 添加尺寸参数: {params.width}x{params.height} -> {size_desc} (标准: {standard_width}x{standard_height})")
         else:
             # 如果没有指定尺寸，使用1:1 2k质量作为默认
@@ -122,8 +121,8 @@ class GeminiProvider(SyncRelayProvider):
             else:
                 image_size = "1K"
 
-            # 按照 Gemini API 文档，参数应该包装在 imageConfig 对象中
-            image_config = {"imageSize": image_size}
+            # 按照 Gemini API 文档，imageConfig 只支持 aspectRatio 参数
+            image_config = {}
 
             # 只有当比例匹配到标准比例且不是默认1:1时才传递 aspectRatio
             if aspect_ratio in ["3:2", "4:3", "5:4", "16:9", "16:10", "21:9"]:
@@ -135,7 +134,9 @@ class GeminiProvider(SyncRelayProvider):
             else:
                 logger.info(f"[Gemini] 使用默认比例 1:1，不传递 aspectRatio 参数")
 
-            generation_config["imageConfig"] = image_config
+            # 只在有 aspectRatio 时才添加 imageConfig
+            if image_config:
+                generation_config["imageConfig"] = image_config
 
             logger.info(f"[Gemini] 设置API参数: imageConfig={image_config}, 请求尺寸={params.width}x{params.height}, 标准化尺寸={standard_width}x{standard_height}")
 

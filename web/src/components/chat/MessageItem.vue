@@ -496,7 +496,19 @@ const generatorStore = useGeneratorStore()
 // 渲染 markdown
 function renderMarkdown(content) {
   if (!content) return ''
-  return marked.parse(content)
+  // Filter out English system prompt content that shouldn't be shown to users
+  let cleaned = content
+  // Remove "System instructions: ..." blocks
+  cleaned = cleaned.replace(/System instructions?:[\s\S]*?(?=\n\n|$)/gi, '')
+  // Remove "gemini-*-flash-image-preview\n\nSystem instructions:..." blocks
+  cleaned = cleaned.replace(/gemini[\w.-]*\s*\n\s*System[\s\S]*?(?=\n\n[^a-zA-Z]|$)/gi, '')
+  // If entire content is English system prompt (starts with "You are an expert"), replace it
+  if (/^(You are an expert|Write production-ready|IMPORTANT:)/i.test(cleaned.trim())) {
+    return '<p>正在生成图像...</p>'
+  }
+  cleaned = cleaned.trim()
+  if (!cleaned) return '<p>图像生成完成！</p>'
+  return marked.parse(cleaned)
 }
 
 const props = defineProps({
@@ -697,11 +709,22 @@ const progressCard = computed(() => {
       ? Math.max(0, Math.min(100, Math.round(Number(currentProgress.progressPercent))))
       : 0
 
+    // Filter out English system prompts from display
+    let displayMessage = currentProgress.stageMessage || props.msg.content || '正在生成图像'
+    if (displayMessage && (
+      displayMessage.includes('System instructions:') ||
+      displayMessage.includes('You are an expert prompt') ||
+      displayMessage.includes('Write production-ready') ||
+      (displayMessage.length > 200 && /^[a-zA-Z\s,.;:'"!?\-(){}[\]\/\\@#$%^&*+=<>~`0-9\n]+$/.test(displayMessage.substring(0, 200)))
+    )) {
+      displayMessage = '正在生成图像...'
+    }
+
     return {
       mode: 'single',
       stage: String(currentProgress.stage || ''),
       title: currentProgress.stageLabel || '图像任务处理中',
-      message: currentProgress.stageMessage || props.msg.content || '正在生成图像',
+      message: displayMessage,
       percent,
       icon: getStageIcon(currentProgress.stage),
       caption: totalStages > 0 && stageIndex > 0

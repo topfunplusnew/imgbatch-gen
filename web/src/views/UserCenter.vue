@@ -1186,6 +1186,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useAppStore } from '@/store/useAppStore'
 import { useNotificationStore } from '@/store/useNotificationStore'
@@ -1195,6 +1196,7 @@ import { notification } from '@/utils/notification'
 import AnnouncementList from '@/components/AnnouncementList.vue'
 import QRCode from 'qrcode'
 
+const router = useRouter()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 const notificationStore = useNotificationStore()
@@ -1714,7 +1716,7 @@ async function handleUpdatePassword() {
     // Logout and redirect to login
     setTimeout(async () => {
       await authStore.logout()
-      appStore.goToLogin()
+      router.push('/login')
     }, 1500)
 
   } catch (error) {
@@ -1924,7 +1926,7 @@ function maskUsername(username) {
 
 // 返回首页
 function goHome() {
-  appStore.setCurrentPage('agent')
+  router.push('/')
 }
 
 // 监听标签页切换

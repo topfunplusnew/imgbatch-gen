@@ -78,9 +78,11 @@
 </template>
 
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
 import { useNotificationStore } from '@/store/useNotificationStore'
 import { useAppStore } from '@/store/useAppStore'
 
+const router = useRouter()
 const notificationStore = useNotificationStore()
 const appStore = useAppStore()
 
@@ -152,7 +154,7 @@ function handleViewDetails() {
     notificationStore.closePopup()
 
     // 切换到用户中心的通知标签页
-    appStore.setCurrentPage('user-center', 'notifications')
+    router.push('/user-center')
   }
 }
 </script>

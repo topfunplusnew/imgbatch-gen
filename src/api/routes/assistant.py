@@ -403,7 +403,9 @@ async def assistant_chat(
                 api_key,
             )
         else:
+            # Use original Chinese prompt for records, translated prompt for actual generation
             generation_prompt = execution_plan.prompt or original_user_text
+            display_prompt = route_metadata.get("original_prompt") or original_user_text
             logger.info(
                 "Image generation prompt prepared: chars={}, attachment_count={}, attachment_text_count={}, preview={}",
                 len(generation_prompt or ""),
@@ -424,7 +426,7 @@ async def assistant_chat(
                     confidence=execution_plan.confidence,
                     parameters={
                         "count": execution_plan.batch_count,
-                        "original_prompt": generation_prompt,
+                        "original_prompt": display_prompt,
                     },
                     reasoning=execution_plan.reasoning,
                 )
@@ -446,7 +448,7 @@ async def assistant_chat(
                 intent = Intent(
                     type="single_generate",
                     confidence=execution_plan.confidence,
-                    parameters={"prompt": generation_prompt},
+                    parameters={"prompt": generation_prompt, "display_prompt": display_prompt},
                     reasoning=execution_plan.reasoning,
                 )
                 response = await handle_single_generate(
@@ -660,9 +662,10 @@ async def handle_single_generate(message: ChatMessage, intent: Intent, task_mana
 
         # 同步模型：创建生成任务，传入用户请求ID和会话ID
         session_id = session_id or f"session_{datetime.now().timestamp()}"
+        display_prompt_for_record = intent.parameters.get("display_prompt") or intent.parameters.get("prompt", prompt_text)
         task = task_manager.create_task(
             params=params,
-            user_input=prompt_text,
+            user_input=display_prompt_for_record,
             user_request_id=user_request_id,
             metadata={
                 "session_id": session_id,
@@ -676,12 +679,14 @@ async def handle_single_generate(message: ChatMessage, intent: Intent, task_mana
 
         # 保存任务信息到数据库
         db_manager = get_db_manager()
+        # Save original Chinese prompt for display, not the translated English one
+        display_prompt = intent.parameters.get("display_prompt") or intent.parameters.get("prompt", params.prompt)
         await db_manager.create_user_request(
             user_id=user_id or "anonymous",
             request_type="image_generation",
             request_data={
                 "task_id": task.task_id,
-                "prompt": params.prompt,
+                "prompt": display_prompt,
                 "provider": params.provider
             },
             status="processing",

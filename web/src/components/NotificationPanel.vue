@@ -112,6 +112,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useNotificationStore, type Announcement } from '@/store/useNotificationStore'
 import { useAppStore } from '@/store/useAppStore'
 
@@ -123,6 +124,7 @@ const emit = defineEmits<{
   close: []
 }>()
 
+const router = useRouter()
 const appStore = useAppStore()
 const notificationStore = useNotificationStore()
 
@@ -185,13 +187,13 @@ async function handleNotificationClick(notification: Announcement) {
   emit('close')
 
   // 使用 appStore 切换到用户中心的通知标签页
-  appStore.setCurrentPage('user-center', 'notifications')
+  router.push('/user-center')
 }
 
 // 查看全部通知
 function handleViewAllNotifications() {
   emit('close')
-  appStore.setCurrentPage('user-center', 'notifications')
+  router.push('/user-center')
 }
 
 // 标记全部为已读

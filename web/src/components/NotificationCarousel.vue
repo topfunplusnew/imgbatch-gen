@@ -123,6 +123,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight, Bell, Promotion } from '@element-plus/icons-vue'
 import { useAppStore } from '@/store/useAppStore'
 import { useNotificationStore, type Announcement } from '@/store/useNotificationStore'
@@ -133,6 +134,7 @@ const props = defineProps<{
   maxItems?: number
 }>()
 
+const router = useRouter()
 const appStore = useAppStore()
 const notificationStore = useNotificationStore()
 
@@ -201,7 +203,7 @@ function handleCarouselChange(index: number) {
 
 function handleClick(announcement: Announcement) {
   notificationStore.setSelectedNotification(announcement.id)
-  appStore.setCurrentPage('user-center')
+  router.push('/user-center')
 }
 
 function pauseAutoplay() {

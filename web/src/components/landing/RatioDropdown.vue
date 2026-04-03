@@ -63,7 +63,7 @@ import { useGeneratorStore } from '@/store/useGeneratorStore'
 
 const generatorStore = useGeneratorStore()
 const isOpen = ref(false)
-const selectedRatio = ref('1:1')
+const selectedRatio = ref('auto')
 const customWidth = ref(1024)
 const customHeight = ref(1024)
 

@@ -34,6 +34,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useAppStore } from '@/store/useAppStore'
@@ -43,6 +44,7 @@ const props = defineProps({
   hideUserCenter: { type: Boolean, default: false }
 })
 
+const router = useRouter()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 const notificationStore = useNotificationStore()
@@ -64,11 +66,11 @@ function goToProfile() {
 }
 
 function goToUserCenter() {
-  appStore.setCurrentPage('user-center')
+  router.push('/user-center')
 }
 
 function goToAdmin() {
-  appStore.setCurrentPage('admin')
+  router.push('/admin')
 }
 
 async function handleLogout() {

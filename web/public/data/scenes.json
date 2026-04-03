@@ -1,0 +1,235 @@
+{
+  "categories": [
+    { "id": "education", "name": "教育智慧", "icon": "📚" },
+    { "id": "knowledge", "name": "知识学习", "icon": "🧠" },
+    { "id": "creative", "name": "创意文案", "icon": "✨" },
+    { "id": "content", "name": "内容创作", "icon": "📝" },
+    { "id": "language", "name": "语言文化", "icon": "🌐" },
+    { "id": "life", "name": "生活百科", "icon": "🌿" },
+    { "id": "science", "name": "知识科普", "icon": "🔬" }
+  ],
+  "scenes": [
+    {
+      "id": "math", "name": "数学", "icon": "📐", "category": "education",
+      "description": "数学公式、几何图形、函数图表的可视化卡片",
+      "coverImage": "/covers/types/formula.webp",
+      "templates": [
+        { "id": "m1", "title": "数学公式卡片", "type": "知识卡片", "style": "扁平", "prompt": "请帮我生成一张数学公式知识卡片，卡片背景为浅米色纸质纹理，顶部深蓝色标题栏写着核心公式，中央用清晰排版展示3-5个重要数学公式（如二次方程求根公式、三角恒等式、导数公式），每个公式下方标注名称和适用场景，底部有数学符号边框装饰" },
+        { "id": "m2", "title": "几何图形海报", "type": "海报设计", "style": "极简", "prompt": "设计一张几何之美艺术海报，纯白背景用金色细线绘制黄金螺旋、正二十面体、分形三角形，图形之间有微妙光影渐变，底部用衬线字体写 The Beauty of Geometry" },
+        { "id": "m3", "title": "数学思维导图", "type": "思维导图", "style": "手绘", "prompt": "创建高中数学知识体系思维导图，中心主题高中数学向外发散为函数、几何、概率统计、数列、三角函数五大分支，每个分支不同颜色，手绘涂鸦风格，重要公式用荧光笔标注" },
+        { "id": "m4", "title": "函数图像对比", "type": "信息图表", "style": "扁平", "prompt": "生成常见函数图像对比卡片，坐标系中用不同颜色展示y=x²、y=√x、y=1/x、y=eˣ、y=ln(x)五个函数图像，每条曲线旁标注函数名和定义域" }
+      ]
+    },
+    {
+      "id": "reading_notes", "name": "读书笔记", "icon": "📖", "category": "knowledge",
+      "description": "书籍摘录、读后感、阅读打卡分享",
+      "coverImage": "/covers/types/reading_notes.webp",
+      "templates": [
+        { "id": "rn1", "title": "经典名著读书笔记", "type": "读书笔记", "style": "手绘", "prompt": "生成一张《小王子》读书笔记卡片，手绘风格，包含书名、作者、核心人物关系图、经典语录摘抄、个人感悟区域，配色温暖柔和" },
+        { "id": "rn2", "title": "商业书籍精华", "type": "读书笔记", "style": "扁平", "prompt": "制作《思考快与慢》读书笔记，分为系统1和系统2两大板块，用信息图展示关键概念如锚定效应、框架效应、损失厌恶，配专业商务配色" },
+        { "id": "rn3", "title": "年度书单推荐", "type": "信息图表", "style": "极简", "prompt": "设计年度书单推荐TOP10信息图，用书架造型排列推荐书籍，每本书展示书脊和一句话推荐理由，按文学蓝色、商业橙色、科普绿色分类" }
+      ]
+    },
+    {
+      "id": "mind_map", "name": "思维导图", "icon": "🧠", "category": "knowledge",
+      "description": "知识体系、逻辑梳理、概念关联",
+      "coverImage": "/covers/types/mind_map.webp",
+      "templates": [
+        { "id": "mm1", "title": "项目规划导图", "type": "思维导图", "style": "扁平", "prompt": "生成一张项目管理思维导图，中心主题为产品上线，分支包括需求分析、设计开发、测试验收、上线部署、运营推广，每个分支3-4个子节点" },
+        { "id": "mm2", "title": "学科知识导图", "type": "思维导图", "style": "手绘", "prompt": "创建生物学知识思维导图，涵盖细胞结构、遗传变异、生态系统、进化论四大主题，手绘风格线条，重点用星号标注" },
+        { "id": "mm3", "title": "AI技术全景图", "type": "思维导图", "style": "科技", "prompt": "制作人工智能技术全景思维导图，包含机器学习、深度学习、自然语言处理、计算机视觉、强化学习分支，标注代表性技术和应用场景" }
+      ]
+    },
+    {
+      "id": "infographic", "name": "信息图表", "icon": "📊", "category": "knowledge",
+      "description": "数据可视化、统计图表、信息图解",
+      "coverImage": "/covers/types/infographic.webp",
+      "templates": [
+        { "id": "ig1", "title": "年度数据报告", "type": "信息图表", "style": "商务", "prompt": "设计年度运营数据报告信息图，包含用户增长趋势折线图、营收占比环形图、关键KPI卡片、地区分布热力图，深蓝色主色调" },
+        { "id": "ig2", "title": "产品对比分析", "type": "对比分析", "style": "扁平", "prompt": "制作产品方案A vs B对比分析信息图，左右分栏布局，对比价格柱状图、性能雷达图、用户评分星级，蓝色和橙色区分两个方案" },
+        { "id": "ig3", "title": "人体健康数据", "type": "信息图表", "style": "插画", "prompt": "生成人体健康指标信息图，展示BMI、血压、心率、血糖的正常范围和异常预警值，配人体轮廓插画和颜色编码" }
+      ]
+    },
+    {
+      "id": "flow_guide", "name": "流程指南", "icon": "📋", "category": "knowledge",
+      "description": "步骤教程、操作流程、使用指南",
+      "coverImage": "/covers/types/flow_guide.webp",
+      "templates": [
+        { "id": "fg1", "title": "如何制作一杯拿铁", "type": "流程指南", "style": "手绘", "prompt": "制作一杯拿铁咖啡的步骤指南，分6步展示：磨豆、萃取浓缩、打奶泡、倒入杯中、拉花、成品展示，每步配手绘插画和简短文字" },
+        { "id": "fg2", "title": "新员工入职指南", "type": "流程指南", "style": "扁平", "prompt": "设计新员工入职流程图，从面试通过到转正的完整流程，包含报到登记、领取设备、部门介绍、导师对接、培训考核等环节" },
+        { "id": "fg3", "title": "如何画一只猫", "type": "教程指南", "style": "卡通", "prompt": "生成一张可爱的画猫教程，分步展示从基本形状到完整猫咪的绘画过程，每步用简单几何形引导，最终效果可爱卡通风" }
+      ]
+    },
+    {
+      "id": "comic", "name": "漫画故事", "icon": "💬", "category": "creative",
+      "description": "四格漫画、连环画、故事插图",
+      "coverImage": "/covers/types/comic.webp",
+      "templates": [
+        { "id": "cm1", "title": "程序员的一天", "type": "漫画故事", "style": "卡通", "prompt": "绘制程序员日常四格漫画，场景：早上被闹钟吵醒→到公司打开电脑→下午debug到崩溃→深夜终于解决bug开心庆祝，Q版卡通风格" },
+        { "id": "cm2", "title": "三只小猪", "type": "漫画故事", "style": "水彩", "prompt": "用水彩绘本风格画三只小猪的故事，四格展示：草房子→木房子→砖房子→大灰狼失败，色彩温暖明亮，适合儿童" },
+        { "id": "cm3", "title": "办公室趣事", "type": "漫画故事", "style": "扁平", "prompt": "创作办公室日常搞笑漫画，主题：开会时的各种状态，扁平插画风格，包含认真记录、偷偷摸鱼、疯狂提问、昏昏欲睡四种状态" }
+      ]
+    },
+    {
+      "id": "timeline", "name": "时间线", "icon": "⏳", "category": "knowledge",
+      "description": "历史事件、发展历程、时间轴可视化",
+      "coverImage": "/covers/types/timeline.webp",
+      "templates": [
+        { "id": "tl1", "title": "中国航天发展史", "type": "时间线", "style": "科技", "prompt": "制作中国航天发展时间线，从东方红一号到天宫空间站，标注关键里程碑年份和事件，科技感配色，配火箭和卫星图标" },
+        { "id": "tl2", "title": "iPhone发展史", "type": "时间线", "style": "极简", "prompt": "设计iPhone发展历程时间轴，从2007年初代到最新款，展示每代的标志性特征和创新点，极简苹果风格" },
+        { "id": "tl3", "title": "世界大战时间线", "type": "时间线", "style": "复古", "prompt": "绘制二战关键事件时间线，复古地图风格，标注重要战役和转折点，使用泛黄纸张纹理和老照片效果" }
+      ]
+    },
+    {
+      "id": "comparison", "name": "对比分析", "icon": "⚖️", "category": "knowledge",
+      "description": "横向对比、优劣分析、方案评估",
+      "coverImage": "/covers/types/comparison.webp",
+      "templates": [
+        { "id": "cp1", "title": "猫vs狗 宠物对比", "type": "对比分析", "style": "卡通", "prompt": "制作猫vs狗宠物对比图，左右分栏展示性格特点、养护难度、花费预算、适合人群等维度对比，卡通可爱风" },
+        { "id": "cp2", "title": "编程语言对比", "type": "对比分析", "style": "扁平", "prompt": "Python vs JavaScript编程语言对比分析图，雷达图展示学习曲线、就业前景、社区活跃度、应用领域等维度" }
+      ]
+    },
+    {
+      "id": "concept_map", "name": "概念地图", "icon": "🗺️", "category": "knowledge",
+      "description": "概念关联、知识网络、系统架构",
+      "coverImage": "/covers/types/concept_map.webp",
+      "templates": [
+        { "id": "cm1", "title": "人体消化系统", "type": "概念地图", "style": "插画", "prompt": "绘制人体消化系统概念地图，从口腔到排泄的完整路径，标注各器官功能和消化过程，医学插画风格" },
+        { "id": "cm2", "title": "互联网产品生态", "type": "概念地图", "style": "扁平", "prompt": "制作互联网产品生态概念地图，展示搜索引擎、社交媒体、电商、支付、云服务之间的关联关系" }
+      ]
+    },
+    {
+      "id": "poster", "name": "海报设计", "icon": "🎨", "category": "creative",
+      "description": "活动海报、宣传物料、创意设计",
+      "coverImage": "/covers/types/poster.webp",
+      "templates": [
+        { "id": "ps1", "title": "音乐节海报", "type": "海报设计", "style": "复古", "prompt": "设计夏日音乐节海报，复古迷幻风格，大标题用渐变字体，背景是夜空下的露天舞台剪影，底部放演出时间地点" },
+        { "id": "ps2", "title": "读书会海报", "type": "海报设计", "style": "极简", "prompt": "制作线上读书分享会海报，极简风格，大面积留白，中央一本翻开的书的简笔画，底部信息排版整洁" },
+        { "id": "ps3", "title": "产品发布海报", "type": "海报设计", "style": "科技", "prompt": "设计科技产品新品发布海报，纯黑背景中央聚光灯照亮产品轮廓，上方小字重新定义，科技感十足" }
+      ]
+    },
+    {
+      "id": "poetry", "name": "诗词解读", "icon": "🌙", "category": "language",
+      "description": "古诗词鉴赏、意境解读、文化传承",
+      "coverImage": "/covers/types/poetry.webp",
+      "templates": [
+        { "id": "po1", "title": "静夜思赏析", "type": "诗词解读", "style": "水墨", "prompt": "生成李白《静夜思》诗词鉴赏卡片，水墨山水画背景，楷书字体书写诗文全文，配月光下窗前思乡的意境插画，留白充足" },
+        { "id": "po2", "title": "唐诗三百首精选", "type": "知识卡片", "style": "复古", "prompt": "设计唐诗三百首精选卡片，选取5首代表作品，每首配微型意境插画和简短赏析，古典宣纸纹理背景" }
+      ]
+    },
+    {
+      "id": "vocabulary", "name": "单词解读", "icon": "🔤", "category": "language",
+      "description": "英语单词图解、词根词缀、记忆卡片",
+      "coverImage": "/covers/types/vocabulary.webp",
+      "templates": [
+        { "id": "vc1", "title": "Serendipity 单词卡", "type": "单词解读", "style": "卡通", "prompt": "制作英语单词Serendipity记忆卡片，大号艺术字体展示单词和音标，配插画一个人在雨天偶然走进温馨咖啡店，中英文释义和例句" },
+        { "id": "vc2", "title": "像素单词卡", "type": "单词解读", "style": "像素", "prompt": "生成我的世界风格像素单词卡片，单词apple，用像素方块拼出苹果图案，旁边标注发音和释义，8-bit游戏风格" }
+      ]
+    },
+    {
+      "id": "classical", "name": "古文解读", "icon": "📜", "category": "language",
+      "description": "文言文翻译、典故解析、国学经典",
+      "coverImage": "/covers/types/ancient_text.webp",
+      "templates": [
+        { "id": "cl1", "title": "论语名句解读", "type": "古文解读", "style": "水墨", "prompt": "制作论语经典名句解读卡片，学而时习之不亦说乎，水墨风格背景配孔子讲学场景插画，注释译文和现代启示" }
+      ]
+    },
+    {
+      "id": "history", "name": "丝绸之路", "icon": "🏛️", "category": "science",
+      "description": "历史事件、文化探源、人物传记",
+      "coverImage": "/covers/types/history.webp",
+      "templates": [
+        { "id": "hs1", "title": "丝绸之路文化地图", "type": "概念地图", "style": "复古", "prompt": "绘制丝绸之路文化交流地图，标注长安、敦煌、撒马尔罕、罗马等关键节点城市，展示贸易品（丝绸、香料、瓷器）和文化交流内容，古地图风格" }
+      ]
+    },
+    {
+      "id": "nutrition", "name": "营养小卡片", "icon": "🥑", "category": "science",
+      "description": "食物营养、健康饮食、成分分析",
+      "coverImage": "/covers/types/nutrition.webp",
+      "templates": [
+        { "id": "nt1", "title": "牛油果营养卡", "type": "知识卡片", "style": "扁平", "prompt": "制作牛油果营养小卡片，展示热量、脂肪、蛋白质、膳食纤维等营养成分，配可爱的牛油果切面插画和健康小贴士" },
+        { "id": "nt2", "title": "每日营养搭配", "type": "流程指南", "style": "卡通", "prompt": "生成每日营养均衡搭配指南，用餐盘模型展示蔬菜40%、蛋白质25%、碳水25%、水果10%的比例，配食物插画" }
+      ]
+    },
+    {
+      "id": "ingredient", "name": "成分指南", "icon": "🧪", "category": "science",
+      "description": "护肤成分、食品添加剂、化学科普",
+      "coverImage": "/covers/types/ingredient.webp",
+      "templates": [
+        { "id": "ig1", "title": "维生素C成分科普", "type": "知识卡片", "style": "扁平", "prompt": "制作维生素C护肤成分科普卡片，解释功效（抗氧化、美白、促进胶原蛋白）、适用肤质、使用注意事项，配分子结构简图" }
+      ]
+    },
+    {
+      "id": "business", "name": "商业模式", "icon": "💼", "category": "science",
+      "description": "商业画布、盈利模式、市场分析",
+      "coverImage": "/covers/types/business.webp",
+      "templates": [
+        { "id": "bm1", "title": "商业模式画布", "type": "信息图表", "style": "商务", "prompt": "生成商业模式画布模板，9个板块：价值主张、客户细分、渠道、客户关系、收入来源、核心资源、关键活动、合作伙伴、成本结构，专业商务配色" }
+      ]
+    },
+    {
+      "id": "tutorial", "name": "教程指南", "icon": "📐", "category": "knowledge",
+      "description": "技能教学、操作教程、DIY指南",
+      "coverImage": "/covers/types/tutorial.webp",
+      "templates": [
+        { "id": "tt1", "title": "如何画一只猫", "type": "教程指南", "style": "卡通", "prompt": "生成画猫教程步骤图，从圆形基本形到完整可爱猫咪，分4-6步展示，每步用简单几何形引导，配文字说明" }
+      ]
+    },
+    {
+      "id": "visual_summary", "name": "视觉总结", "icon": "📝", "category": "creative",
+      "description": "会议纪要、课堂笔记、知识汇总",
+      "coverImage": "/covers/types/visual_summary.webp",
+      "templates": [
+        { "id": "vs1", "title": "TED演讲笔记", "type": "视觉总结", "style": "手绘", "prompt": "制作TED演讲视觉笔记，主题如何成为更好的交流者，手绘涂鸦风格记录关键观点、案例和金句，用箭头和图标串联逻辑" }
+      ]
+    },
+    {
+      "id": "relationship", "name": "关系图", "icon": "🔗", "category": "knowledge",
+      "description": "人物关系、组织架构、系统关联",
+      "coverImage": "/covers/types/relationship.webp",
+      "templates": [
+        { "id": "rl1", "title": "三国人物关系图谱", "type": "关系图", "style": "复古", "prompt": "绘制三国演义核心人物关系图谱，以刘备、曹操、孙权三大势力为核心，用不同颜色区分阵营，标注主要人物间的关系" }
+      ]
+    },
+    {
+      "id": "storyboard", "name": "故事板", "icon": "🎬", "category": "creative",
+      "description": "分镜脚本、视频策划、故事线",
+      "coverImage": "/covers/types/storyboard.webp",
+      "templates": [
+        { "id": "sb1", "title": "产品宣传视频分镜", "type": "故事板", "style": "手绘", "prompt": "制作产品宣传视频手绘分镜脚本，6-8个画面，展示产品使用场景、用户痛点、解决方案、功能演示、用户好评、CTA" }
+      ]
+    },
+    {
+      "id": "presentation", "name": "演示文稿", "icon": "📽️", "category": "creative",
+      "description": "PPT内容可视化、演示稿设计",
+      "coverImage": "/covers/types/presentation.webp",
+      "templates": [
+        { "id": "pt1", "title": "2025年度工作总结", "type": "演示文稿", "style": "商务", "prompt": "生成年度工作总结可视化页面，包含年度目标完成度环形图、关键成果KPI卡片、团队协作时间线、下年度计划" }
+      ]
+    },
+    {
+      "id": "encyclopedia", "name": "百科词典", "icon": "📒", "category": "knowledge",
+      "description": "百科知识、术语图解、概念解释",
+      "coverImage": "/covers/types/encyclopedia.webp",
+      "templates": [
+        { "id": "ec1", "title": "海洋生物百科", "type": "百科词典", "style": "插画", "prompt": "制作海洋生物百科卡片，展示5种深海生物的外形特征、栖息深度、食物链位置，精美海洋插画风格" }
+      ]
+    },
+    {
+      "id": "classic_guide", "name": "名著导读", "icon": "📚", "category": "language",
+      "description": "经典文学作品导读、阅读指南",
+      "coverImage": "/covers/types/classic_guide.webp",
+      "templates": [
+        { "id": "cg1", "title": "小王子阅读指南", "type": "名著导读", "style": "水彩", "prompt": "制作《小王子》阅读指南卡片，包含核心主题、人物关系图、经典语录、阅读建议，水彩绘本风格配以玫瑰和星星元素" }
+      ]
+    },
+    {
+      "id": "formula", "name": "公式原理", "icon": "🔬", "category": "knowledge",
+      "description": "物理公式、化学方程式、数学定理",
+      "coverImage": "/covers/types/formula.webp",
+      "templates": [
+        { "id": "fm1", "title": "E=mc²解读", "type": "公式原理", "style": "科技", "prompt": "制作爱因斯坦质能方程E=mc²科普卡片，图解公式含义、历史背景和实际应用（核能、粒子物理），科技感设计风格" }
+      ]
+    }
+  ]
+}

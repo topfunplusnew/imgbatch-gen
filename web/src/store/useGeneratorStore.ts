@@ -289,7 +289,7 @@ export const useGeneratorStore = defineStore('generator', {
         model: DEFAULT_GEMINI_MODEL,
         width: 2048,
         height: 2048,
-        aspectRatio: '1:1',
+        aspectRatio: 'auto',
         batchSize: 1,
         isGenerating: false,
         prompt: '',
@@ -398,7 +398,7 @@ export const useGeneratorStore = defineStore('generator', {
         resetParams() {
             this.width = 1024
             this.height = 1024
-            this.aspectRatio = '1:1'
+            this.aspectRatio = 'auto'
             this.batchSize = 1
             this.style = 'photorealistic'
             this.quality = '2k'
@@ -851,12 +851,18 @@ export const useGeneratorStore = defineStore('generator', {
                             }))
                         }
 
+                        // Update billing status: frozen → deducted on completion
+                        const completedBilling = task.billing ? { ...task.billing } : undefined
+                        if (completedBilling && completedBilling.status === 'frozen') {
+                            completedBilling.status = 'deducted'
+                        }
+
                         this.updateMessage(messageId, {
                             content: '图像生成完成！',
                             status: 'completed',
                             images: images,
                             generationProgress: buildTaskProgressPayload(task, '图像生成完成！'),
-                            ...(task.billing ? { billing: task.billing } : {})
+                            ...(completedBilling ? { billing: completedBilling } : {})
                         })
                         console.log('任务完成，图片数据:', this.messages.find(m => m.id === messageId)?.images)
 
@@ -883,12 +889,16 @@ export const useGeneratorStore = defineStore('generator', {
                         this.activePollingTasks.delete(taskId)
                         return true
                     } else if (FAILED_TASK_STATUSES.has(taskStatus)) {
-                        // 任务失败
+                        // 任务失败 — billing status: frozen → refunded
+                        const failedBilling = task.billing ? { ...task.billing } : undefined
+                        if (failedBilling && failedBilling.status === 'frozen') {
+                            failedBilling.status = 'refunded'
+                        }
                         this.updateMessage(messageId, {
                             content: `生成失败: ${task.error || '未知错误'}`,
                             status: 'error',
                             generationProgress: buildTaskProgressPayload(task, `生成失败: ${task.error || '未知错误'}`),
-                            ...(task.billing ? { billing: task.billing } : {})
+                            ...(failedBilling ? { billing: failedBilling } : {})
                         })
                         this.activePollingTasks.delete(taskId)
                         return false
@@ -1429,7 +1439,7 @@ export const useGeneratorStore = defineStore('generator', {
                 this.applyPreferredDefaultModel()
                 this.width = 1024
                 this.height = 1024
-                this.aspectRatio = '1:1'
+                this.aspectRatio = 'auto'
                 this.batchSize = 1
                 this.isGenerating = false
 

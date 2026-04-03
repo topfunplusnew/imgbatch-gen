@@ -78,11 +78,13 @@
 
 <script setup>
 import { onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useHistoryStore } from '@/store/useHistoryStore'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import { useAppStore } from '@/store/useAppStore'
 import { api } from '@/services/api'
 
+const router = useRouter()
 const historyStore = useHistoryStore()
 const generatorStore = useGeneratorStore()
 const appStore = useAppStore()
@@ -127,7 +129,7 @@ const refreshHistory = async () => {
 }
 
 const startNewConversation = async () => {
-  appStore.setCurrentPage('agent')
+  router.push('/')
   await generatorStore.startNewConversation()
 }
 

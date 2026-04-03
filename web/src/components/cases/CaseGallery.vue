@@ -268,11 +268,13 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useCaseStore } from '@/store/useCaseStore'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import { useAppStore } from '@/store/useAppStore'
 import CaseCard from './CaseCard.vue'
 
+const router = useRouter()
 const caseStore = useCaseStore()
 const generatorStore = useGeneratorStore()
 const appStore = useAppStore()
@@ -410,7 +412,7 @@ const selectModel = (model) => {
   generatorStore.setSelectedModelInfo(model)
 
   // 切换到生成页面
-  appStore.setCurrentPage('agent')
+  router.push('/')
 }
 
 const loadModels = async () => {

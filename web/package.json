@@ -19,7 +19,7 @@
     "ant-design-vue": "^4.2.6",
     "autoprefixer": "^10.4.27",
     "axios": "^1.13.6",
-    "element-plus": "^2.9.7",
+    "element-plus": "^2.13.6",
     "marked": "^17.0.4",
     "minio": "^8.0.7",
     "pdfjs-dist": "^5.5.207",

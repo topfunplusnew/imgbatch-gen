@@ -5,6 +5,7 @@ import 'element-plus/dist/index.css'
 import 'ant-design-vue/dist/reset.css'
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 import App from './App.vue'
+import router from './router'
 import './assets/main.css'
 import { useApiConfigStore } from './store/useApiConfigStore'
 
@@ -12,6 +13,7 @@ const app = createApp(App)
 const pinia = createPinia()
 
 app.use(pinia)
+app.use(router)
 app.use(ElementPlus, { locale: zhCn })
 
 // 初始化API配置

@@ -137,8 +137,53 @@
     "commission_max_rate": 20
   },
   "subscription_plans": {
-    "description": "订阅套餐配置(暂时未启用，保留扩展)",
-    "plans": []
+    "description": "订阅套餐配置",
+    "plans": [
+      {
+        "id": "free",
+        "name": "免费版",
+        "icon": "gift",
+        "badge": "",
+        "monthly_price": 0,
+        "yearly_price": 0,
+        "points_per_month": 3,
+        "features": ["多种图片类型", "多种图片风格", "多种图片尺寸", "支持1K/2K/4K清晰度"],
+        "color": "emerald"
+      },
+      {
+        "id": "plus",
+        "name": "Plus",
+        "icon": "bolt",
+        "badge": "最受欢迎",
+        "monthly_price": 9900,
+        "yearly_price": 99900,
+        "points_per_month": 150,
+        "features": ["免费版全部功能", "高峰期稳定通道", "专属用户社群", "优先客服支持"],
+        "color": "amber"
+      },
+      {
+        "id": "pro",
+        "name": "Pro",
+        "icon": "workspace_premium",
+        "badge": "畅用首选",
+        "monthly_price": 29900,
+        "yearly_price": 299900,
+        "points_per_month": 500,
+        "features": ["Plus全部功能", "更多每月积分", "批量生成优先", "高级模型优先"],
+        "color": "rose"
+      },
+      {
+        "id": "max",
+        "name": "Max",
+        "icon": "diamond",
+        "badge": "超值推荐",
+        "monthly_price": 49900,
+        "yearly_price": 499900,
+        "points_per_month": 1000,
+        "features": ["Pro全部功能", "最多每月积分", "全部模型无限制", "1对1专属服务"],
+        "color": "red"
+      }
+    ]
   },
   "limits": {
     "description": "用户限制配置",

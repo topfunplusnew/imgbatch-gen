@@ -71,7 +71,7 @@
                   :auto-upload="false"
                   :show-file-list="false"
                   :multiple="true"
-                  accept=".pdf,.docx,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg"
+                  accept="image/*,.pdf,.docx,.doc,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   :on-change="handleUploadChange"
                 >
                   <el-tooltip content="添加附件" placement="top">
@@ -181,6 +181,7 @@
 <script setup>
 import { ref, onUnmounted, computed, onMounted, watch, nextTick } from 'vue';
 import { useGeneratorStore } from '@/store/useGeneratorStore';
+import { useRouter } from 'vue-router';
 import { useAppStore } from '@/store/useAppStore';
 import { notification } from '@/utils/notification';
 import { api } from '@/services/api';
@@ -196,6 +197,7 @@ const props = defineProps({
 const emit = defineEmits(['update:showModelSelector'])
 
 const generatorStore = useGeneratorStore();
+const router = useRouter();
 const appStore = useAppStore();
 const uploadRef = ref(null);
 const inputBoxRef = ref(null);
@@ -451,14 +453,21 @@ const handleSend = async () => {
   // 判断模型类型：文本模型走流式聊天，图像模型走图片生成
   const modelInfo = generatorStore.selectedModelInfo;
   const modelType = modelInfo?.model_type;
+  const modelName = modelInfo?.model_name || generatorStore.model || '';
+  const promptText = generatorStore.prompt.trim().toLowerCase();
 
-  console.log('[发送消息] 模型类型:', modelType, '模型信息:', modelInfo);
+  // 判断是否应该走图像生成流程
+  const isImageModel = modelType === '图像' || modelName.includes('image');
+  const hasImageKeywords = /生成|生图|画|海报|绘制|出图|创建图片|配图|封面|渲染|插画/.test(promptText);
+  const hasAttachments = generatorStore.attachments.length > 0;
 
-  // 根据model_type判断：文本模型走聊天，图像模型走图像生成
-  if (modelType === '图像') {
+  console.log('[发送消息] 模型类型:', modelType, '模型名:', modelName, '图像模型:', isImageModel, '含生图关键词:', hasImageKeywords, '有附件:', hasAttachments);
+
+  // 图像模型、或有附件+生图关键词 → 走图像生成
+  if (isImageModel || (hasAttachments && hasImageKeywords)) {
     await handleImageModelSend();
   } else {
-    // 默认走聊天模型（包括文本模型和未知类型）
+    // 默认走聊天模型
     await handleChatModelSend();
   }
 };
@@ -841,7 +850,7 @@ onUnmounted(() => {
 
 // Navigate to recharge page
 const goToRecharge = () => {
-  appStore.setCurrentPage('user-center', 'balance');
+  router.push('/user-center');
 };
 
 // Create new conversation

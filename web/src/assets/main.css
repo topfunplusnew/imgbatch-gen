@@ -196,6 +196,21 @@ body {
   }
 }
 
+/* Smooth transitions only for interactive elements */
+a, button, [role="button"],
+.el-button, .el-tag, .el-card,
+[class*="hover:"] {
+  transition: color 200ms, background-color 200ms, border-color 200ms, box-shadow 200ms, opacity 200ms, transform 200ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
 .el-button {
   font-weight: 600;
   border-radius: 14px;

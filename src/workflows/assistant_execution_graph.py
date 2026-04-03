@@ -281,7 +281,10 @@ def _get_default_ocr_model() -> str:
 
 IMAGE_MODEL_SYSTEM_PROMPT = (
     "You are an expert prompt orchestrator for image generation models. "
-    "Write production-ready prompts in English. "
+    "IMPORTANT: Unless the user explicitly requests English or another language, "
+    "always generate images with Chinese text (中文). All text, labels, titles, captions, "
+    "and annotations in the generated image MUST be in Chinese by default. "
+    "Write production-ready prompts that instruct the image model to use Chinese for all visible text. "
     "Follow the user's latest explicit request first, use recent conversation only as supporting context, "
     "and treat attachment-derived facts as grounded constraints. "
     "Preserve the main subject, composition, layout, visible text, numbers, colors, branding, and key visual hierarchy "
@@ -1921,6 +1924,10 @@ async def _build_image_plan(
         effective_batch_count = route_decision.batch_count
         effective_intent_type = route_decision.intent_type
 
+    # Keep original Chinese prompts for display/records
+    original_prompt = final_prompt
+    original_batch_prompts = list(wrapped_batch_prompts) if wrapped_batch_prompts else None
+
     prompts_to_translate = wrapped_batch_prompts if wrapped_batch_prompts else [final_prompt]
     translated_prompts = await _translate_prompts_to_english(prompts_to_translate, api_key)
     translation_applied = translated_prompts != prompts_to_translate
@@ -1963,6 +1970,8 @@ async def _build_image_plan(
             "image_prompt_system_prompt_language": "en",
             "image_prompt_context_included": bool(recent_context),
             "image_prompt_translated_to_english": translation_applied,
+            "original_prompt": original_prompt,
+            "original_batch_prompts": original_batch_prompts,
             "gemini_reference_system_grounding_included": bool(
                 reference_system_context and _is_gemini_native_image_model_name(effective_model)
             ),
