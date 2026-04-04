@@ -44,7 +44,7 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Install backend dependencies
-        run: uv sync --frozen --extra dev
+        run: uv sync --extra dev
 
       - name: Run backend tests
         shell: bash
