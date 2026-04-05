@@ -357,6 +357,8 @@ class Worker:
                 if not image_urls:
                     raise ValueError("没有有效的图片URL")
 
+                # 消费记录使用用户原始提示词，而非系统增强后的 prompt
+                user_prompt = task.metadata.get("user_input") or task.metadata.get("display_prompt") or task.metadata.get("original_prompt") or task.params.prompt
                 billing_result = await account_service.settle_frozen_points(
                     user_id=user_id,
                     freeze_id=freeze_id,
@@ -364,7 +366,7 @@ class Worker:
                     model_name=task.params.model or "unknown",
                     provider=task.params.provider or "unknown",
                     request_id=task.task_id,
-                    prompt=task.params.prompt,
+                    prompt=user_prompt,
                     image_count=len(image_urls),
                     image_urls=image_urls,
                 )
@@ -382,12 +384,13 @@ class Worker:
                 if not image_urls:
                     raise ValueError("没有有效的图片URL，不应扣费")
 
+                user_prompt = task.metadata.get("user_input") or task.metadata.get("display_prompt") or task.metadata.get("original_prompt") or task.params.prompt
                 await account_service.deduct_cost_on_success(
                     user_id=user_id,
                     model_name=task.params.model or "unknown",
                     provider=task.params.provider or "unknown",
                     request_id=task.task_id,
-                    prompt=task.params.prompt,
+                    prompt=user_prompt,
                     image_count=len(image_urls),
                     image_urls=image_urls
                 )
@@ -426,6 +429,8 @@ class Worker:
             logger.info(f"批量子任务 {task.task_id} 失败，跳过单独退还（freeze_id={freeze_id}）")
             return
 
+        user_prompt = task.metadata.get("user_input") or task.metadata.get("display_prompt") or task.metadata.get("original_prompt") or task.params.prompt
+
         if user_id and freeze_id:
             try:
                 from ..services.account_service import get_account_service
@@ -437,7 +442,7 @@ class Worker:
                     model_name=task.params.model or "unknown",
                     provider=task.params.provider or "unknown",
                     request_id=task.task_id,
-                    prompt=task.params.prompt,
+                    prompt=user_prompt,
                     error_reason=str(error),
                 )
                 task.metadata["billing_result"] = billing_result
@@ -454,7 +459,7 @@ class Worker:
                     model_name=task.params.model or "unknown",
                     provider=task.params.provider or "unknown",
                     request_id=task.task_id,
-                    prompt=task.params.prompt,
+                    prompt=user_prompt,
                     error_reason=str(error)
                 )
             except Exception as billing_error:
@@ -471,12 +476,13 @@ class Worker:
             # 准备图片URL列表
             image_urls = [img.url for img in results]
 
-            # 创建图片生成记录
+            # 创建图片生成记录 - 使用用户原始提示词
+            db_prompt = task.metadata.get("user_input") or task.metadata.get("display_prompt") or task.metadata.get("original_prompt") or task.params.prompt
             image_record = await db_manager.create_image_generation_record(
                 user_request_id=task.user_request_id,
                 provider=task.params.provider,
                 model=task.params.model or "",
-                prompt=task.params.prompt,
+                prompt=db_prompt,
                 negative_prompt=task.params.negative_prompt,
                 width=task.params.width,
                 height=task.params.height,
