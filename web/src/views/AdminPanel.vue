@@ -1269,33 +1269,11 @@ function editSceneTemplates(scene: any) {
 
 async function syncScenesToServer() {
   try {
-    // Load default scenes from JSON to merge with admin edits
-    let defaultScenes = []
-    let defaultCategories = []
-    try {
-      const res = await fetch('/data/scenes.json')
-      const data = await res.json()
-      defaultScenes = data.scenes || []
-      defaultCategories = data.categories || []
-    } catch {}
-
-    // Merge: admin scenes override defaults by id
-    const adminIds = new Set(sceneList.value.map(s => s.id))
-    const mergedScenes = [
-      ...sceneList.value,
-      ...defaultScenes.filter(s => !adminIds.has(s.id))
-    ]
-
-    await api.updateSystemConfig({
-      config_key: 'scenes.data',
-      config_value: JSON.stringify({ categories: sceneCategories.value.length > 0 ? sceneCategories.value : defaultCategories, scenes: mergedScenes })
-    }).catch(() => {
-      // Fallback: try the scenes-specific endpoint
-      return fetch('/api/v1/admin/system-config/scenes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ categories: defaultCategories, scenes: mergedScenes })
-      })
+    const categories = sceneCategories.value.length > 0 ? sceneCategories.value : []
+    await fetch('/api/v1/admin/system-config/scenes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categories, scenes: sceneList.value })
     })
   } catch (e) {
     console.error('Failed to sync scenes to server:', e)
@@ -1349,21 +1327,22 @@ function handleSceneCoverUpload(uploadFile: any) {
 
 const sceneCategories = ref([])
 
-// Load saved scenes from API
+// Load ALL scenes from API (including defaults)
 async function loadScenesFromServer() {
   try {
     const res = await fetch('/api/v1/admin/system-config/scenes')
     const data = await res.json()
     if (data.scenes?.length) {
-      // Only load admin-created scenes (not the default ones from JSON)
-      sceneList.value = data.scenes.filter(s => s.id?.startsWith('scene_'))
+      sceneList.value = data.scenes
     }
     if (data.categories?.length) sceneCategories.value = data.categories
   } catch {
-    // Fallback to localStorage
+    // Fallback: load from static JSON
     try {
-      const saved = localStorage.getItem('admin_scenes')
-      if (saved) sceneList.value = JSON.parse(saved)
+      const res = await fetch('/data/scenes.json')
+      const data = await res.json()
+      if (data.scenes?.length) sceneList.value = data.scenes
+      if (data.categories?.length) sceneCategories.value = data.categories
     } catch {}
   }
 }
