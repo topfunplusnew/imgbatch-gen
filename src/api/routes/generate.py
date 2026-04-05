@@ -63,6 +63,8 @@ class UnifiedGenerationRecord(BaseModel):
     platform: Optional[str] = None  # 异步任务的平台
     processing_time: Optional[float] = None
     error: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
 
 
 def get_task_manager(request: Request) -> TaskManager:
@@ -313,13 +315,27 @@ async def get_unified_generation_history(
     unified = []
 
     for record in chat_records:
+        # 优先使用用户输入的提示词（中文），过滤掉系统提示词
+        prompt = record.get("prompt", "")
+        if prompt and ("System instructions" in prompt or prompt.strip().startswith("You are an expert")):
+            # 尝试从extra_params中获取原始提示词
+            extra = record.get("extra_params") or {}
+            prompt = extra.get("display_prompt") or extra.get("original_prompt") or extra.get("user_input") or ""
+            if not prompt:
+                # 从长英文prompt中提取中文内容
+                import re
+                cn_parts = re.findall(r'[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]+', record.get("prompt", ""))
+                prompt = ' '.join(cn_parts) if cn_parts else record.get("prompt", "")
+
         unified.append({
             "id": record["id"],
             "type": "chat",
             "model": record["model"],
-            "prompt": record["prompt"],
+            "prompt": prompt,
             "status": record["status"],
             "image_urls": record["image_urls"] or [],
+            "width": record.get("width"),
+            "height": record.get("height"),
             "timestamp": record["created_at"],
             "created_at": record["created_at"],
             "provider": record.get("provider")

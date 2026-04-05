@@ -1166,7 +1166,7 @@
               </div>
               <div>
                 <label class="text-sm font-medium text-gray-700">尺寸</label>
-                <p class="mt-1 text-gray-900">{{ selectedGeneration.width }} × {{ selectedGeneration.height }}</p>
+                <p class="mt-1 text-gray-900">{{ selectedGeneration.width && selectedGeneration.height ? `${selectedGeneration.width} × ${selectedGeneration.height}` : 'Auto' }}</p>
               </div>
               <div>
                 <label class="text-sm font-medium text-gray-700">状态</label>
