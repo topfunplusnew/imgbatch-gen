@@ -43,7 +43,13 @@ class GeminiProvider(SyncRelayProvider):
         extra = params.extra_params or {}
 
         # 构建增强的prompt，包含尺寸和质量信息
-        enhanced_prompt = params.prompt
+        # 检测是否有中文内容，若有则强化中文生图指令
+        import re
+        has_chinese = bool(re.search(r'[\u4e00-\u9fff]', params.prompt or ''))
+        if has_chinese:
+            enhanced_prompt = f"{params.prompt}\n\n[IMPORTANT: All visible text in the generated image MUST be in Chinese (中文), including titles, labels, captions, and annotations. Do NOT use English text.]"
+        else:
+            enhanced_prompt = params.prompt
 
         # 获取宽高比和标准化尺寸
         if params.width and params.height:
@@ -168,7 +174,10 @@ class GeminiProvider(SyncRelayProvider):
                     "parts": parts
                 }
             ],
-            "generationConfig": generation_config
+            "generationConfig": generation_config,
+            "systemInstruction": {
+                "parts": [{"text": "IMPORTANT: Unless the user explicitly requests English or another language, always generate images with Chinese text (中文). All text, labels, titles, captions, and annotations in the generated image MUST be in Chinese. 所有生成的图片中的文字必须使用中文。"}]
+            }
         }
 
         # 打印完整的payload用于调试
