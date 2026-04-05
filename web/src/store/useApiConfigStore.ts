@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 
 const API_CONFIG_STORAGE_KEY = 'apiConfig'
-const DEFAULT_MODEL = 'gemini-2.5-flash-image-preview'
+const DEFAULT_MODEL = 'gemini-3.1-flash-image-preview'
 
 type StoredApiConfig = {
   apiKey?: string

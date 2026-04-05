@@ -6,7 +6,7 @@ import { mockGenerateImage, mockGetTaskStatus, isMockMode } from '@/utils/mockAp
 const ACTIVE_TASK_STATUSES = new Set(['pending', 'processing', 'running'])
 const FAILED_TASK_STATUSES = new Set(['failed', 'error', 'cancelled', 'canceled'])
 const TERMINAL_TASK_STATUSES = new Set(['completed', ...FAILED_TASK_STATUSES])
-const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-image-preview'
+const DEFAULT_GEMINI_MODEL = 'gemini-3.1-flash-image-preview'
 
 const STAGE_LABEL_MAP: Record<string, string> = {
     request_received: '请求已接收',

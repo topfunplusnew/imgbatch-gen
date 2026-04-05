@@ -18,7 +18,7 @@ class GeminiProvider(SyncRelayProvider):
     """
 
     def get_endpoint(self) -> str:
-        return "/v1beta/models/gemini-2.5-flash-image-preview:generateContent"
+        return "/v1beta/models/gemini-3.1-flash-image-preview:generateContent"
 
     def get_timeout(self) -> float:
         return 300.0
