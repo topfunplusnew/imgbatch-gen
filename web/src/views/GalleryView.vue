@@ -206,9 +206,15 @@ const filteredCreations = computed(() => {
   return result
 })
 
+const normalizeMinioUrl = (url) => {
+  if (!url) return url
+  const m = url.match(/^https?:\/\/[^/]*minio[^/]*(?::\d+)?\/([^/]+)\/(.+)$/)
+  return m ? `/storage/${m[2]}` : url
+}
+
 const getImageUrl = (item) => {
-  if (item.image_urls?.length > 0) return item.image_urls[0]
-  if (item.thumbnail_url) return item.thumbnail_url
+  if (item.image_urls?.length > 0) return normalizeMinioUrl(item.image_urls[0])
+  if (item.thumbnail_url) return normalizeMinioUrl(item.thumbnail_url)
   return ''
 }
 

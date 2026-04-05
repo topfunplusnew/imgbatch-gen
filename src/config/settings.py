@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     minio_secret_key: str = "admin123"
     minio_bucket_name: str = "images"
     minio_secure: bool = False
-    minio_url_prefix: Optional[str] = None
+    minio_url_prefix: Optional[str] = "/storage"
     public_base_url: Optional[str] = None
 
     max_concurrent_tasks: int = 20

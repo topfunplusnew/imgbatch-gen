@@ -962,14 +962,20 @@ function getAttachmentIcon(file) {
 }
 
 function getFileUrl(file) {
-  const rawUrl = file?.url || file?.file_url || file?.local_url || file?.preview_url || ''
+  let rawUrl = file?.url || file?.file_url || file?.local_url || file?.preview_url || ''
   if (!rawUrl) return ''
-  if (
-    rawUrl.startsWith('blob:') ||
-    rawUrl.startsWith('data:') ||
-    rawUrl.startsWith('http://') ||
-    rawUrl.startsWith('https://')
-  ) {
+  if (rawUrl.startsWith('blob:') || rawUrl.startsWith('data:')) {
+    return rawUrl
+  }
+
+  // 将内部 MinIO URL 转换为 /storage/... 路径
+  const minioInternalPattern = /^https?:\/\/[^/]*minio[^/]*(?::\d+)?\/([^/]+)\/(.+)$/
+  const minioMatch = rawUrl.match(minioInternalPattern)
+  if (minioMatch) {
+    rawUrl = `/storage/${minioMatch[2]}`
+  }
+
+  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
     return rawUrl
   }
 
@@ -1205,7 +1211,15 @@ const getImageUrl = (image, useThumbnail = false) => {
   }
   if (!url) return url
 
-  // 如果已经是完整URL，直接返回
+  // 将内部 MinIO URL（http://minio:9000/images/...）转换为前端可访问的 /storage/... 路径
+  const minioInternalPattern = /^https?:\/\/[^/]*minio[^/]*(?::\d+)?\/([^/]+)\/(.+)$/
+  const minioMatch = url.match(minioInternalPattern)
+  if (minioMatch) {
+    // minioMatch[1] = bucket name (e.g. "images"), minioMatch[2] = object path
+    url = `/storage/${minioMatch[2]}`
+  }
+
+  // 如果已经是完整外部URL，直接返回
   if (url.startsWith('http://') || url.startsWith('https://')) {
     return url
   }
