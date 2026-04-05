@@ -449,7 +449,7 @@
 
                   <!-- 信息 -->
                   <div class="p-4">
-                    <p class="text-sm text-gray-600 line-clamp-2 mb-2">{{ record.prompt }}</p>
+                    <p class="text-sm text-gray-600 line-clamp-2 mb-2">{{ cleanPrompt(record.prompt) }}</p>
                     <div class="flex items-center justify-between">
                       <span class="text-xs text-gray-500">{{ record.model }}</span>
                       <span class="text-xs text-gray-500">{{ formatDate(record.created_at) }}</span>
@@ -610,7 +610,7 @@
 
                   <!-- 中部：提示词 -->
                   <div v-if="record.prompt" class="mb-3">
-                    <p class="text-sm text-gray-700 line-clamp-2">{{ record.prompt }}</p>
+                    <p class="text-sm text-gray-700 line-clamp-2">{{ cleanPrompt(record.prompt) }}</p>
                   </div>
 
                   <!-- 底部：扣费信息和失败原因 -->
@@ -1157,7 +1157,7 @@
           <div class="space-y-4">
             <div>
               <label class="text-sm font-medium text-gray-700">提示词</label>
-              <p class="mt-1 p-3 bg-gray-50 rounded-lg text-gray-900">{{ selectedGeneration.prompt }}</p>
+              <p class="mt-1 p-3 bg-gray-50 rounded-lg text-gray-900">{{ cleanPrompt(selectedGeneration.prompt) }}</p>
             </div>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
@@ -1410,6 +1410,24 @@ async function loadMoreConsumption() {
 }
 
 // 获取计费类型显示文本
+// 过滤掉英文系统提示词，只展示用户输入的提示词
+function cleanPrompt(prompt) {
+  if (!prompt) return ''
+  let cleaned = prompt
+  // 移除 "System instructions: ..." 段落
+  cleaned = cleaned.replace(/System instructions?:[\s\S]*?(?=\n\n|$)/gi, '')
+  // 移除 "gemini-*-flash-image-preview\nSystem..." 段落
+  cleaned = cleaned.replace(/gemini[\w.-]*\s*\n\s*System[\s\S]*?(?=\n\n[^a-zA-Z]|$)/gi, '')
+  // 如果整段都是英文系统提示词，返回空
+  if (/^(You are an expert|Write production-ready|IMPORTANT:|Create a|Generate a)/i.test(cleaned.trim())) {
+    // 尝试提取最后一行中文内容作为用户提示词
+    const lines = prompt.split('\n').filter(l => l.trim())
+    const chineseLine = lines.find(l => /[\u4e00-\u9fff]/.test(l))
+    return chineseLine?.trim() || ''
+  }
+  return cleaned.trim()
+}
+
 function getCostTypeDisplay(costType) {
   const typeMap = {
     'free': '免费',
@@ -1421,11 +1439,14 @@ function getCostTypeDisplay(costType) {
   return typeMap[costType] || costType
 }
 
-// 获取图片URL（处理相对路径）
+// 获取图片URL（处理相对路径和内部MinIO URL）
 function getImageUrl(url) {
   if (!url) return ''
+  // 将内部 MinIO URL 转换为 /storage/... 路径
+  const m = url.match(/^https?:\/\/[^/]*minio[^/]*(?::\d+)?\/([^/]+)\/(.+)$/)
+  if (m) return `/storage/${m[2]}`
   if (url.startsWith('http')) return url
-  return `/api/v1${url.startsWith('/') ? '' : '/'}${url}`
+  return url
 }
 
 // 格式化日期时间
