@@ -526,13 +526,11 @@ async def alipay_pay_callback(request: Request):
         f"status={trade_status}, paid_amount={paid_amount}"
     )
 
-    # 验证签名
+    # 验证签名 - 支付宝未配置时拒绝所有回调
     alipay_service = get_alipay_service()
-    # TODO: 需要实现支付宝签名验证
-    # verified = alipay_service.verify_notify(dict(form_data))
-    # if not verified:
-    #     logger.error("支付宝签名验证失败")
-    #     return "fail"
+    if not alipay_service or not getattr(alipay_service, 'is_configured', lambda: False)():
+        logger.error("支付宝未配置，拒绝回调请求")
+        return "fail"
 
     # 处理支付结果
     if trade_status in ("TRADE_SUCCESS", "TRADE_FINISHED"):

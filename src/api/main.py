@@ -214,9 +214,42 @@ async def lifespan(app: FastAPI):
             logger.info("过期订单检查任务注册成功")
 
             logger.info("所有支付定时任务已注册")
+
+            # 清理过期临时积分（每30分钟）
+            async def cleanup_expired_gift_points():
+                """清理所有用户过期的临时积分"""
+                try:
+                    from ..database import get_db_manager
+                    from ..database.billing_models import Account
+                    from sqlalchemy import select, update
+                    from datetime import datetime
+
+                    db_manager = get_db_manager()
+                    async with db_manager.get_session() as session:
+                        now = datetime.now()
+                        result = await session.execute(
+                            update(Account)
+                            .where(Account.gift_points > 0)
+                            .where(Account.gift_points_expiry != None)
+                            .where(Account.gift_points_expiry < now)
+                            .values(gift_points=0, gift_points_expiry=None)
+                        )
+                        if result.rowcount > 0:
+                            await session.commit()
+                            logger.info(f"清理了 {result.rowcount} 个用户的过期临时积分")
+                except Exception as e:
+                    logger.error(f"清理过期临时积分失败: {e}")
+
+            app.state.scheduler.schedule_periodic(
+                name="cleanup_expired_gift_points",
+                interval_seconds=1800,  # 30分钟
+                coroutine_func=cleanup_expired_gift_points,
+            )
+            logger.info("临时积分清理任务注册成功（每30分钟）")
+
         except Exception as e:
             import traceback
-            logger.error(f"支付定时任务注册失败: {str(e)}")
+            logger.error(f"定时任务注册失败: {str(e)}")
             logger.error(f"错误详情: {traceback.format_exc()}")
 
         # 如果配置了启动时清理

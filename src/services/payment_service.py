@@ -298,22 +298,61 @@ class PaymentService:
 
         elif order.order_type == "subscription":
             # 订阅：开通会员
-            # TODO: 实现订阅逻辑
-            logger.info(f"订阅开通: user={order.user_id}, plan={order.plan_id}")
+            account = await account_service.get_or_create_account(order.user_id)
+
+            # 查找套餐配置
+            plan_config = self._get_plan_config(order.plan_id)
+            duration_days = plan_config.get("duration_days", 30) if plan_config else 30
+            points_included = plan_config.get("points_included", 0) if plan_config else 0
+            plan_name = plan_config.get("name", order.plan_id) if plan_config else order.plan_id
+
+            # 设置订阅到期时间
+            from datetime import datetime, timedelta
+            account.subscription_plan = order.plan_id
+            account.subscription_expires_at = datetime.now() + timedelta(days=duration_days)
+            await account_service.db_manager.update_account(account)
+
+            # 发放套餐包含的积分
+            if points_included > 0:
+                await account_service.db_manager.add_transaction(
+                    user_id=order.user_id,
+                    transaction_type="subscription",
+                    amount=0,
+                    points_change=points_included,
+                    description=f"订阅 {plan_name} - 赠送 {points_included} 积分",
+                    related_order_id=order.order_id,
+                )
+
+            logger.info(
+                f"订阅开通: user={order.user_id}, plan={order.plan_id}, "
+                f"expires={account.subscription_expires_at}, points={points_included}"
+            )
 
     def _get_recharge_config(self) -> Dict[str, Any]:
         """获取充值配置"""
+        return self._load_billing_config().get("recharge_options", {})
+
+    def _get_plan_config(self, plan_id: str) -> Optional[Dict[str, Any]]:
+        """获取订阅套餐配置"""
+        config = self._load_billing_config()
+        plans = config.get("subscription_plans", {}).get("plans", [])
+        for plan in plans:
+            if plan.get("id") == plan_id or plan.get("plan_id") == plan_id:
+                return plan
+        return None
+
+    def _load_billing_config(self) -> Dict[str, Any]:
+        """加载计费配置"""
         import json
         from pathlib import Path
 
         config_path = Path(__file__).parent.parent / "config" / "billing_config.json"
         try:
             with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
-                return config.get("recharge_options", {})
+                return json.load(f)
         except Exception as e:
-            logger.error(f"加载充值配置失败: {str(e)}")
-            return {"options": []}
+            logger.error(f"加载计费配置失败: {str(e)}")
+            return {}
 
 
 # 微信支付相关

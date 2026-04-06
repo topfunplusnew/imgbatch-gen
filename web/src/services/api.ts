@@ -332,28 +332,72 @@ const createApiClient = (): AxiosInstance => {
     }
   )
 
-  // 响应拦截器
+  // 响应拦截器 - 支持 401 自动刷新 token
+  let isRefreshing = false
+  let pendingRequests: Array<(token: string) => void> = []
+
   client.interceptors.response.use(
     (response: AxiosResponse) => {
-      // 添加响应日志（开发环境）
       if (import.meta.env.DEV) {
         console.log(`[API Response] ${response.config.method?.toUpperCase()} ${response.config.url}`, {
           status: response.status,
           data: response.data,
         })
       }
-
       return response
     },
-    (error: AxiosError) => {
-      // 统一错误处理
+    async (error: AxiosError) => {
+      const originalRequest = error.config as any
+      const status = error.response?.status
+
+      // 401 且不是刷新 token 请求本身 → 尝试自动刷新
+      if (status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/refresh')) {
+        const refreshToken = localStorage.getItem('refresh_token')
+        if (refreshToken) {
+          if (isRefreshing) {
+            // 已经在刷新中，排队等待
+            return new Promise((resolve) => {
+              pendingRequests.push((newToken: string) => {
+                originalRequest.headers['Authorization'] = `Bearer ${newToken}`
+                resolve(client(originalRequest))
+              })
+            })
+          }
+
+          originalRequest._retry = true
+          isRefreshing = true
+
+          try {
+            const res = await client.post('/api/v1/auth/refresh', { refresh_token: refreshToken })
+            const newToken = res.data.access_token
+            localStorage.setItem('access_token', newToken)
+            client.defaults.headers.common['Authorization'] = `Bearer ${newToken}`
+
+            // 重试所有排队的请求
+            pendingRequests.forEach(cb => cb(newToken))
+            pendingRequests = []
+
+            // 重试原始请求
+            originalRequest.headers['Authorization'] = `Bearer ${newToken}`
+            return client(originalRequest)
+          } catch (refreshError) {
+            // 刷新也失败，跳转登录
+            pendingRequests = []
+            void redirectToLoginForUnauthorized(error)
+            return Promise.reject(error)
+          } finally {
+            isRefreshing = false
+          }
+        }
+      }
+
+      // 非 401 或无 refresh_token
       const errorMessage = handleApiError(error)
       console.error('[API Response Error]', errorMessage)
 
-      void redirectToLoginForUnauthorized(error)
-
-      // 可以在这里添加全局错误提示
-      // 例如：showToast(errorMessage)
+      if (status === 401) {
+        void redirectToLoginForUnauthorized(error)
+      }
 
       return Promise.reject(error)
     }

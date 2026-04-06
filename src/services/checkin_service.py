@@ -52,8 +52,11 @@ class CheckinService:
         else:
             account.consecutive_checkin_days = 1
 
-        # 发放签到奖励（40永久积分，不清零）
-        account.points = (account.points or 0) + self.daily_reward
+        # 发放签到奖励（临时积分，当日23:59:59过期）
+        from datetime import time as dtime
+        expiry_time = datetime.combine(today, dtime(23, 59, 59))
+        account.gift_points = (account.gift_points or 0) + self.daily_reward
+        account.gift_points_expiry = expiry_time
         account.total_points_earned = (account.total_points_earned or 0) + self.daily_reward
         account.last_checkin_date = today
 
@@ -61,7 +64,7 @@ class CheckinService:
 
         logger.info(
             f"用户 {user_id} 签到成功，连续 {account.consecutive_checkin_days} 天，"
-            f"奖励 {self.daily_reward} 永久积分"
+            f"奖励 {self.daily_reward} 临时积分，{expiry_time} 过期"
         )
 
         return {
@@ -69,7 +72,7 @@ class CheckinService:
             "reward_points": self.daily_reward,
             "consecutive_days": account.consecutive_checkin_days,
             "gift_points": account.gift_points or 0,
-            "gift_points_expiry": account.gift_points_expiry.isoformat() if account.gift_points_expiry else None,
+            "gift_points_expiry": expiry_time.isoformat(),
         }
 
     async def get_checkin_status(self, user_id: str) -> Dict[str, Any]:
