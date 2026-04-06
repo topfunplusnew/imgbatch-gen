@@ -1023,10 +1023,21 @@ def _compose_image_model_prompt(
         sections.append(f"System instructions:\n{system_prompt.strip()}")
     if recent_context.strip():
         sections.append(f"Recent conversation context:\n{recent_context.strip()}")
-    if user_prompt.strip():
-        sections.append(f"Latest user request:\n{user_prompt.strip()}")
-    if planned_prompt.strip():
-        sections.append(f"Final grounded generation brief:\n{planned_prompt.strip()}")
+
+    # 避免 user_prompt 和 planned_prompt 内容重复拼接
+    user_text = user_prompt.strip()
+    planned_text = planned_prompt.strip()
+    if user_text and planned_text:
+        # 如果两者内容基本一致（互相包含），只保留一份
+        if user_text in planned_text or planned_text in user_text:
+            sections.append(planned_text)
+        else:
+            sections.append(f"Latest user request:\n{user_text}")
+            sections.append(f"Final grounded generation brief:\n{planned_text}")
+    elif planned_text:
+        sections.append(planned_text)
+    elif user_text:
+        sections.append(user_text)
 
     return _trim_attachment_text(
         "\n\n".join(sections),
