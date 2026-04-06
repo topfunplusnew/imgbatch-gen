@@ -121,7 +121,7 @@
         </div>
 
         <!-- Mobile nav -->
-        <div class="flex-1 px-3">
+        <div class="shrink-0 px-3">
           <ul class="space-y-1">
             <li v-for="item in menuItems" :key="item.to">
               <router-link
@@ -139,6 +139,11 @@
               </router-link>
             </li>
           </ul>
+        </div>
+
+        <!-- Mobile chat history -->
+        <div v-if="authStore.isAuthenticated" class="flex-1 min-h-0 overflow-hidden">
+          <ChatHistorySidebar @collapse="showMobileSidebar = false" />
         </div>
 
         <!-- Mobile points -->

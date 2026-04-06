@@ -162,6 +162,11 @@ async function switchToSession(session: HistorySession) {
   appStore.setSelectedCreation(null)
   appStore.clearSelectedCase()
   appStore.setCurrentView('chat')
+
+  // 如果不在首页，导航到首页显示聊天
+  if (router.currentRoute.value.path !== '/') {
+    router.push('/')
+  }
 }
 
 async function deleteSession(sessionId: string) {

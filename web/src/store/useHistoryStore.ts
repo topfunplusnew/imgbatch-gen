@@ -1,6 +1,17 @@
 import { defineStore } from 'pinia'
 import { api } from '@/services/api'
 
+/** 归一化 MinIO 内部 URL 为前端可访问的相对路径 */
+function normalizeImageUrl(url: string): string {
+  if (!url) return url
+  const m = url.match(/^https?:\/\/[^/]*minio[^/]*(?::\d+)?\/([^/]+)\/(.+)$/)
+  if (m) return `/storage/${m[2]}`
+  // localhost MinIO
+  const l = url.match(/^https?:\/\/(?:localhost|127\.0\.0\.1):\d+\/([^/]+)\/(.+)$/)
+  if (l) return `/storage/${l[2]}`
+  return url
+}
+
 function parseHistoryTimestamp(value: string | number | null | undefined): number {
   if (value === null || value === undefined || value === '') {
     return 0
@@ -155,7 +166,7 @@ export const useHistoryStore = defineStore('history', {
             model: msg.model,
             provider: msg.provider,
             createdAt: parseHistoryTimestamp(msg.created_at),
-            images: msg.images ? msg.images.map((url: string) => ({ url, alt: '生成的图像' })) : [],
+            images: msg.images ? msg.images.map((url: string) => ({ url: normalizeImageUrl(url), alt: '生成的图像' })) : [],
             files: msg.files || []
           }))
 

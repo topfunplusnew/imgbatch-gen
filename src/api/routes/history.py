@@ -1,6 +1,7 @@
 """对话历史接口"""
 
 import json
+import re
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Request, Depends
 from loguru import logger
@@ -18,6 +19,22 @@ from .chat import _extract_api_key, _get_openai_client
 
 
 router = APIRouter(prefix="/api/v1", tags=["history"])
+
+_MINIO_INTERNAL_RE = re.compile(r'^https?://[^/]*minio[^/]*(?::\d+)?/[^/]+/(.+)$')
+_LOCALHOST_MINIO_RE = re.compile(r'^https?://(?:localhost|127\.0\.0\.1):\d+/[^/]+/(.+)$')
+
+
+def _normalize_image_url(url: str) -> str:
+    """将 MinIO 内部 URL 转为前端可访问的 /storage/ 路径"""
+    if not url:
+        return url
+    m = _MINIO_INTERNAL_RE.match(url)
+    if m:
+        return f"/storage/{m.group(1)}"
+    m = _LOCALHOST_MINIO_RE.match(url)
+    if m:
+        return f"/storage/{m.group(1)}"
+    return url
 
 
 # ==================== 请求/响应模型 ====================
@@ -282,7 +299,8 @@ async def get_conversation(
             }
             if msg.images:
                 try:
-                    msg_data["images"] = json.loads(msg.images)
+                    raw_images = json.loads(msg.images)
+                    msg_data["images"] = [_normalize_image_url(u) for u in raw_images if u]
                 except Exception:
                     msg_data["images"] = []
             if msg.files:
