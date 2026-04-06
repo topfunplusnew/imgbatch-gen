@@ -251,12 +251,21 @@ services:
       MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-images}
       MINIO_SECURE: ${MINIO_SECURE:-false}
       MINIO_URL_PREFIX: ${MINIO_URL_PREFIX:-/storage}
+      WECHAT_APPID: ${WECHAT_APPID:-}
+      WECHAT_MCH_ID: ${WECHAT_MCH_ID:-}
+      WECHAT_CERT_SERIAL_NO: ${WECHAT_CERT_SERIAL_NO:-}
+      WECHAT_API_KEY: ${WECHAT_API_KEY:-}
+      WECHAT_KEY_PATH: ${WECHAT_KEY_PATH:-./certs/apiclient_key.pem}
+      WECHAT_NOTIFY_URL: ${WECHAT_NOTIFY_URL:-}
+      WECHAT_PUBLIC_KEY: ${WECHAT_PUBLIC_KEY:-./certs/pub_key.pem}
+      WECHAT_PUBLIC_KEY_ID: ${WECHAT_PUBLIC_KEY_ID:-}
     ports:
       - "${BACKEND_BIND_IP:-0.0.0.0}:${BACKEND_PORT:-8888}:8888"
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./storage:/app/storage
+      - ./certs:/app/certs
     healthcheck:
       test:
         [
