@@ -68,7 +68,7 @@ const customWidth = ref(1024)
 const customHeight = ref(1024)
 
 const ratioOptions = [
-  { value: 'auto', label: 'Auto', desc: '自动', w: 1024, h: 1024 },
+  { value: 'auto', label: 'Auto', desc: '自动', w: 0, h: 0 },
   { value: '1:1', label: '1:1', desc: '方形', w: 1024, h: 1024 },
   { value: '3:4', label: '3:4', desc: '竖版', w: 768, h: 1024 },
   { value: '4:3', label: '4:3', desc: '横版', w: 1024, h: 768 },
@@ -114,6 +114,13 @@ const selectRatio = (ratio) => {
 
   selectedRatio.value = ratio.value
   isOpen.value = false
+
+  if (ratio.value === 'auto') {
+    generatorStore.width = 0
+    generatorStore.height = 0
+    generatorStore.aspectRatio = 'auto'
+    return
+  }
 
   const maxDimMap = { '720p': 1280, '2k': 2048, '4k': 3840 }
   const maxDim = maxDimMap[generatorStore.quality] || 2048

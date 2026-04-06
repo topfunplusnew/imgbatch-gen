@@ -287,8 +287,8 @@ function pickPreferredDefaultModel(models: any[] = []) {
 export const useGeneratorStore = defineStore('generator', {
     state: () => ({
         model: DEFAULT_GEMINI_MODEL,
-        width: 2048,
-        height: 2048,
+        width: 0,
+        height: 0,
         aspectRatio: 'auto',
         batchSize: 1,
         isGenerating: false,
@@ -396,8 +396,8 @@ export const useGeneratorStore = defineStore('generator', {
         },
 
         resetParams() {
-            this.width = 1024
-            this.height = 1024
+            this.width = 0
+            this.height = 0
             this.aspectRatio = 'auto'
             this.batchSize = 1
             this.style = 'photorealistic'
@@ -1437,8 +1437,8 @@ export const useGeneratorStore = defineStore('generator', {
 
                 // 重置生成参数到默认值
                 this.applyPreferredDefaultModel()
-                this.width = 1024
-                this.height = 1024
+                this.width = 0
+                this.height = 0
                 this.aspectRatio = 'auto'
                 this.batchSize = 1
                 this.isGenerating = false

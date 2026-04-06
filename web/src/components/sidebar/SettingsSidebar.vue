@@ -206,7 +206,7 @@ const ratioOptions = [
   { value: 'custom',label: '自定义', desc: '更多',   w: null, h: null },
 ]
 
-const selectedRatio = ref('1:1')
+const selectedRatio = ref('auto')
 
 const selectRatio = (ratio) => {
   if (ratio.value === 'custom') {

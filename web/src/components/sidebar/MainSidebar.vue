@@ -350,7 +350,7 @@ const emit = defineEmits(['settingsDrawerChange', 'requestClose'])
 
 const showSettingsDrawer = ref(false)
 const showHelp = ref(false)
-const selectedRatio = ref('1:1')
+const selectedRatio = ref('auto')
 const showCustomSize = ref(false)
 
 const asideClass = computed(() => {
