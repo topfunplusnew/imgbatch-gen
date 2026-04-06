@@ -244,8 +244,6 @@ create table if not exists users
 
 comment on column users.username is '用户名';
 
-comment on column users.email is '邮箱(可选)';
-
 comment on column users.phone is '手机号(可选)';
 
 comment on column users.password_hash is '密码哈希';
