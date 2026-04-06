@@ -226,6 +226,8 @@ create index if not exists ix_uploaded_files_conversation_id
 create table if not exists users
 (
     username              varchar(50)  not null,
+    email                 varchar(255)
+        unique,
     phone                 varchar(20)
         unique,
     password_hash         varchar(255) not null,
@@ -241,6 +243,8 @@ create table if not exists users
 );
 
 comment on column users.username is '用户名';
+
+comment on column users.email is '邮箱(可选)';
 
 comment on column users.phone is '手机号(可选)';
 
@@ -265,6 +269,21 @@ end $$;
 
 create index if not exists ix_users_username
     on users (username);
+
+-- 迁移: 添加 email 列（如果不存在）
+do $$
+begin
+    if not exists (
+        select 1 from information_schema.columns
+        where table_name = 'users' and column_name = 'email'
+    ) then
+        alter table users add column email varchar(255) unique;
+        comment on column users.email is '邮箱(可选)';
+    end if;
+end $$;
+
+create index if not exists ix_users_email
+    on users (email);
 
 -- ==================== billing_plans ====================
 

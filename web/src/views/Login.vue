@@ -39,16 +39,16 @@
       <!-- 登录/注册表单 -->
       <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
         <div class="p-6">
-          <form @submit.prevent="handleSubmit" class="space-y-4">
+          <!-- ===== 登录模式 ===== -->
+          <form v-if="isLoginMode" @submit.prevent="handleLogin" class="space-y-4">
             <div>
-              <label class="block text-sm font-medium text-ink-700 mb-1">用户名</label>
+              <label class="block text-sm font-medium text-ink-700 mb-1">用户名 / 邮箱</label>
               <input
                 v-model="form.username"
                 type="text"
                 required
                 minlength="2"
-                maxlength="20"
-                placeholder="2-20位字符"
+                placeholder="请输入用户名或邮箱"
                 class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
               />
             </div>
@@ -65,8 +65,7 @@
               />
             </div>
 
-            <!-- 忘记密码链接（仅登录模式显示） -->
-            <div v-if="isLoginMode" class="text-right">
+            <div class="text-right">
               <button
                 type="button"
                 @click="showForgotPassword = true"
@@ -76,37 +75,193 @@
               </button>
             </div>
 
-            <div v-if="!isLoginMode">
-              <label class="block text-sm font-medium text-ink-700 mb-1">确认密码</label>
-              <input
-                v-model="form.passwordConfirmation"
-                type="password"
-                required
-                minlength="6"
-                placeholder="再次输入密码"
-                class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
-              />
-            </div>
-
-            <div v-if="!isLoginMode">
-              <label class="block text-sm font-medium text-ink-700 mb-1">邀请码（可选）</label>
-              <input
-                v-model="form.inviteCode"
-                type="text"
-                placeholder="填写邀请码，邀请人可获得奖励"
-                maxlength="20"
-                class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
-              />
-            </div>
-
             <button
               type="submit"
               :disabled="loading"
               class="w-full py-3 bg-primary text-white rounded-xl font-medium hover:bg-primary-strong disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
             >
-              {{ loading ? '处理中...' : (isLoginMode ? '登录' : '注册并登录') }}
+              {{ loading ? '登录中...' : '登录' }}
             </button>
           </form>
+
+          <!-- ===== 注册模式 ===== -->
+          <div v-else>
+            <!-- 注册方式切换标签 -->
+            <div class="flex mb-5 bg-gray-100 rounded-xl p-1">
+              <button
+                @click="registerTab = 'username'"
+                :class="[
+                  'flex-1 py-2 text-sm font-medium rounded-lg transition-all',
+                  registerTab === 'username'
+                    ? 'bg-white text-primary shadow-sm'
+                    : 'text-ink-500 hover:text-ink-700'
+                ]"
+              >
+                用户名注册
+              </button>
+              <button
+                @click="registerTab = 'email'"
+                :class="[
+                  'flex-1 py-2 text-sm font-medium rounded-lg transition-all',
+                  registerTab === 'email'
+                    ? 'bg-white text-primary shadow-sm'
+                    : 'text-ink-500 hover:text-ink-700'
+                ]"
+              >
+                邮箱注册
+              </button>
+            </div>
+
+            <!-- 用户名注册表单 -->
+            <form v-if="registerTab === 'username'" @submit.prevent="handleUsernameRegister" class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-ink-700 mb-1">用户名</label>
+                <input
+                  v-model="form.username"
+                  type="text"
+                  required
+                  minlength="2"
+                  maxlength="20"
+                  placeholder="2-20位字符"
+                  class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-ink-700 mb-1">密码</label>
+                <input
+                  v-model="form.password"
+                  type="password"
+                  required
+                  minlength="6"
+                  placeholder="至少6位字符"
+                  class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-ink-700 mb-1">确认密码</label>
+                <input
+                  v-model="form.passwordConfirmation"
+                  type="password"
+                  required
+                  minlength="6"
+                  placeholder="再次输入密码"
+                  class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-ink-700 mb-1">邀请码（可选）</label>
+                <input
+                  v-model="form.inviteCode"
+                  type="text"
+                  placeholder="填写邀请码，双方各获奖励"
+                  maxlength="20"
+                  class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                />
+              </div>
+
+              <button
+                type="submit"
+                :disabled="loading"
+                class="w-full py-3 bg-primary text-white rounded-xl font-medium hover:bg-primary-strong disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+              >
+                {{ loading ? '注册中...' : '注册并登录' }}
+              </button>
+            </form>
+
+            <!-- 邮箱注册表单 -->
+            <form v-else @submit.prevent="handleEmailRegister" class="space-y-4">
+              <!-- 步骤1: 输入邮箱获取验证码 -->
+              <div>
+                <label class="block text-sm font-medium text-ink-700 mb-1">邮箱地址</label>
+                <div class="flex gap-2">
+                  <input
+                    v-model="emailForm.email"
+                    type="email"
+                    required
+                    placeholder="请输入邮箱"
+                    class="flex-1 px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                  />
+                  <button
+                    type="button"
+                    @click="sendEmailCode"
+                    :disabled="!emailForm.email || emailCodeSending || emailCountdown > 0"
+                    class="px-4 py-3 bg-primary-soft text-primary rounded-xl hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium whitespace-nowrap transition-colors"
+                  >
+                    {{ emailCountdown > 0 ? `${emailCountdown}s` : (emailCodeSending ? '发送中' : '获取验证码') }}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-ink-700 mb-1">验证码</label>
+                <input
+                  v-model="emailForm.code"
+                  type="text"
+                  required
+                  maxlength="6"
+                  placeholder="请输入6位验证码"
+                  class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-ink-700 mb-1">用户名（可选）</label>
+                <input
+                  v-model="emailForm.username"
+                  type="text"
+                  maxlength="20"
+                  placeholder="不填则自动生成"
+                  class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-ink-700 mb-1">密码</label>
+                <input
+                  v-model="emailForm.password"
+                  type="password"
+                  required
+                  minlength="6"
+                  placeholder="至少6位字符"
+                  class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-ink-700 mb-1">确认密码</label>
+                <input
+                  v-model="emailForm.passwordConfirmation"
+                  type="password"
+                  required
+                  minlength="6"
+                  placeholder="再次输入密码"
+                  class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-ink-700 mb-1">邀请码（可选）</label>
+                <input
+                  v-model="emailForm.inviteCode"
+                  type="text"
+                  placeholder="填写邀请码，双方各获奖励"
+                  maxlength="20"
+                  class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                />
+              </div>
+
+              <button
+                type="submit"
+                :disabled="loading || !emailForm.code"
+                class="w-full py-3 bg-primary text-white rounded-xl font-medium hover:bg-primary-strong disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+              >
+                {{ loading ? '注册中...' : '注册并登录' }}
+              </button>
+            </form>
+          </div>
 
           <!-- 提示信息 -->
           <div v-if="!isLoginMode" class="mt-4 p-3 bg-blue-50 rounded-xl">
@@ -310,25 +465,11 @@ const authStore = useAuthStore()
 const appStore = useAppStore()
 
 // 状态
-const isLoginMode = ref(true) // 默认登录模式
+const isLoginMode = ref(true)
+const registerTab = ref('email') // 'username' | 'email'
 const loading = ref(false)
 
-// 忘记密码弹窗状态
-const showForgotPassword = ref(false)
-const resetStep = ref(1) // 1: 输入邮箱, 2: 输入验证码和新密码, 3: 成功
-const resetSending = ref(false)
-const resetLoading = ref(false)
-const resetCountdown = ref(0)
-
-// 忘记密码表单
-const resetForm = ref({
-  email: '',
-  code: '',
-  newPassword: '',
-  confirmPassword: ''
-})
-
-// 表单
+// 登录/用户名注册表单
 const form = ref({
   username: '',
   password: '',
@@ -336,14 +477,38 @@ const form = ref({
   inviteCode: ''
 })
 
+// 邮箱注册表单
+const emailForm = ref({
+  email: '',
+  code: '',
+  username: '',
+  password: '',
+  passwordConfirmation: '',
+  inviteCode: ''
+})
+const emailCodeSending = ref(false)
+const emailCountdown = ref(0)
+
+// 忘记密码弹窗状态
+const showForgotPassword = ref(false)
+const resetStep = ref(1)
+const resetSending = ref(false)
+const resetLoading = ref(false)
+const resetCountdown = ref(0)
+const resetForm = ref({
+  email: '',
+  code: '',
+  newPassword: '',
+  confirmPassword: ''
+})
+
 // 切换登录/注册模式
 function toggleMode() {
   isLoginMode.value = !isLoginMode.value
-  // 重置表单
   form.value = { username: '', password: '', passwordConfirmation: '', inviteCode: '' }
+  emailForm.value = { email: '', code: '', username: '', password: '', passwordConfirmation: '', inviteCode: '' }
 }
 
-// 返回首页
 function backToHome() {
   router.push('/')
 }
@@ -353,35 +518,95 @@ onMounted(() => {
   const code = route.query.code
   if (code) {
     form.value.inviteCode = String(code)
-    isLoginMode.value = false // 有邀请码自动切到注册模式
+    emailForm.value.inviteCode = String(code)
+    isLoginMode.value = false
   }
 })
 
-// 处理表单提交
-async function handleSubmit() {
+// 登录
+async function handleLogin() {
   loading.value = true
   try {
-    if (isLoginMode.value) {
-      // 登录
-      await authStore.loginByUsername(form.value.username, form.value.password)
-    } else {
-      // 注册
-      if (form.value.password !== form.value.passwordConfirmation) {
-        notification.error('注册失败', '两次输入的密码不一致')
-        return
-      }
-      await authStore.registerByUsername({
-        username: form.value.username,
-        password: form.value.password,
-        password_confirmation: form.value.passwordConfirmation,
-        invite_code: form.value.inviteCode || undefined
-      })
-    }
-
-    // 成功后跳转
+    await authStore.loginByUsername(form.value.username, form.value.password)
     router.push('/')
   } catch (error) {
-    notification.error('操作失败', error?.response?.data?.detail || '请重试')
+    notification.error('登录失败', error?.response?.data?.detail || '用户名或密码错误')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 用户名注册
+async function handleUsernameRegister() {
+  if (form.value.password !== form.value.passwordConfirmation) {
+    notification.error('注册失败', '两次输入的密码不一致')
+    return
+  }
+  loading.value = true
+  try {
+    await authStore.registerByUsername({
+      username: form.value.username,
+      password: form.value.password,
+      password_confirmation: form.value.passwordConfirmation,
+      invite_code: form.value.inviteCode || undefined
+    })
+    router.push('/')
+  } catch (error) {
+    notification.error('注册失败', error?.response?.data?.detail || '请重试')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 发送邮箱验证码（注册用）
+async function sendEmailCode() {
+  if (!emailForm.value.email) {
+    notification.error('错误', '请输入邮箱地址')
+    return
+  }
+  emailCodeSending.value = true
+  try {
+    await api.sendVerifyCode(emailForm.value.email, 'email')
+    notification.success('发送成功', '验证码已发送到您的邮箱')
+    emailCountdown.value = 60
+    const timer = setInterval(() => {
+      emailCountdown.value--
+      if (emailCountdown.value <= 0) clearInterval(timer)
+    }, 1000)
+  } catch (error) {
+    notification.error('发送失败', error?.response?.data?.detail || '请稍后重试')
+  } finally {
+    emailCodeSending.value = false
+  }
+}
+
+// 邮箱注册
+async function handleEmailRegister() {
+  if (!emailForm.value.code) {
+    notification.error('错误', '请输入验证码')
+    return
+  }
+  if (emailForm.value.password.length < 6) {
+    notification.error('错误', '密码至少需要6位字符')
+    return
+  }
+  if (emailForm.value.password !== emailForm.value.passwordConfirmation) {
+    notification.error('注册失败', '两次输入的密码不一致')
+    return
+  }
+  loading.value = true
+  try {
+    await authStore.registerByEmail({
+      email: emailForm.value.email,
+      code: emailForm.value.code,
+      password: emailForm.value.password,
+      password_confirmation: emailForm.value.passwordConfirmation,
+      username: emailForm.value.username || undefined,
+      invite_code: emailForm.value.inviteCode || undefined
+    })
+    router.push('/')
+  } catch (error) {
+    notification.error('注册失败', error?.response?.data?.detail || '请重试')
   } finally {
     loading.value = false
   }
@@ -393,22 +618,15 @@ async function sendResetCode() {
     notification.error('错误', '请输入邮箱地址')
     return
   }
-
   resetSending.value = true
   try {
     await api.sendVerifyCode(resetForm.value.email, 'email')
     notification.success('发送成功', '验证码已发送到您的邮箱')
-
-    // 开始倒计时
     resetCountdown.value = 60
     const timer = setInterval(() => {
       resetCountdown.value--
-      if (resetCountdown.value <= 0) {
-        clearInterval(timer)
-      }
+      if (resetCountdown.value <= 0) clearInterval(timer)
     }, 1000)
-
-    // 进入下一步
     resetStep.value = 2
   } catch (error) {
     notification.error('发送失败', error?.response?.data?.detail || '请稍后重试')
@@ -423,17 +641,14 @@ async function resetPassword() {
     notification.error('错误', '请填写完整信息')
     return
   }
-
   if (resetForm.value.newPassword.length < 6) {
     notification.error('错误', '密码至少需要6位字符')
     return
   }
-
   if (resetForm.value.newPassword !== resetForm.value.confirmPassword) {
     notification.error('错误', '两次输入的密码不一致')
     return
   }
-
   resetLoading.value = true
   try {
     await api.resetPassword(
@@ -443,8 +658,6 @@ async function resetPassword() {
       'email'
     )
     notification.success('重置成功', '密码已成功重置')
-
-    // 进入成功步骤
     resetStep.value = 3
   } catch (error) {
     notification.error('重置失败', error?.response?.data?.detail || '请稍后重试')
@@ -453,17 +666,10 @@ async function resetPassword() {
   }
 }
 
-// 关闭忘记密码弹窗
 function closeForgotPassword() {
   showForgotPassword.value = false
-  // 重置状态
   resetStep.value = 1
-  resetForm.value = {
-    email: '',
-    code: '',
-    newPassword: '',
-    confirmPassword: ''
-  }
+  resetForm.value = { email: '', code: '', newPassword: '', confirmPassword: '' }
   resetCountdown.value = 0
 }
 </script>

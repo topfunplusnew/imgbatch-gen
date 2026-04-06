@@ -81,7 +81,30 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  // 用户名登录
+  // 邮箱注册
+  async function registerByEmail(data: {
+    email: string
+    code: string
+    password: string
+    password_confirmation: string
+    username?: string
+    invite_code?: string
+  }) {
+    loading.value = true
+    try {
+      const result = await api.registerByEmail(data)
+      setTokens(result.access_token, result.refresh_token)
+      setUser(result.user)
+      return result
+    } catch (error: any) {
+      console.error('邮箱注册失败:', error)
+      throw error
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 用户名/邮箱登录
   async function loginByUsername(username: string, password: string) {
     loading.value = true
     try {
@@ -300,6 +323,7 @@ export const useAuthStore = defineStore('auth', () => {
     setUser,
     clearAuth,
     registerByUsername,
+    registerByEmail,
     loginByUsername,
     refreshAccessToken,
     fetchCurrentUser,

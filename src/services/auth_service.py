@@ -196,12 +196,84 @@ class AuthService:
             # 邀请码处理失败不影响注册流程，只记录错误，不抛出异常
             pass
 
+    async def register_by_email(
+        self,
+        email: str,
+        password: str,
+        username: Optional[str] = None,
+        invite_code: Optional[str] = None,
+    ) -> User:
+        """邮箱注册（需先验证邮箱验证码）"""
+        from datetime import date
+        from ..database import Account
+
+        # 检查邮箱是否已注册
+        existing = await self.db_manager.get_user_by_email(email)
+        if existing:
+            raise ValueError("该邮箱已被注册")
+
+        # 自动生成用户名（如果未提供）
+        if not username:
+            # 用邮箱前缀作为用户名
+            prefix = email.split("@")[0]
+            username = prefix
+            # 检查是否重复，如果重复则加随机后缀
+            import random
+            import string
+            existing_name = await self.db_manager.get_user_by_username(username)
+            if existing_name:
+                username = prefix + ''.join(random.choices(string.digits, k=4))
+        else:
+            existing_name = await self.db_manager.get_user_by_username(username)
+            if existing_name:
+                raise ValueError("用户名已被注册")
+
+        # 哈希密码
+        password_hash = await self.hash_password(password)
+
+        # 创建用户
+        user = User(
+            username=username,
+            email=email,
+            password_hash=password_hash,
+        )
+        await self.db_manager.create_user(user)
+
+        # 创建账户并赠送100永久积分
+        account = await self.db_manager.create_user_account(user.id)
+        account.points = 100
+        account.total_points_earned = 100
+        account.invite_code = self._generate_invite_code()
+
+        # 创建邮箱认证记录
+        email_auth = UserAuth(
+            user_id=user.id,
+            auth_type="email",
+            auth_identifier=email,
+            verified=True,
+        )
+        await self.db_manager.create_user_auth(email_auth)
+
+        logger.info(f"邮箱注册成功: {email}, username={username}, 赠送100永久积分, user_id: {user.id}")
+
+        # 处理邀请码
+        if invite_code:
+            try:
+                await self._process_invite_code(account, invite_code)
+            except Exception as e:
+                logger.error(f"处理邀请码失败: {str(e)}")
+
+        await self.db_manager.update_account(account)
+        return user
+
     async def login_by_username(
         self, username: str, password: str, client_ip: str, user_agent: str
     ) -> Dict[str, Any]:
-        """用户名+密码登录"""
-        # 获取用户
+        """用户名或邮箱+密码登录"""
+        # 先尝试用户名查找，再尝试邮箱查找
         user = await self.db_manager.get_user_by_username(username)
+        if not user and "@" in username:
+            user = await self.db_manager.get_user_by_email(username)
         if not user:
             await self._log_login(None, "username", "failed", "用户不存在", client_ip, user_agent)
             raise ValueError("用户名或密码错误")
@@ -237,6 +309,7 @@ class AuthService:
             "user": {
                 "id": user.id,
                 "username": user.username,
+                "email": getattr(user, 'email', None),
                 "phone": user.phone,
                 "status": user.status,
                 "role": user.role,

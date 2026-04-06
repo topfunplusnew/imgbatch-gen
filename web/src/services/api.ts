@@ -844,7 +844,27 @@ export const api = {
   },
 
   /**
-   * 用户名登录
+   * 邮箱注册
+   */
+  async registerByEmail(data: {
+    email: string
+    code: string
+    password: string
+    password_confirmation: string
+    username?: string
+    invite_code?: string
+  }): Promise<{
+    access_token: string
+    refresh_token: string
+    token_type: string
+    user: User
+  }> {
+    const response = await apiClient.post('/api/v1/auth/register/email', data)
+    return response.data
+  },
+
+  /**
+   * 用户名/邮箱登录
    */
   async loginByUsername(username: string, password: string): Promise<{
     access_token: string

@@ -5,7 +5,7 @@ from datetime import timedelta
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy import select, update, delete, and_, or_
+from sqlalchemy import select, update, delete, and_, or_, text
 from contextlib import asynccontextmanager
 from loguru import logger
 
@@ -985,6 +985,13 @@ class DatabaseManager:
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
+    async def get_user_by_email(self, email: str) -> Optional[User]:
+        """根据邮箱获取用户"""
+        async with self.get_session() as session:
+            stmt = select(User).where(User.email == email)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
     async def update_user(self, user: User) -> User:
         """更新用户"""
         async with self.get_session() as session:
@@ -1556,6 +1563,16 @@ async def init_db(database_url: str = None, echo: bool = False):
     # 自动创建所有表
     async with _db_manager.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # 自动迁移：添加缺失的列
+    async with _db_manager.engine.begin() as conn:
+        try:
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE"
+            ))
+            logger.info("数据库迁移: 确认 users.email 列存在")
+        except Exception as e:
+            logger.warning(f"数据库迁移(email): {e}")
 
 
 async def close_db():

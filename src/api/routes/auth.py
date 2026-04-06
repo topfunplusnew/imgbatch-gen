@@ -38,8 +38,8 @@ class RegisterUsernameRequest(BaseModel):
 
 
 class LoginUsernameRequest(BaseModel):
-    """用户名登录请求"""
-    username: str = Field(..., min_length=2, max_length=20, description="用户名")
+    """用户名/邮箱登录请求"""
+    username: str = Field(..., min_length=2, max_length=255, description="用户名或邮箱")
     password: str = Field(..., min_length=6, max_length=50, description="密码")
 
 
@@ -74,10 +74,27 @@ class ResetPasswordRequest(BaseModel):
     auth_type: str = Field(..., pattern=r'^(email|phone)$', description="认证类型")
 
 
+class RegisterEmailRequest(BaseModel):
+    """邮箱注册请求"""
+    email: str = Field(..., description="邮箱地址")
+    code: str = Field(..., min_length=4, max_length=10, description="验证码")
+    password: str = Field(..., min_length=6, max_length=50, description="密码")
+    password_confirmation: str = Field(..., min_length=6, max_length=50, description="确认密码")
+    username: Optional[str] = Field(None, min_length=2, max_length=20, description="用户名(可选)")
+    invite_code: Optional[str] = Field(None, description="邀请码")
+
+    @validator('password_confirmation')
+    def passwords_match(cls, v, values, **kwargs):
+        if 'password' in values and v != values['password']:
+            raise ValueError('两次输入的密码不一致')
+        return v
+
+
 class UserResponse(BaseModel):
     """用户响应"""
     id: str
     username: str
+    email: Optional[str] = None
     phone: Optional[str] = None
     status: str
     role: str
@@ -119,6 +136,7 @@ async def register_by_username(request: Request, body: RegisterUsernameRequest):
             user=UserResponse(
                 id=user.id,
                 username=user.username,
+                email=getattr(user, 'email', None),
                 phone=user.phone,
                 status=user.status,
                 role=user.role,
@@ -130,6 +148,71 @@ async def register_by_username(request: Request, body: RegisterUsernameRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"用户名注册失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="注册失败，请稍后重试")
+
+
+@router.post("/register/email", response_model=LoginResponse, summary="邮箱注册")
+async def register_by_email(request: Request, body: RegisterEmailRequest):
+    """邮箱+验证码注册（自动登录）"""
+    auth_service = get_auth_service()
+
+    try:
+        # 先验证邮箱验证码
+        from ...database import UserAuth
+        from sqlalchemy import select
+
+        db_manager = get_db_manager()
+        async with db_manager.get_session() as session:
+            result = await session.execute(
+                select(UserAuth)
+                .where(UserAuth.auth_identifier == body.email)
+                .where(UserAuth.auth_type == "email")
+            )
+            auth_record = result.scalar_one_or_none()
+
+            if not auth_record:
+                raise ValueError("请先获取验证码")
+
+            is_valid = await auth_service.verify_code(auth_record, body.code)
+            if not is_valid:
+                raise ValueError("验证码错误或已过期")
+
+            # 清除验证码
+            auth_record.verify_code = None
+            auth_record.verify_code_expiry = None
+            await session.commit()
+
+        # 注册
+        user = await auth_service.register_by_email(
+            email=body.email,
+            password=body.password,
+            username=body.username or None,
+            invite_code=body.invite_code,
+        )
+
+        # 生成Token
+        access_token = await auth_service.create_access_token(user.id)
+        refresh_token = await auth_service.create_refresh_token(user.id)
+
+        return LoginResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer",
+            user=UserResponse(
+                id=user.id,
+                username=user.username,
+                email=getattr(user, 'email', None),
+                phone=user.phone,
+                status=user.status,
+                role=user.role,
+                force_password_change=getattr(user, 'force_password_change', False),
+                created_at=user.created_at.isoformat() if user.created_at else None,
+            ),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"邮箱注册失败: {str(e)}")
         raise HTTPException(status_code=500, detail="注册失败，请稍后重试")
 
 
@@ -174,11 +257,11 @@ async def refresh_token(body: RefreshTokenRequest):
 @router.get("/me", response_model=UserResponse, summary="获取当前用户信息")
 async def get_current_user_info(user: dict = Depends(RequiredAuthDependency())):
     """获取当前登录用户信息"""
-    # 确保返回force_password_change字段
     db_manager = get_db_manager()
     user_obj = await db_manager.get_user_by_id(user["id"])
     if user_obj:
         user["force_password_change"] = getattr(user_obj, 'force_password_change', False)
+        user["email"] = getattr(user_obj, 'email', None)
     return UserResponse(**user)
 
 
@@ -221,6 +304,7 @@ async def update_profile(
     return UserResponse(
         id=user_obj.id,
         username=user_obj.username,
+        email=getattr(user_obj, 'email', None),
         phone=user_obj.phone,
         status=user_obj.status,
         role=user_obj.role,
@@ -341,11 +425,12 @@ async def send_verify_code(request: Request, body: SendVerifyCodeRequest):
 
         # 发送验证码
         if body.auth_type == 'email':
-            # TODO: 集成邮件发送服务
-            # 临时：直接记录到日志
-            logger.info(f"【测试】邮箱验证码: {code} -> {body.identifier}")
+            from ...services.email_service import get_email_service
+            email_service = get_email_service()
+            success = await email_service.send_verify_code(body.identifier, code)
+            if not success:
+                raise HTTPException(status_code=500, detail="邮件发送失败，请稍后重试")
         else:  # phone
-            # TODO: 集成短信服务
             from ...services.sms_service import get_sms_service
             sms_service = get_sms_service()
             await sms_service.send_verify_code(body.identifier, code)

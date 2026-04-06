@@ -52,31 +52,10 @@ async def get_current_user_optional(request: Request) -> Optional[dict]:
             logger.warning(f"[Auth] Invalid token (source: {token_source})")
             return None
 
-        # 手动查询邮箱（避免懒加载会话问题）
-        email = None
-        try:
-            from ..database import get_db_manager, UserAuth
-            from sqlalchemy import select
-            db_manager = get_db_manager()
-            async with db_manager.get_session() as session:
-                auth_record = await session.execute(
-                    select(UserAuth)
-                    .where(UserAuth.user_id == user.id)
-                    .where(UserAuth.auth_type == "email")
-                    .where(UserAuth.verified == True)
-                    .order_by(UserAuth.created_at.desc())
-                    .limit(1)
-                )
-                auth_result = auth_record.scalar_one_or_none()
-                if auth_result:
-                    email = auth_result.auth_identifier
-        except Exception as e:
-            logger.warning(f"查询邮箱失败: {str(e)}")
-
         logger.info(f"[Auth] ✅ User authenticated: {user.id} (source: {token_source})")
         return {
             "id": user.id,
-            "email": email,
+            "email": getattr(user, 'email', None),
             "phone": user.phone,
             "username": user.username,
             "status": user.status,

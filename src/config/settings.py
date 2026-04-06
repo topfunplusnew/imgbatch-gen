@@ -119,11 +119,11 @@ class Settings(BaseSettings):
     tencent_sms_template_id: Optional[str] = None
     tencent_sms_sign_name: Optional[str] = None
 
-    smtp_host: Optional[str] = "smtp.126.com"
+    smtp_host: Optional[str] = "smtp.163.com"
     smtp_port: int = 465
-    smtp_user: Optional[str] = "lrb1015@126.com"
-    smtp_password: Optional[str] = "UCXY4iZsfbTLqEcA"
-    smtp_from: Optional[str] = "lrb1015@126.com"
+    smtp_user: Optional[str] = "testaimail@163.com"
+    smtp_password: Optional[str] = "BNA6D33PjkhpbRFW"
+    smtp_from: Optional[str] = "testaimail@163.com"
     smtp_use_tls: bool = True
 
     wechat_appid: Optional[str] = None  # 应用ID

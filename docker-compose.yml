@@ -259,6 +259,12 @@ services:
       WECHAT_NOTIFY_URL: ${WECHAT_NOTIFY_URL:-}
       WECHAT_PUBLIC_KEY: ${WECHAT_PUBLIC_KEY:-./certs/pub_key.pem}
       WECHAT_PUBLIC_KEY_ID: ${WECHAT_PUBLIC_KEY_ID:-}
+      SMTP_HOST: ${SMTP_HOST:-smtp.163.com}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-testaimail@163.com}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-BNA6D33PjkhpbRFW}
+      SMTP_FROM: ${SMTP_FROM:-testaimail@163.com}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
     ports:
       - "${BACKEND_BIND_IP:-0.0.0.0}:${BACKEND_PORT:-8888}:8888"
     volumes:
