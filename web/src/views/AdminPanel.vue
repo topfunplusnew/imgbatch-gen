@@ -767,11 +767,13 @@
                   <el-input v-model="sceneForm.icon" placeholder="如：📚" />
                 </el-form-item>
                 <el-form-item label="分类">
-                  <el-select v-model="sceneForm.category" placeholder="选择分类">
-                    <el-option label="教育智慧" value="education" />
-                    <el-option label="创意文案" value="creative" />
-                    <el-option label="内容创作" value="content" />
-                    <el-option label="生活百科" value="life" />
+                  <el-select v-model="sceneForm.category" placeholder="选择分类" filterable allow-create>
+                    <el-option
+                      v-for="cat in sceneCategories"
+                      :key="cat.id"
+                      :label="`${cat.icon || ''} ${cat.name}`"
+                      :value="cat.id"
+                    />
                   </el-select>
                 </el-form-item>
                 <el-form-item label="描述">
@@ -1285,11 +1287,21 @@ function editSceneTemplates(scene: any) {
 async function syncScenesToServer() {
   try {
     const categories = sceneCategories.value.length > 0 ? sceneCategories.value : []
-    await fetch('/api/v1/admin/system-config/scenes', {
+    const token = localStorage.getItem('access_token')
+    const res = await fetch('/api/v1/admin/system-config/scenes', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
       body: JSON.stringify({ categories, scenes: sceneList.value })
     })
+    if (res.ok) {
+      const data = await res.json()
+      console.log('场景库同步成功:', data.message)
+    } else {
+      console.error('场景库同步失败:', res.status)
+    }
   } catch (e) {
     console.error('Failed to sync scenes to server:', e)
   }
@@ -1351,6 +1363,16 @@ async function loadScenesFromServer() {
       sceneList.value = data.scenes
     }
     if (data.categories?.length) sceneCategories.value = data.categories
+    // 如果没有分类数据，从场景中自动提取
+    if (!sceneCategories.value.length && sceneList.value.length) {
+      const catMap = new Map()
+      sceneList.value.forEach((s: any) => {
+        if (s.category && !catMap.has(s.category)) {
+          catMap.set(s.category, { id: s.category, name: s.category, icon: '' })
+        }
+      })
+      sceneCategories.value = Array.from(catMap.values())
+    }
   } catch {
     // Fallback: load from static JSON
     try {
