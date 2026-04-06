@@ -102,6 +102,16 @@
               场景库管理
             </button>
             <button
+              @click="activeTab = 'pricing'"
+              :class="[
+                'w-full px-4 py-3 rounded-xl text-left font-medium flex items-center gap-3',
+                activeTab === 'pricing' ? 'bg-primary text-white' : 'text-ink-700 hover:bg-gray-50'
+              ]"
+            >
+              <span class="material-symbols-outlined !text-xl">sell</span>
+              产品定价
+            </button>
+            <button
               @click="activeTab = 'config'"
               :class="[
                 'w-full px-4 py-3 rounded-xl text-left font-medium flex items-center gap-3',
@@ -647,6 +657,10 @@
                 下一页
               </button>
             </div>
+          </div>
+
+          <div v-if="activeTab === 'pricing'">
+            <BillingConfigManagement />
           </div>
 
           <div v-if="activeTab === 'config'" class="space-y-6">
@@ -1241,6 +1255,7 @@ import { useAuthStore } from '@/store/useAuthStore'
 import { api, type SystemConfigItem } from '@/services/api'
 import CaseManagement from '@/components/admin/CaseManagement.vue'
 import AnnouncementForm from '@/components/admin/AnnouncementForm.vue'
+import BillingConfigManagement from '@/components/admin/BillingConfigManagement.vue'
 
 const router = useRouter()
 const appStore = useAppStore()

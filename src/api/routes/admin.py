@@ -683,3 +683,42 @@ async def export_withdrawals(
     except Exception as e:
         logger.error(f"导出Excel失败: {str(e)}")
         raise HTTPException(status_code=500, detail="导出Excel失败")
+
+
+# ==================== 计费配置管理 ====================
+
+
+@router.get("/billing-config", summary="获取计费配置")
+async def get_billing_config_admin(admin: dict = Depends(require_admin)):
+    """获取完整的计费配置（管理员）"""
+    from ...services.account_service import get_billing_config
+    return get_billing_config()
+
+
+@router.put("/billing-config", summary="更新计费配置")
+async def update_billing_config_admin(
+    request_body: dict,
+    admin: dict = Depends(require_admin),
+):
+    """更新计费配置（管理员）"""
+    import json
+    from pathlib import Path
+    from ...services.account_service import load_billing_config
+
+    config_path = Path(__file__).parent.parent.parent / "config" / "billing_config.json"
+
+    try:
+        # 写入文件
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(request_body, f, ensure_ascii=False, indent=2)
+
+        # 清除缓存，下次请求重新加载
+        import src.services.account_service as account_mod
+        account_mod._billing_config = None
+
+        logger.info(f"计费配置已更新 by admin {admin['id']}")
+        return {"success": True, "message": "计费配置已更新"}
+
+    except Exception as e:
+        logger.error(f"更新计费配置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"更新失败: {str(e)}")

@@ -1365,6 +1365,22 @@ export const api = {
   },
 
   /**
+   * 获取计费配置（管理员）
+   */
+  async getAdminBillingConfig(): Promise<any> {
+    const response = await apiClient.get('/api/v1/admin/billing-config')
+    return response.data
+  },
+
+  /**
+   * 更新计费配置（管理员）
+   */
+  async updateAdminBillingConfig(config: any): Promise<{ success: boolean; message: string }> {
+    const response = await apiClient.put('/api/v1/admin/billing-config', config)
+    return response.data
+  },
+
+  /**
    * 获取所有系统配置
    */
   async getSystemConfigs(): Promise<SystemConfigItem[]> {
