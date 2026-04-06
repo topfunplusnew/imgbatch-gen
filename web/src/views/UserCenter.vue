@@ -1449,10 +1449,14 @@ function getImageUrl(url) {
   return url
 }
 
-// 格式化日期时间
+// 格式化日期时间（后端返回UTC时间）
 function formatDateTime(dateStr) {
   if (!dateStr) return '-'
-  const date = new Date(dateStr)
+  let normalized = dateStr
+  if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.match(/\d{2}:\d{2}$/)) {
+    normalized = dateStr + 'Z'
+  }
+  const date = new Date(normalized)
   const now = new Date()
   const diff = now.getTime() - date.getTime()
   const days = Math.floor(diff / (1000 * 60 * 60 * 24))
@@ -1867,10 +1871,15 @@ function getWithdrawalMethodText(method) {
   return methodMap[method] || method
 }
 
-// 格式化日期
+// 格式化日期（后端返回UTC时间，需要统一处理）
 function formatDate(dateStr) {
   if (!dateStr) return '-'
-  const date = new Date(dateStr)
+  // 如果时间字符串没有时区信息，当作 UTC 处理
+  let normalized = dateStr
+  if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.match(/\d{2}:\d{2}$/)) {
+    normalized = dateStr + 'Z'
+  }
+  const date = new Date(normalized)
   const now = new Date()
   const diff = now.getTime() - date.getTime()
   const days = Math.floor(diff / (1000 * 60 * 60 * 24))
