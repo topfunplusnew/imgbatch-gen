@@ -333,7 +333,7 @@ const showHomeTypePanel = ref(false)
 const homeSelectedType = ref('')
 const homeSelectedStyle = ref('')
 
-const homeTypes = [
+const homeTypes = ref([
   { value: 'poster', label: '海报设计', emoji: '🎨', cover: '/covers/types/poster.webp' },
   { value: 'reading_notes', label: '读书笔记', emoji: '📖', cover: '/covers/types/reading_notes.webp' },
   { value: 'mind_map', label: '思维导图', emoji: '🧠', cover: '/covers/types/mind_map.webp' },
@@ -347,11 +347,23 @@ const homeTypes = [
   { value: 'visual_summary', label: '视觉总结', emoji: '📝', cover: '/covers/types/visual_summary.webp' },
   { value: 'poetry', label: '诗词解读', emoji: '🌙', cover: '/covers/types/poetry.webp' },
   { value: 'formula', label: '公式原理', emoji: '🔬', cover: '/covers/types/formula.webp' },
-]
+])
 
-const homeStyles = ['手绘', '水彩', '扁平', '卡通', '写实', '复古', '动漫', '3D', '极简', '水墨', '素描', '像素']
+const homeStyles = ref(['手绘', '水彩', '扁平', '卡通', '写实', '复古', '动漫', '3D', '极简', '水墨', '素描', '像素'])
 
-const homeTypeObj = computed(() => homeTypes.find(t => t.value === homeSelectedType.value))
+const homeTypeObj = computed(() => homeTypes.value.find(t => t.value === homeSelectedType.value))
+
+// 从后台加载类型和风格
+async function loadTypesStyles() {
+  try {
+    const res = await fetch('/api/v1/admin/system-config/types-styles')
+    if (res.ok) {
+      const data = await res.json()
+      if (data.types?.length) homeTypes.value = data.types
+      if (data.styles?.length) homeStyles.value = data.styles
+    }
+  } catch { /* 使用默认值 */ }
+}
 
 // Gallery state
 const galleryRecords = ref([])
@@ -495,6 +507,7 @@ onMounted(() => {
   if (historyStore.sessions.length === 0) historyStore.loadFromServer()
   if (generatorStore.availableModels.length === 0) generatorStore.fetchAvailableModels()
   loadGallery()
+  loadTypesStyles()
   // Sync prompt from store (e.g. from scene library "做同款")
   if (generatorStore.prompt && !promptInput.value) {
     promptInput.value = generatorStore.prompt

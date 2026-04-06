@@ -327,3 +327,90 @@ async def update_scenes_data(
     except Exception as exc:
         logger.error(f"Failed to update scenes data: {exc}")
         raise HTTPException(status_code=500, detail="更新场景库失败")
+
+
+# ==================== 类型与风格配置接口 ====================
+
+TYPES_STYLES_CONFIG_KEY = "home.types_styles"
+
+# 默认数据
+_DEFAULT_TYPES = [
+    {"value": "poster", "label": "海报设计", "emoji": "🎨", "cover": "/covers/types/poster.webp"},
+    {"value": "reading_notes", "label": "读书笔记", "emoji": "📖", "cover": "/covers/types/reading_notes.webp"},
+    {"value": "mind_map", "label": "思维导图", "emoji": "🧠", "cover": "/covers/types/mind_map.webp"},
+    {"value": "infographic", "label": "信息图表", "emoji": "📊", "cover": "/covers/types/infographic.webp"},
+    {"value": "flow_guide", "label": "流程指南", "emoji": "📋", "cover": "/covers/types/flow_guide.webp"},
+    {"value": "comic", "label": "漫画故事", "emoji": "💬", "cover": "/covers/types/comic.webp"},
+    {"value": "timeline", "label": "时间线", "emoji": "⏳", "cover": "/covers/types/timeline.webp"},
+    {"value": "comparison", "label": "对比分析", "emoji": "⚖️", "cover": "/covers/types/comparison.webp"},
+    {"value": "tutorial", "label": "教程指南", "emoji": "📐", "cover": "/covers/types/tutorial.webp"},
+    {"value": "concept_map", "label": "概念地图", "emoji": "🗺️", "cover": "/covers/types/concept_map.webp"},
+    {"value": "visual_summary", "label": "视觉总结", "emoji": "📝", "cover": "/covers/types/visual_summary.webp"},
+    {"value": "poetry", "label": "诗词解读", "emoji": "🌙", "cover": "/covers/types/poetry.webp"},
+    {"value": "formula", "label": "公式原理", "emoji": "🔬", "cover": "/covers/types/formula.webp"},
+]
+
+_DEFAULT_STYLES = ["手绘", "水彩", "扁平", "卡通", "写实", "复古", "动漫", "3D", "极简", "水墨", "素描", "像素"]
+
+
+@router.get("/types-styles", summary="获取类型与风格配置（公开）")
+async def get_types_styles():
+    """公开接口，获取首页类型和风格选项。"""
+    import json
+
+    db_manager = get_db_manager()
+    try:
+        async with db_manager.get_session() as session:
+            config = await session.scalar(
+                select(SystemConfig).where(SystemConfig.config_key == TYPES_STYLES_CONFIG_KEY)
+            )
+            if config and config.config_value:
+                return json.loads(config.config_value)
+    except Exception as exc:
+        logger.warning(f"Failed to load types/styles from DB: {exc}")
+
+    return {"types": _DEFAULT_TYPES, "styles": _DEFAULT_STYLES}
+
+
+class UpdateTypesStylesRequest(BaseModel):
+    types: list = Field(default_factory=list, description="类型列表")
+    styles: list = Field(default_factory=list, description="风格列表")
+
+
+@router.post("/types-styles", summary="更新类型与风格配置（管理员）")
+async def update_types_styles(
+    body: UpdateTypesStylesRequest,
+    user: dict = Depends(RequiredAuthDependency()),
+):
+    """管理员接口，更新首页类型和风格选项。"""
+    import json
+
+    if not await verify_admin(user["id"]):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+
+    db_manager = get_db_manager()
+    data_json = json.dumps({"types": body.types, "styles": body.styles}, ensure_ascii=False)
+
+    try:
+        async with db_manager.get_session() as session:
+            config = await session.scalar(
+                select(SystemConfig).where(SystemConfig.config_key == TYPES_STYLES_CONFIG_KEY)
+            )
+            if config:
+                config.config_value = data_json
+                config.updated_by = user["id"]
+            else:
+                session.add(SystemConfig(
+                    config_key=TYPES_STYLES_CONFIG_KEY,
+                    config_value=data_json,
+                    config_type="json",
+                    category="content",
+                    description="首页类型与风格配置",
+                    updated_by=user["id"],
+                ))
+            await session.commit()
+
+        return {"success": True, "message": f"已更新 {len(body.types)} 个类型和 {len(body.styles)} 个风格"}
+    except Exception as exc:
+        logger.error(f"Failed to update types/styles: {exc}")
+        raise HTTPException(status_code=500, detail="更新失败")

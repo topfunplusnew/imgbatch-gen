@@ -102,6 +102,16 @@
               场景库管理
             </button>
             <button
+              @click="activeTab = 'types-styles'"
+              :class="[
+                'w-full px-4 py-3 rounded-xl text-left font-medium flex items-center gap-3',
+                activeTab === 'types-styles' ? 'bg-primary text-white' : 'text-ink-700 hover:bg-gray-50'
+              ]"
+            >
+              <span class="material-symbols-outlined !text-xl">palette</span>
+              类型与风格
+            </button>
+            <button
               @click="activeTab = 'pricing'"
               :class="[
                 'w-full px-4 py-3 rounded-xl text-left font-medium flex items-center gap-3',
@@ -657,6 +667,10 @@
                 下一页
               </button>
             </div>
+          </div>
+
+          <div v-if="activeTab === 'types-styles'">
+            <TypesStylesManagement />
           </div>
 
           <div v-if="activeTab === 'pricing'">
@@ -1258,6 +1272,7 @@ import { api, type SystemConfigItem } from '@/services/api'
 import CaseManagement from '@/components/admin/CaseManagement.vue'
 import AnnouncementForm from '@/components/admin/AnnouncementForm.vue'
 import BillingConfigManagement from '@/components/admin/BillingConfigManagement.vue'
+import TypesStylesManagement from '@/components/admin/TypesStylesManagement.vue'
 
 const router = useRouter()
 const appStore = useAppStore()
