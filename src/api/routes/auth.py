@@ -157,30 +157,35 @@ async def register_by_email(request: Request, body: RegisterEmailRequest):
     auth_service = get_auth_service()
 
     try:
-        # 先验证邮箱验证码
-        from ...database import UserAuth
-        from sqlalchemy import select
+        # 验证邮箱验证码（优先从内存缓存检查，再查数据库）
+        cache_key = f"email:{body.email}"
+        cached = _verify_code_cache.get(cache_key)
 
-        db_manager = get_db_manager()
-        async with db_manager.get_session() as session:
-            result = await session.execute(
-                select(UserAuth)
-                .where(UserAuth.auth_identifier == body.email)
-                .where(UserAuth.auth_type == "email")
-            )
-            auth_record = result.scalar_one_or_none()
+        code_valid = False
+        if cached and cached["code"] == body.code and datetime.utcnow() <= cached["expiry"]:
+            code_valid = True
+            _verify_code_cache.pop(cache_key, None)
+        else:
+            # 回退到数据库查询（已注册用户可能有user_auth记录）
+            from ...database import UserAuth
+            from sqlalchemy import select
+            db_manager = get_db_manager()
+            async with db_manager.get_session() as session:
+                result = await session.execute(
+                    select(UserAuth)
+                    .where(UserAuth.auth_identifier == body.email)
+                    .where(UserAuth.auth_type == "email")
+                )
+                auth_record = result.scalar_one_or_none()
+                if auth_record:
+                    code_valid = await auth_service.verify_code(auth_record, body.code)
+                    if code_valid:
+                        auth_record.verify_code = None
+                        auth_record.verify_code_expiry = None
+                        await session.commit()
 
-            if not auth_record:
-                raise ValueError("请先获取验证码")
-
-            is_valid = await auth_service.verify_code(auth_record, body.code)
-            if not is_valid:
-                raise ValueError("验证码错误或已过期")
-
-            # 清除验证码
-            auth_record.verify_code = None
-            auth_record.verify_code_expiry = None
-            await session.commit()
+        if not code_valid:
+            raise ValueError("验证码错误或已过期")
 
         # 注册
         user = await auth_service.register_by_email(
@@ -372,6 +377,10 @@ async def change_password(
         raise HTTPException(status_code=500, detail="修改密码失败，请稍后重试")
 
 
+# 内存验证码存储（key: "type:identifier" -> {"code": str, "expiry": datetime}）
+_verify_code_cache: dict = {}
+
+
 @router.post("/send-code", summary="发送验证码")
 async def send_verify_code(request: Request, body: SendVerifyCodeRequest):
     """
@@ -379,49 +388,37 @@ async def send_verify_code(request: Request, body: SendVerifyCodeRequest):
 
     用于注册、绑定、密码找回等场景
     """
-    auth_service = get_auth_service()
+    from datetime import timedelta
 
     try:
         # 生成6位验证码
         import random
         code = ''.join(random.choices('0123456789', k=6))
 
-        # 保存验证码到数据库（或使用UserAuth表）
-        # 这里简化处理，实际应该存储到数据库或缓存
-        from ...database import get_db_manager, UserAuth
-        from datetime import timedelta
+        # 保存验证码到内存缓存（有效期10分钟）
+        cache_key = f"{body.auth_type}:{body.identifier}"
+        expiry = datetime.utcnow() + timedelta(minutes=10)
+        _verify_code_cache[cache_key] = {"code": code, "expiry": expiry}
+        logger.info(f"验证码已生成: {body.identifier} -> {code}")
 
-        db_manager = get_db_manager()
-
-        # 查找或创建认证记录
-        async with db_manager.get_session() as session:
+        # 同时尝试更新已有的user_auth记录（用于已注册用户的密码重置）
+        try:
+            from ...database import get_db_manager, UserAuth
             from sqlalchemy import select
-            result = await session.execute(
-                select(UserAuth)
-                .where(UserAuth.auth_identifier == body.identifier)
-                .where(UserAuth.auth_type == body.auth_type)
-            )
-            auth_record = result.scalar_one_or_none()
-
-            # 保存验证码（有效期10分钟）
-            expiry = datetime.utcnow() + timedelta(minutes=10)
-
-            if auth_record:
-                auth_record.verify_code = code
-                auth_record.verify_code_expiry = expiry
-            else:
-                # 创建临时认证记录（未绑定用户）
-                auth_record = UserAuth(
-                    user_id="",  # 暂时为空，绑定或注册时更新
-                    auth_type=body.auth_type,
-                    auth_identifier=body.identifier,
-                    verify_code=code,
-                    verify_code_expiry=expiry,
-                    verified=False
+            db_manager = get_db_manager()
+            async with db_manager.get_session() as session:
+                result = await session.execute(
+                    select(UserAuth)
+                    .where(UserAuth.auth_identifier == body.identifier)
+                    .where(UserAuth.auth_type == body.auth_type)
                 )
-                session.add(auth_record)
-
-            await session.commit()
+                auth_record = result.scalar_one_or_none()
+                if auth_record:
+                    auth_record.verify_code = code
+                    auth_record.verify_code_expiry = expiry
+                    await session.commit()
+        except Exception:
+            pass  # 非致命：内存缓存已保存
 
         # 发送验证码
         if body.auth_type == 'email':
@@ -437,6 +434,8 @@ async def send_verify_code(request: Request, body: SendVerifyCodeRequest):
 
         return {"success": True, "message": "验证码已发送"}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"发送验证码失败: {str(e)}")
         raise HTTPException(status_code=500, detail="发送验证码失败，请稍后重试")
@@ -457,43 +456,51 @@ async def reset_password(request: Request, body: ResetPasswordRequest):
     db_manager = get_db_manager()
 
     try:
-        # 查找认证记录
-        from ...database import UserAuth
-        from sqlalchemy import select
+        # 验证验证码（先查内存缓存，再查数据库）
+        cache_key = f"{body.auth_type}:{body.identifier}"
+        cached = _verify_code_cache.get(cache_key)
+        code_valid = False
 
-        async with db_manager.get_session() as session:
-            result = await session.execute(
-                select(UserAuth)
-                .where(UserAuth.auth_identifier == body.identifier)
-                .where(UserAuth.auth_type == body.auth_type)
-            )
-            auth_record = result.scalar_one_or_none()
+        if cached and cached["code"] == body.code and datetime.utcnow() <= cached["expiry"]:
+            code_valid = True
+            _verify_code_cache.pop(cache_key, None)
 
-            if not auth_record:
-                raise HTTPException(status_code=404, detail="该邮箱/手机号未注册")
+        # 查找用户（通过邮箱或user_auth）
+        user = None
+        if body.auth_type == "email":
+            user = await db_manager.get_user_by_email(body.identifier)
 
-            # 验证验证码
-            is_valid = await auth_service.verify_code(auth_record, body.code)
-            if not is_valid:
-                raise HTTPException(status_code=400, detail="验证码错误或已过期")
+        if not user:
+            # 回退到user_auth表查找
+            from ...database import UserAuth
+            from sqlalchemy import select
+            async with db_manager.get_session() as session:
+                result = await session.execute(
+                    select(UserAuth)
+                    .where(UserAuth.auth_identifier == body.identifier)
+                    .where(UserAuth.auth_type == body.auth_type)
+                )
+                auth_record = result.scalar_one_or_none()
+                if auth_record and auth_record.user_id:
+                    user = await db_manager.get_user_by_id(auth_record.user_id)
+                    # 也检查数据库中的验证码
+                    if not code_valid:
+                        code_valid = await auth_service.verify_code(auth_record, body.code)
+                    if code_valid:
+                        auth_record.verify_code = None
+                        auth_record.verify_code_expiry = None
+                        await session.commit()
 
-            # 获取用户
-            if not auth_record.user_id:
-                raise HTTPException(status_code=400, detail="账号异常，请联系客服")
+        if not user:
+            raise HTTPException(status_code=404, detail="该邮箱/手机号未注册")
 
-            user = await db_manager.get_user_by_id(auth_record.user_id)
-            if not user:
-                raise HTTPException(status_code=404, detail="用户不存在")
+        if not code_valid:
+            raise HTTPException(status_code=400, detail="验证码错误或已过期")
 
-            # 重置密码
-            password_hash = await auth_service.hash_password(body.new_password)
-            user.password_hash = password_hash
-            await db_manager.update_user(user)
-
-            # 清除验证码
-            auth_record.verify_code = None
-            auth_record.verify_code_expiry = None
-            await session.commit()
+        # 重置密码
+        password_hash = await auth_service.hash_password(body.new_password)
+        user.password_hash = password_hash
+        await db_manager.update_user(user)
 
         logger.info(f"密码重置成功: user_id={user.id}, auth_type={body.auth_type}")
 
