@@ -445,10 +445,14 @@ const patchMessageFilesWithUploadResults = (messageId, messageFiles, uploadResul
 }
 
 /**
- * 发送消息 - 根据模型类型分流
+ * 发送消息 - 根据模型类型分流（含防重复提交锁）
  */
+let _sendLock = false
 const handleSend = async () => {
   if ((!generatorStore.prompt.trim() && generatorStore.attachments.length === 0) || generatorStore.isGenerating) return;
+  // 防止快速重复点击
+  if (_sendLock) return;
+  _sendLock = true;
 
   // 判断模型类型：文本模型走流式聊天，图像模型走图片生成
   const modelInfo = generatorStore.selectedModelInfo;
@@ -464,11 +468,15 @@ const handleSend = async () => {
   console.log('[发送消息] 模型类型:', modelType, '模型名:', modelName, '图像模型:', isImageModel, '含生图关键词:', hasImageKeywords, '有附件:', hasAttachments);
 
   // 图像模型、或有附件+生图关键词 → 走图像生成
-  if (isImageModel || (hasAttachments && hasImageKeywords)) {
-    await handleImageModelSend();
-  } else {
-    // 默认走聊天模型
-    await handleChatModelSend();
+  try {
+    if (isImageModel || (hasAttachments && hasImageKeywords)) {
+      await handleImageModelSend();
+    } else {
+      // 默认走聊天模型
+      await handleChatModelSend();
+    }
+  } finally {
+    _sendLock = false;
   }
 };
 
@@ -597,7 +605,10 @@ const handleChatModelSend = async () => {
  * 图片模型发送 - 统一走附件理解/ OCR 后再进入生图流程
  */
 const handleImageModelSend = async () => {
-  if ((!generatorStore.prompt.trim() && generatorStore.attachments.length === 0) || generatorStore.isGenerating) return;
+  if ((!generatorStore.prompt.trim() && generatorStore.attachments.length === 0) || generatorStore.isGenerating) {
+    _sendLock = false;
+    return;
+  }
 
   // 保存输入和附件
   const prompt = generatorStore.prompt.trim()
@@ -626,6 +637,7 @@ const handleImageModelSend = async () => {
   }
   await generatorStore.addMessage(assistantMessage)
 
+  // 立即设置生成中状态，防止重复提交
   generatorStore.isGenerating = true
 
   try {

@@ -1,8 +1,10 @@
 """统一AI助手聊天接口"""
 
 import asyncio
+import hashlib
 import json
 import mimetypes
+import time
 import uuid
 from typing import Any, Dict, List, Optional
 from datetime import datetime
@@ -239,6 +241,28 @@ async def create_user_request(db_manager, request: ChatRequest, http_request: Re
 
 # ==================== 聊天接口 ====================
 
+# 请求去重缓存: {request_hash: (timestamp, response)}
+_request_dedup_cache: dict = {}
+_DEDUP_WINDOW_SECONDS = 5  # 5秒内相同请求视为重复
+
+
+def _get_request_hash(user_id: str, messages: list, model: str = None) -> str:
+    """计算请求指纹"""
+    key_parts = [user_id, model or ""]
+    for m in messages[-2:]:  # 只取最后2条消息计算哈希
+        content = m.content if hasattr(m, 'content') else str(m)
+        key_parts.append(f"{getattr(m, 'role', '')}:{content[:200]}")
+    return hashlib.md5("|".join(key_parts).encode()).hexdigest()
+
+
+def _cleanup_dedup_cache():
+    """清理过期缓存"""
+    now = time.time()
+    expired = [k for k, (ts, _) in _request_dedup_cache.items() if now - ts > 30]
+    for k in expired:
+        _request_dedup_cache.pop(k, None)
+
+
 @router.post("/assistant/chat")
 async def assistant_chat(
     request: ChatRequest,
@@ -248,19 +272,19 @@ async def assistant_chat(
 ):
     """
     统一AI助手聊天接口
-
-    功能:
-    1. 接收用户消息和对话历史
-    2. 使用LLM识别用户意图
-    3. 根据意图执行相应操作:
-       - single_generate: 调用单图生成接口
-       - batch_generate: 调用批量生成接口
-       - chat: 返回LLM对话响应
-    4. 保存对话历史到数据库
-    5. 返回结构化响应
     """
 
     try:
+        # 请求去重检查
+        user_id_for_dedup = current_user.get("id", "")
+        req_hash = _get_request_hash(user_id_for_dedup, request.messages, request.model)
+        now = time.time()
+        _cleanup_dedup_cache()
+
+        cached = _request_dedup_cache.get(req_hash)
+        if cached and (now - cached[0]) < _DEDUP_WINDOW_SECONDS:
+            logger.warning(f"[去重] 检测到重复请求，直接返回缓存响应 (hash={req_hash[:8]})")
+            return cached[1]
         # API Key 可选，如果未提供则使用管理员统一配置
         api_key = _extract_api_key(http_request)
         db_manager = get_db_manager()
@@ -500,6 +524,8 @@ async def assistant_chat(
         except Exception as e:
             logger.error(f"更新用户请求状态失败: {str(e)}")
 
+        # 缓存响应用于去重
+        _request_dedup_cache[req_hash] = (time.time(), response)
         return response
 
     except Exception as e:
