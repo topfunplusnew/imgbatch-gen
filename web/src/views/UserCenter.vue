@@ -1903,7 +1903,11 @@ function formatDate(dateStr) {
 // 格式化过期时间为"XX时XX分"
 function formatExpiryTime(dateStr) {
   if (!dateStr) return '-'
-  const date = new Date(dateStr)
+  let normalized = dateStr
+  if (typeof dateStr === 'string' && !dateStr.endsWith('Z') && !dateStr.includes('+') && !/[+-]\d{2}:\d{2}$/.test(dateStr)) {
+    normalized = dateStr.replace(' ', 'T') + 'Z'
+  }
+  const date = new Date(normalized)
   const hours = date.getHours().toString().padStart(2, '0')
   const minutes = date.getMinutes().toString().padStart(2, '0')
   const month = (date.getMonth() + 1).toString().padStart(2, '0')

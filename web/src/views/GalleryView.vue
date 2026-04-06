@@ -295,7 +295,11 @@ const reusePrompt = (item) => {
 
 const formatTime = (timestamp) => {
   if (!timestamp) return ''
-  const date = new Date(timestamp)
+  let normalized = timestamp
+  if (typeof timestamp === 'string' && !timestamp.endsWith('Z') && !timestamp.includes('+') && !/[+-]\d{2}:\d{2}$/.test(timestamp)) {
+    normalized = timestamp.replace(' ', 'T') + 'Z'
+  }
+  const date = new Date(normalized)
   return date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 

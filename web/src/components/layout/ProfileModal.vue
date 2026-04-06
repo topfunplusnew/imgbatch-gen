@@ -172,7 +172,11 @@ const userInitial = computed(() => {
 // 格式化日期
 function formatDate(dateStr) {
   if (!dateStr) return '-'
-  const date = new Date(dateStr)
+  let normalized = dateStr
+  if (typeof dateStr === 'string' && !dateStr.endsWith('Z') && !dateStr.includes('+') && !/[+-]\d{2}:\d{2}$/.test(dateStr)) {
+    normalized = dateStr.replace(' ', 'T') + 'Z'
+  }
+  const date = new Date(normalized)
   return date.toLocaleString('zh-CN', {
     year: 'numeric',
     month: '2-digit',

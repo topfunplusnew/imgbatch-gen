@@ -221,7 +221,12 @@ function stripHtml(html: string): string {
 function formatTime(dateString: string | null): string {
   if (!dateString) return ''
 
-  const date = new Date(dateString)
+  // 后端返回UTC时间不带Z，补上避免8小时时差
+  let normalized = dateString
+  if (!dateString.endsWith('Z') && !dateString.includes('+') && !/[+-]\d{2}:\d{2}$/.test(dateString)) {
+    normalized = dateString.replace(' ', 'T') + 'Z'
+  }
+  const date = new Date(normalized)
   const now = new Date()
   const diff = now.getTime() - date.getTime()
 
