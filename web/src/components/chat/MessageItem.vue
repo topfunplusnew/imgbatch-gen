@@ -415,8 +415,8 @@
             v-for="slot in generatedGallerySlots"
             :key="slot.index"
             :class="[
-              'aspect-square rounded-xl overflow-hidden border border-border-dark shadow-lg transition-shadow',
-              slot.entry ? 'relative group bg-white hover:shadow-xl cursor-zoom-in' : 'relative bg-white/80'
+              'rounded-xl overflow-hidden border border-border-dark shadow-lg transition-shadow',
+              slot.entry ? 'relative group bg-white hover:shadow-xl cursor-zoom-in' : 'relative aspect-square bg-white/80'
             ]"
             @click="slot.entry ? openGeneratedImagePreview(slot.entry.index) : undefined"
           >
@@ -424,7 +424,7 @@
               <img
                 :src="slot.entry.preview.url"
                 :alt="slot.entry.preview.alt || `图片 ${slot.index + 1}`"
-                class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
+                class="w-full h-auto object-contain transition-transform duration-300 group-hover:scale-105">
               <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                 <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
                   <p class="text-xs text-white truncate">{{ slot.entry.preview.alt || `图片 ${slot.index + 1}` }}</p>
