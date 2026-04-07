@@ -80,7 +80,7 @@ class RegisterEmailRequest(BaseModel):
     code: str = Field(..., min_length=4, max_length=10, description="验证码")
     password: str = Field(..., min_length=6, max_length=50, description="密码")
     password_confirmation: str = Field(..., min_length=6, max_length=50, description="确认密码")
-    username: Optional[str] = Field(None, min_length=2, max_length=20, description="用户名(可选)")
+    username: Optional[str] = Field(None, max_length=20, description="用户名(可选)")
     invite_code: Optional[str] = Field(None, description="邀请码")
 
     @validator('password_confirmation')

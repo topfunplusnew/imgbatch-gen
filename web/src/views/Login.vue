@@ -606,7 +606,9 @@ async function handleEmailRegister() {
     })
     router.push('/')
   } catch (error) {
-    notification.error('注册失败', error?.response?.data?.detail || '请重试')
+    const detail = error?.response?.data?.detail
+    const msg = Array.isArray(detail) ? detail.map(d => d.msg || d).join('; ') : (typeof detail === 'string' ? detail : '请重试')
+    notification.error('注册失败', msg)
   } finally {
     loading.value = false
   }
