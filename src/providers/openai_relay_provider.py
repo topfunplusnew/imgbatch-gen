@@ -166,12 +166,10 @@ class OpenAIRelayProvider(SyncRelayProvider):
                 payload["size"] = f"{params.width}x{params.height}"
                 logger.info(f"[Doubao] 使用精确像素尺寸: {payload['size']}, 总像素: {total_pixels}, 宽高比: {ratio:.3f}, 标准比例: {aspect_ratio}")
         else:
-            # 使用标准化尺寸
-            if max(standard_width, standard_height) >= 2048:
-                payload["size"] = f"{standard_width}x{standard_height}"
-            else:
-                payload["size"] = f"{standard_width}x{standard_height}"
-            logger.info(f"[Doubao] 使用默认像素尺寸: {payload['size']} (标准化尺寸: {standard_width}x{standard_height})")
+            # auto模式：使用默认 1:1 2k 尺寸
+            default_w, default_h = get_size_for_aspect_ratio("1:1", params.quality or "2k")
+            payload["size"] = f"{default_w}x{default_h}"
+            logger.info(f"[Doubao] 使用auto默认尺寸: {payload['size']}")
 
         logger.info(f"[Doubao] 原始prompt: {params.prompt[:50]}...")
         logger.info(f"[Doubao] 增强prompt: {enhanced_prompt[:50]}...")

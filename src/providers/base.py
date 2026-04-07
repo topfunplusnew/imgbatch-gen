@@ -48,9 +48,10 @@ class BaseProvider(ABC):
         """
         if not params.prompt:
             return False
-        if params.width < 256 or params.width > 4096:
+        # width/height 为 0 表示 auto（让模型自动决定），跳过尺寸验证
+        if params.width and (params.width < 256 or params.width > 8192):
             return False
-        if params.height < 256 or params.height > 4096:
+        if params.height and (params.height < 256 or params.height > 8192):
             return False
         if params.n < 1 or params.n > 10:
             return False
