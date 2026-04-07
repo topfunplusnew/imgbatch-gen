@@ -255,7 +255,7 @@
                       :key="`${message.id}-image-${index}`"
                       :src="resolveImageSrc(image.url)"
                       :alt="image.alt || `图片 ${index + 1}`"
-                      class="aspect-square w-full rounded-xl border border-border-dark object-cover"
+                      class="w-full h-auto rounded-xl border border-border-dark object-contain"
                       @error="handleImageFallback"
                     >
                   </div>

@@ -35,15 +35,15 @@
           class="group relative rounded-lg overflow-hidden bg-gray-100 cursor-pointer hover:shadow-lg transition-all"
         >
           <!-- 图片 -->
-          <div class="aspect-square">
+          <div>
             <img
               v-if="record.image_urls && record.image_urls.length > 0"
               :src="resolveImageSrc(record.image_urls[0])"
               :alt="record.prompt"
-              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              class="w-full h-auto object-contain group-hover:scale-105 transition-transform duration-300"
               @error="handleImageFallback"
             >
-            <div v-else class="w-full h-full flex items-center justify-center text-ink-300">
+            <div v-else class="w-full aspect-square flex items-center justify-center text-ink-300">
               <span class="material-symbols-outlined !text-4xl">image</span>
             </div>
           </div>

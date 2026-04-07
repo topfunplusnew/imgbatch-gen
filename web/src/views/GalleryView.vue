@@ -68,12 +68,12 @@
           @click="previewImage(item)"
         >
           <!-- Image -->
-          <div :class="viewMode === 'grid' ? 'aspect-square' : 'h-20 w-20 shrink-0'">
+          <div :class="viewMode === 'grid' ? '' : 'h-20 w-20 shrink-0'">
             <img
               v-if="getImageUrl(item)"
               :src="getImageUrl(item)"
               :alt="item.prompt"
-              class="h-full w-full object-cover transition-transform group-hover:scale-105"
+              :class="viewMode === 'grid' ? 'w-full h-auto object-contain transition-transform group-hover:scale-105' : 'h-full w-full object-cover transition-transform group-hover:scale-105'"
               loading="lazy"
             />
             <div v-else class="flex h-full items-center justify-center bg-primary-soft text-primary">
