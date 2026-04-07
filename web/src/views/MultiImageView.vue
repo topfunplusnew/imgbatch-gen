@@ -114,55 +114,27 @@
       </div>
 
       <div v-show="showTypePanel">
-        <!-- Type panel -->
-        <div v-if="activeTab === 'type'">
-          <!-- Category filter -->
-          <div class="flex flex-wrap items-center gap-1.5 mb-3">
-            <button v-for="cat in typeCategories" :key="cat.id"
-              @click="selectedTypeCategory = cat.id"
-              :class="['rounded-full px-3.5 py-1 text-xs font-medium cursor-pointer',
-                selectedTypeCategory === cat.id ? 'bg-ink-950 text-white' : 'bg-white text-ink-700 border border-border-dark hover:border-ink-300']">
-              {{ cat.label }}
-            </button>
-          </div>
-          <!-- Type grid — clean cards like reference -->
-          <div class="grid grid-cols-3 gap-2.5 xs:grid-cols-4 md:grid-cols-5">
-            <button v-for="t in filteredTypes" :key="t.value" @click="selectedType = t.value"
-              :class="['relative flex flex-col items-center cursor-pointer group']">
-              <div :class="['w-full overflow-hidden rounded-xl border-2',
-                selectedType === t.value ? 'border-primary' : 'border-transparent hover:border-primary/30']">
-                <div class="aspect-square overflow-hidden bg-primary-soft/20">
-                  <img v-if="t.cover" :src="t.cover" :alt="t.label"
-                    class="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-                  <div v-else class="flex h-full items-center justify-center">
-                    <span class="text-3xl">{{ t.emoji }}</span>
-                  </div>
-                </div>
-              </div>
-              <!-- Check badge -->
-              <div v-if="selectedType === t.value"
-                class="absolute top-1.5 right-1.5 grid h-5 w-5 place-items-center rounded-full bg-primary text-white">
-                <span class="material-symbols-outlined !text-xs">check</span>
-              </div>
-              <span :class="['mt-1.5 text-xs font-medium',
-                selectedType === t.value ? 'text-primary' : 'text-ink-700']">{{ t.label }}</span>
-            </button>
-          </div>
+        <!-- 类型：纯文字标签 -->
+        <div v-if="activeTab === 'type'" class="flex flex-wrap gap-2">
+          <button v-for="t in filteredTypes" :key="t.value"
+            @click="selectedType = selectedType === t.value ? '' : t.value"
+            :class="['rounded-lg border px-3 py-1.5 text-xs font-medium cursor-pointer',
+              selectedType === t.value ? 'border-primary bg-primary/8 text-primary' : 'border-border-dark bg-white text-ink-700 hover:border-primary/30']">
+            {{ t.label }}
+          </button>
         </div>
 
-        <!-- Style panel -->
+        <!-- 风格：带封面图卡片（完整显示） -->
         <div v-if="activeTab === 'style'">
           <div class="grid grid-cols-3 gap-2.5 xs:grid-cols-4 md:grid-cols-5">
-            <button v-for="s in imageStyles" :key="s.value" @click="selectedStyle = s.value"
-              :class="['relative flex flex-col items-center cursor-pointer group']">
+            <button v-for="s in imageStyles" :key="s.value"
+              @click="selectedStyle = selectedStyle === s.value ? '' : s.value"
+              class="relative flex flex-col items-center cursor-pointer group">
               <div :class="['w-full overflow-hidden rounded-xl border-2',
                 selectedStyle === s.value ? 'border-primary' : 'border-transparent hover:border-primary/30']">
-                <div class="aspect-square overflow-hidden bg-primary-soft/20">
-                  <img v-if="s.cover" :src="s.cover" :alt="s.label"
-                    class="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-                  <div v-else class="flex h-full items-center justify-center">
-                    <span class="text-3xl">{{ s.emoji }}</span>
-                  </div>
+                <div class="overflow-hidden bg-primary-soft/10 rounded-xl">
+                  <img :src="s.cover" :alt="s.label"
+                    class="w-full h-auto object-contain group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                 </div>
               </div>
               <div v-if="selectedStyle === s.value"
@@ -320,78 +292,48 @@ const presetCounts = [4, 8, 12, 16, 20, 36]
 const showTypePanel = ref(true)
 const selectedTypeCategory = ref('all')
 
-const typeCategories = [
-  { id: 'all', label: '全部' },
-  { id: 'knowledge', label: '知识学习' },
-  { id: 'content', label: '内容创作' },
-  { id: 'visual', label: '可视化' },
-  { id: 'language', label: '语言文化' },
-  { id: 'science', label: '知识科普' },
-]
+// 类型：纯文字标签（从API加载）
+const imageTypes = ref([
+  { value: 'poster', label: '海报设计' },
+  { value: 'reading_notes', label: '读书笔记' },
+  { value: 'mind_map', label: '思维导图' },
+  { value: 'infographic', label: '信息图表' },
+  { value: 'flow_guide', label: '流程指南' },
+  { value: 'comic', label: '漫画故事' },
+  { value: 'timeline', label: '时间线' },
+  { value: 'comparison', label: '对比分析' },
+  { value: 'tutorial', label: '教程指南' },
+  { value: 'concept_map', label: '概念地图' },
+  { value: 'visual_summary', label: '视觉总结' },
+  { value: 'poetry', label: '诗词解读' },
+  { value: 'formula', label: '公式原理' },
+])
 
-const imageTypes = [
-  // 知识学习
-  { value: 'reading_notes', label: '读书笔记', emoji: '📖', category: 'knowledge', cover: '/covers/types/reading_notes.webp' },
-  { value: 'mind_map', label: '思维导图', emoji: '🧠', category: 'knowledge', cover: '/covers/types/mind_map.webp' },
-  { value: 'concept_map', label: '概念地图', emoji: '🗺️', category: 'knowledge', cover: '/covers/types/concept_map.webp' },
-  { value: 'classic_guide', label: '名著导读', emoji: '📚', category: 'knowledge', cover: '/covers/types/classic_guide.webp' },
-  { value: 'formula', label: '公式原理', emoji: '🔬', category: 'knowledge', cover: '/covers/types/formula.webp' },
-  { value: 'encyclopedia', label: '百科词典', emoji: '📒', category: 'knowledge', cover: '/covers/types/encyclopedia.webp' },
-  // 内容创作
-  { value: 'comic', label: '漫画故事', emoji: '💬', category: 'content', cover: '/covers/types/comic.webp' },
-  { value: 'storyboard', label: '故事板', emoji: '🎬', category: 'content', cover: '/covers/types/storyboard.webp' },
-  { value: 'poster', label: '海报设计', emoji: '🎨', category: 'content', cover: '/covers/types/poster.webp' },
-  { value: 'presentation', label: '演示文稿', emoji: '📽️', category: 'content', cover: '/covers/types/presentation.webp' },
-  { value: 'visual_summary', label: '视觉总结', emoji: '📝', category: 'content', cover: '/covers/types/visual_summary.webp' },
-  // 可视化
-  { value: 'infographic', label: '信息图表', emoji: '📊', category: 'visual', cover: '/covers/types/infographic.webp' },
-  { value: 'flow_guide', label: '流程指南', emoji: '📋', category: 'visual', cover: '/covers/types/flow_guide.webp' },
-  { value: 'timeline', label: '时间线', emoji: '⏳', category: 'visual', cover: '/covers/types/timeline.webp' },
-  { value: 'comparison', label: '对比分析', emoji: '⚖️', category: 'visual', cover: '/covers/types/comparison.webp' },
-  { value: 'relationship', label: '关系图', emoji: '🔗', category: 'visual', cover: '/covers/types/relationship.webp' },
-  { value: 'tutorial', label: '教程指南', emoji: '📐', category: 'visual', cover: '/covers/types/tutorial.webp' },
-  // 语言文化
-  { value: 'poetry', label: '诗词解读', emoji: '🌙', category: 'language', cover: '/covers/types/poetry.webp' },
-  { value: 'vocabulary', label: '单词解读', emoji: '🔤', category: 'language', cover: '/covers/types/vocabulary.webp' },
-  { value: 'classical', label: '古文解读', emoji: '📜', category: 'language', cover: '/covers/types/ancient_text.webp' },
-  // 知识科普
-  { value: 'history', label: '历史科普', emoji: '🏛️', category: 'science', cover: '/covers/types/history.webp' },
-  { value: 'nutrition', label: '营养卡片', emoji: '🥑', category: 'science', cover: '/covers/types/nutrition.webp' },
-  { value: 'ingredient', label: '成分指南', emoji: '🧪', category: 'science', cover: '/covers/types/ingredient.webp' },
-  { value: 'business', label: '商业模式', emoji: '💼', category: 'science', cover: '/covers/types/business.webp' },
-  // 额外
-  { value: 'english_reading', label: '英语阅读', emoji: '🔤', category: 'language', cover: '/covers/types/english_reading.webp' },
-  { value: 'chinese_reading', label: '语文阅读', emoji: '📕', category: 'language', cover: '/covers/types/chinese_reading.webp' },
-  { value: 'mental_model', label: '思维模型', emoji: '💡', category: 'knowledge', cover: '/covers/types/mental_model.webp' },
-]
+const filteredTypes = computed(() => imageTypes.value)
 
-const filteredTypes = computed(() => {
-  if (selectedTypeCategory.value === 'all') return imageTypes
-  return imageTypes.filter(t => t.category === selectedTypeCategory.value)
-})
-
-const selectedTypeObj = computed(() => imageTypes.find(t => t.value === selectedType.value))
+const selectedTypeObj = computed(() => imageTypes.value.find(t => t.value === selectedType.value))
 const selectedTypeLabel = computed(() => selectedTypeObj.value?.label || '')
 const selectedTypeEmoji = computed(() => selectedTypeObj.value?.emoji || '')
 const selectedStyleLabel = computed(() => {
   if (!selectedStyle.value) return ''
-  return imageStyles.find(s => s.value === selectedStyle.value)?.label || ''
+  return imageStyles.value.find(s => s.value === selectedStyle.value)?.label || ''
 })
 
-const imageStyles = [
-  { value: 'flat', label: '扁平', emoji: '🟦', cover: '/covers/styles/flat.webp' },
-  { value: 'minimalist', label: '极简', emoji: '⬜', cover: '/covers/styles/minimalist.webp' },
-  { value: 'hand_drawn', label: '手绘', emoji: '✏️', cover: '/covers/styles/hand_drawn.webp' },
-  { value: 'doodle', label: '涂鸦', emoji: '🎨', cover: '/covers/styles/doodle.webp' },
-  { value: 'sci_fi', label: '科技', emoji: '🔬', cover: '/covers/styles/sci_fi.webp' },
-  { value: 'retro', label: '复古', emoji: '📜', cover: '/covers/styles/retro.webp' },
-  { value: 'cartoon', label: '卡通', emoji: '🧸', cover: '/covers/styles/cartoon.webp' },
-  { value: 'business', label: '商务', emoji: '💼', cover: '/covers/styles/business.webp' },
-  { value: 'illustration', label: '插画', emoji: '🖼️', cover: '/covers/styles/illustration.webp' },
-  { value: '3d', label: '3D', emoji: '🧊', cover: '/covers/styles/sci_fi.webp' },
-  { value: 'watercolor', label: '水彩', emoji: '💧', cover: '/covers/styles/watercolor.webp' },
-  { value: 'felt', label: '毛毡', emoji: '🧶', cover: '/covers/styles/felt.webp' },
-  { value: 'blueprint', label: '图纸', emoji: '📐', cover: '/covers/styles/blueprint.webp' },
+// 风格：带封面图（从API加载）
+const imageStyles = ref([
+  { value: 'hand_drawn', label: '手绘', cover: '/covers/styles/hand_drawn.webp' },
+  { value: 'watercolor', label: '水彩', cover: '/covers/styles/watercolor.webp' },
+  { value: 'flat', label: '扁平', cover: '/covers/styles/flat.webp' },
+  { value: 'cartoon', label: '卡通', cover: '/covers/styles/cartoon.webp' },
+  { value: 'realistic', label: '写实', cover: '/covers/styles/illustration.webp' },
+  { value: 'retro', label: '复古', cover: '/covers/styles/retro.webp' },
+  { value: 'anime', label: '动漫', cover: '/covers/styles/cartoon.webp' },
+  { value: '3d', label: '3D', cover: '/covers/styles/clay.webp' },
+  { value: 'minimalist', label: '极简', cover: '/covers/styles/minimalist.webp' },
+  { value: 'ink', label: '水墨', cover: '/covers/styles/ink.webp' },
+  { value: 'sketch', label: '素描', cover: '/covers/styles/sketch.webp' },
+  { value: 'pixel', label: '像素', cover: '/covers/styles/pixel.webp' },
+])
   { value: 'matchstick', label: '火柴人', emoji: '🧍', cover: '/covers/styles/matchstick.webp' },
   { value: 'pop_up_book', label: '立体书', emoji: '📖', cover: '/covers/styles/pop_up_book.webp' },
   { value: 'science_poster', label: '科学画报', emoji: '🔭', cover: '/covers/styles/science_poster.webp' },
@@ -594,8 +536,8 @@ const startBatchGeneration = async () => {
   if ((!promptInput.value.trim() && attachments.value.length === 0) || isGenerating.value) return
   isGenerating.value = true
 
-  const typeLabel = imageTypes.find(t => t.value === selectedType.value)?.label || ''
-  const styleLabel = imageStyles.find(s => s.value === selectedStyle.value)?.label || ''
+  const typeLabel = imageTypes.value.find(t => t.value === selectedType.value)?.label || ''
+  const styleLabel = imageStyles.value.find(s => s.value === selectedStyle.value)?.label || ''
   let fullPrompt = promptInput.value
   if (typeLabel) fullPrompt += `\n类型：${typeLabel}`
   if (styleLabel) fullPrompt += `\n风格：${styleLabel}`
@@ -709,7 +651,19 @@ const loadGallery = async () => {
   }
 }
 
-onMounted(() => { loadGallery() })
+// 从后台加载类型和风格（与首页保持一致）
+async function loadTypesStyles() {
+  try {
+    const res = await fetch('/api/v1/admin/system-config/types-styles')
+    if (res.ok) {
+      const data = await res.json()
+      if (data.types?.length) imageTypes.value = data.types
+      if (data.styles?.length) imageStyles.value = data.styles
+    }
+  } catch { /* 使用默认值 */ }
+}
+
+onMounted(() => { loadGallery(); loadTypesStyles() })
 onUnmounted(() => { stopPolling() })
 </script>
 
