@@ -285,10 +285,10 @@ class Worker:
         return False
 
     def _is_valid_url(self, url: str) -> bool:
-        """检查URL格式是否有效"""
+        """检查URL格式是否有效（包括 /storage/ 相对路径）"""
         if not url:
             return False
-        return url.startswith(('http://', 'https://'))
+        return url.startswith(('http://', 'https://', '/storage/', '/api/'))
 
     async def _save_images(self, task: ImageTask, images: List) -> List:
         """保存图片到存储"""
