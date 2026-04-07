@@ -150,6 +150,11 @@ const applyCustomRatio = () => {
 watch(
   () => [generatorStore.width, generatorStore.height],
   () => {
+    // width/height 为 0 表示 auto
+    if (!generatorStore.width || !generatorStore.height) {
+      selectedRatio.value = 'auto'
+      return
+    }
     const ratio = generatorStore.width / generatorStore.height
     if (Math.abs(ratio - 1) < 0.01) selectedRatio.value = '1:1'
     else if (Math.abs(ratio - 4 / 3) < 0.01) selectedRatio.value = '4:3'
