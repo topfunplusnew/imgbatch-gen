@@ -38,7 +38,7 @@
               <button v-if="homeSelectedStyle"
                 class="inline-flex items-center gap-1 rounded-lg border border-border-dark bg-white px-2.5 py-1.5 text-xs font-medium text-ink-700 cursor-pointer hover:bg-ink-300/10"
                 @click="homeSelectedStyle = ''">
-                {{ homeSelectedStyle }}
+                {{ homeStyleObj?.label || homeSelectedStyle }}
                 <span class="material-symbols-outlined !text-[11px] ml-0.5 opacity-50">close</span>
               </button>
               <RatioDropdown class="shrink-0" />
@@ -94,33 +94,36 @@
             </span>
           </div>
           <div v-show="showHomeTypePanel">
-            <div v-if="homeTab === 'type'" class="grid grid-cols-3 gap-2.5 xs:grid-cols-4 md:grid-cols-5">
+            <!-- 类型：纯文字标签 -->
+            <div v-if="homeTab === 'type'" class="flex flex-wrap gap-2">
               <button v-for="t in homeTypes" :key="t.value"
                 @click="homeSelectedType = homeSelectedType === t.value ? '' : t.value"
+                :class="['rounded-lg border px-3 py-1.5 text-xs font-medium cursor-pointer',
+                  homeSelectedType === t.value ? 'border-primary bg-primary/8 text-primary' : 'border-border-dark bg-white text-ink-700 hover:border-primary/30']">
+                {{ t.label }}
+              </button>
+            </div>
+            <!-- 风格：带封面图卡片 -->
+            <div v-if="homeTab === 'style'" class="grid grid-cols-3 gap-2.5 xs:grid-cols-4 md:grid-cols-5">
+              <button v-for="s in homeStyles" :key="s.value"
+                @click="homeSelectedStyle = homeSelectedStyle === s.value ? '' : s.value"
                 class="relative flex flex-col items-center cursor-pointer group">
                 <div :class="['w-full overflow-hidden rounded-xl border-2',
-                  homeSelectedType === t.value ? 'border-primary' : 'border-transparent hover:border-primary/30']">
+                  homeSelectedStyle === s.value ? 'border-primary' : 'border-transparent hover:border-primary/30']">
                   <div class="aspect-square overflow-hidden bg-primary-soft/20">
-                    <img v-if="t.cover" :src="t.cover" :alt="t.label"
+                    <img v-if="s.cover" :src="s.cover" :alt="s.label"
                       class="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                     <div v-else class="flex h-full items-center justify-center">
-                      <span class="text-3xl">{{ t.emoji }}</span>
+                      <span class="text-2xl font-bold text-ink-400">{{ s.label }}</span>
                     </div>
                   </div>
                 </div>
-                <div v-if="homeSelectedType === t.value"
+                <div v-if="homeSelectedStyle === s.value"
                   class="absolute top-1.5 right-1.5 grid h-5 w-5 place-items-center rounded-full bg-primary text-white">
                   <span class="material-symbols-outlined !text-xs">check</span>
                 </div>
                 <span :class="['mt-1.5 text-xs font-medium',
-                  homeSelectedType === t.value ? 'text-primary' : 'text-ink-700']">{{ t.label }}</span>
-              </button>
-            </div>
-            <div v-if="homeTab === 'style'" class="flex flex-wrap gap-2">
-              <button v-for="s in homeStyles" :key="s" @click="homeSelectedStyle = homeSelectedStyle === s ? '' : s"
-                :class="['rounded-lg border px-3 py-1.5 text-xs font-medium cursor-pointer',
-                  homeSelectedStyle === s ? 'border-primary bg-primary/8 text-primary' : 'border-border-dark bg-white text-ink-700 hover:border-primary/30']">
-                {{ s }}
+                  homeSelectedStyle === s.value ? 'text-primary' : 'text-ink-700']">{{ s.label }}</span>
               </button>
             </div>
           </div>
@@ -333,25 +336,41 @@ const showHomeTypePanel = ref(false)
 const homeSelectedType = ref('')
 const homeSelectedStyle = ref('')
 
+// 类型：纯文字标签（不带图片）
 const homeTypes = ref([
-  { value: 'poster', label: '海报设计', emoji: '🎨', cover: '/covers/types/poster.webp' },
-  { value: 'reading_notes', label: '读书笔记', emoji: '📖', cover: '/covers/types/reading_notes.webp' },
-  { value: 'mind_map', label: '思维导图', emoji: '🧠', cover: '/covers/types/mind_map.webp' },
-  { value: 'infographic', label: '信息图表', emoji: '📊', cover: '/covers/types/infographic.webp' },
-  { value: 'flow_guide', label: '流程指南', emoji: '📋', cover: '/covers/types/flow_guide.webp' },
-  { value: 'comic', label: '漫画故事', emoji: '💬', cover: '/covers/types/comic.webp' },
-  { value: 'timeline', label: '时间线', emoji: '⏳', cover: '/covers/types/timeline.webp' },
-  { value: 'comparison', label: '对比分析', emoji: '⚖️', cover: '/covers/types/comparison.webp' },
-  { value: 'tutorial', label: '教程指南', emoji: '📐', cover: '/covers/types/tutorial.webp' },
-  { value: 'concept_map', label: '概念地图', emoji: '🗺️', cover: '/covers/types/concept_map.webp' },
-  { value: 'visual_summary', label: '视觉总结', emoji: '📝', cover: '/covers/types/visual_summary.webp' },
-  { value: 'poetry', label: '诗词解读', emoji: '🌙', cover: '/covers/types/poetry.webp' },
-  { value: 'formula', label: '公式原理', emoji: '🔬', cover: '/covers/types/formula.webp' },
+  { value: 'poster', label: '海报设计' },
+  { value: 'reading_notes', label: '读书笔记' },
+  { value: 'mind_map', label: '思维导图' },
+  { value: 'infographic', label: '信息图表' },
+  { value: 'flow_guide', label: '流程指南' },
+  { value: 'comic', label: '漫画故事' },
+  { value: 'timeline', label: '时间线' },
+  { value: 'comparison', label: '对比分析' },
+  { value: 'tutorial', label: '教程指南' },
+  { value: 'concept_map', label: '概念地图' },
+  { value: 'visual_summary', label: '视觉总结' },
+  { value: 'poetry', label: '诗词解读' },
+  { value: 'formula', label: '公式原理' },
 ])
 
-const homeStyles = ref(['手绘', '水彩', '扁平', '卡通', '写实', '复古', '动漫', '3D', '极简', '水墨', '素描', '像素'])
+// 风格：带封面图
+const homeStyles = ref([
+  { value: 'hand_drawn', label: '手绘', cover: '/covers/styles/hand_drawn.webp' },
+  { value: 'watercolor', label: '水彩', cover: '/covers/styles/watercolor.webp' },
+  { value: 'flat', label: '扁平', cover: '/covers/styles/flat.webp' },
+  { value: 'cartoon', label: '卡通', cover: '/covers/styles/cartoon.webp' },
+  { value: 'realistic', label: '写实', cover: '' },
+  { value: 'retro', label: '复古', cover: '/covers/styles/retro.webp' },
+  { value: 'anime', label: '动漫', cover: '' },
+  { value: '3d', label: '3D', cover: '' },
+  { value: 'minimalist', label: '极简', cover: '/covers/styles/minimalist.webp' },
+  { value: 'ink', label: '水墨', cover: '/covers/styles/ink.webp' },
+  { value: 'sketch', label: '素描', cover: '/covers/styles/sketch.webp' },
+  { value: 'pixel', label: '像素', cover: '/covers/styles/pixel.webp' },
+])
 
 const homeTypeObj = computed(() => homeTypes.value.find(t => t.value === homeSelectedType.value))
+const homeStyleObj = computed(() => homeStyles.value.find(s => s.value === homeSelectedStyle.value))
 
 // 从后台加载类型和风格
 async function loadTypesStyles() {
@@ -446,7 +465,7 @@ const startGeneration = () => {
   // Build prompt with selected type/style
   let fullPrompt = promptInput.value
   if (homeTypeObj.value) fullPrompt += `\n类型：${homeTypeObj.value.label}`
-  if (homeSelectedStyle.value) fullPrompt += `\n风格：${homeSelectedStyle.value}`
+  if (homeStyleObj.value) fullPrompt += `\n风格：${homeStyleObj.value.label}`
   generatorStore.prompt = fullPrompt
   attachments.value.forEach(file => generatorStore.addAttachment(file))
   if (fullPrompt.trim() || generatorStore.attachments.length > 0) {

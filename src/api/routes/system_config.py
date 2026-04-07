@@ -333,24 +333,37 @@ async def update_scenes_data(
 
 TYPES_STYLES_CONFIG_KEY = "home.types_styles"
 
-# 默认数据
+# 默认数据 — 类型为纯文字标签，风格带封面图
 _DEFAULT_TYPES = [
-    {"value": "poster", "label": "海报设计", "emoji": "🎨", "cover": "/covers/types/poster.webp"},
-    {"value": "reading_notes", "label": "读书笔记", "emoji": "📖", "cover": "/covers/types/reading_notes.webp"},
-    {"value": "mind_map", "label": "思维导图", "emoji": "🧠", "cover": "/covers/types/mind_map.webp"},
-    {"value": "infographic", "label": "信息图表", "emoji": "📊", "cover": "/covers/types/infographic.webp"},
-    {"value": "flow_guide", "label": "流程指南", "emoji": "📋", "cover": "/covers/types/flow_guide.webp"},
-    {"value": "comic", "label": "漫画故事", "emoji": "💬", "cover": "/covers/types/comic.webp"},
-    {"value": "timeline", "label": "时间线", "emoji": "⏳", "cover": "/covers/types/timeline.webp"},
-    {"value": "comparison", "label": "对比分析", "emoji": "⚖️", "cover": "/covers/types/comparison.webp"},
-    {"value": "tutorial", "label": "教程指南", "emoji": "📐", "cover": "/covers/types/tutorial.webp"},
-    {"value": "concept_map", "label": "概念地图", "emoji": "🗺️", "cover": "/covers/types/concept_map.webp"},
-    {"value": "visual_summary", "label": "视觉总结", "emoji": "📝", "cover": "/covers/types/visual_summary.webp"},
-    {"value": "poetry", "label": "诗词解读", "emoji": "🌙", "cover": "/covers/types/poetry.webp"},
-    {"value": "formula", "label": "公式原理", "emoji": "🔬", "cover": "/covers/types/formula.webp"},
+    {"value": "poster", "label": "海报设计"},
+    {"value": "reading_notes", "label": "读书笔记"},
+    {"value": "mind_map", "label": "思维导图"},
+    {"value": "infographic", "label": "信息图表"},
+    {"value": "flow_guide", "label": "流程指南"},
+    {"value": "comic", "label": "漫画故事"},
+    {"value": "timeline", "label": "时间线"},
+    {"value": "comparison", "label": "对比分析"},
+    {"value": "tutorial", "label": "教程指南"},
+    {"value": "concept_map", "label": "概念地图"},
+    {"value": "visual_summary", "label": "视觉总结"},
+    {"value": "poetry", "label": "诗词解读"},
+    {"value": "formula", "label": "公式原理"},
 ]
 
-_DEFAULT_STYLES = ["手绘", "水彩", "扁平", "卡通", "写实", "复古", "动漫", "3D", "极简", "水墨", "素描", "像素"]
+_DEFAULT_STYLES = [
+    {"value": "hand_drawn", "label": "手绘", "cover": "/covers/styles/hand_drawn.webp"},
+    {"value": "watercolor", "label": "水彩", "cover": "/covers/styles/watercolor.webp"},
+    {"value": "flat", "label": "扁平", "cover": "/covers/styles/flat.webp"},
+    {"value": "cartoon", "label": "卡通", "cover": "/covers/styles/cartoon.webp"},
+    {"value": "realistic", "label": "写实", "cover": ""},
+    {"value": "retro", "label": "复古", "cover": "/covers/styles/retro.webp"},
+    {"value": "anime", "label": "动漫", "cover": ""},
+    {"value": "3d", "label": "3D", "cover": ""},
+    {"value": "minimalist", "label": "极简", "cover": "/covers/styles/minimalist.webp"},
+    {"value": "ink", "label": "水墨", "cover": "/covers/styles/ink.webp"},
+    {"value": "sketch", "label": "素描", "cover": "/covers/styles/sketch.webp"},
+    {"value": "pixel", "label": "像素", "cover": "/covers/styles/pixel.webp"},
+]
 
 
 @router.get("/types-styles", summary="获取类型与风格配置（公开）")
