@@ -1,5 +1,5 @@
 <template>
-  <div class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+  <div class="fixed top-4 right-4 flex flex-col gap-2 pointer-events-none" style="z-index: 99999;">
     <TransitionGroup name="notification">
       <div
         v-for="notif in notifications"
