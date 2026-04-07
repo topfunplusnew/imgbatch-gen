@@ -334,16 +334,6 @@ const imageStyles = ref([
   { value: 'sketch', label: '素描', cover: '/covers/styles/sketch.webp' },
   { value: 'pixel', label: '像素', cover: '/covers/styles/pixel.webp' },
 ])
-  { value: 'matchstick', label: '火柴人', emoji: '🧍', cover: '/covers/styles/matchstick.webp' },
-  { value: 'pop_up_book', label: '立体书', emoji: '📖', cover: '/covers/styles/pop_up_book.webp' },
-  { value: 'science_poster', label: '科学画报', emoji: '🔭', cover: '/covers/styles/science_poster.webp' },
-  { value: 'da_vinci', label: '达芬奇手稿', emoji: '✍️', cover: '/covers/styles/da_vinci.webp' },
-  { value: 'clay', label: '黏土', emoji: '🎭', cover: '/covers/styles/clay.webp' },
-  { value: 'pixel', label: '像素', emoji: '👾', cover: '/covers/styles/pixel.webp' },
-  { value: 'ukiyo_e', label: '浮世绘', emoji: '🏯', cover: '/covers/styles/ink.webp' },
-  { value: 'ink', label: '水墨', emoji: '🖌️', cover: '/covers/styles/ink.webp' },
-  { value: 'sketch', label: '素描', emoji: '✏️', cover: '/covers/styles/sketch.webp' },
-]
 
 const handleUploadChange = (uploadFile) => {
   const file = uploadFile?.raw || uploadFile
