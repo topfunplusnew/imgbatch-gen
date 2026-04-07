@@ -576,10 +576,11 @@ const handleChatModelSend = async () => {
         });
         generatorStore.isGenerating = false;
 
-        // 保存到服务器
+        // 保存到服务器并更新会话标题
         const completedMsg = generatorStore.messages.find(m => m.id === assistantMessage.id);
         if (completedMsg && generatorStore.sessionSavedToHistory) {
           generatorStore.saveMessageToServer(completedMsg);
+          generatorStore.summarizeSession();
         }
       },
       onError(error) {
@@ -818,10 +819,11 @@ const handleImageModelSend = async () => {
         }
         generatorStore.updateMessage(assistantMessage.id, updatedMessage)
 
-        // 同步助手回复到服务器
+        // 同步助手回复到服务器并更新标题
         const completedMessage = generatorStore.messages.find(m => m.id === assistantMessage.id)
         if (completedMessage && generatorStore.sessionSavedToHistory) {
           generatorStore.saveMessageToServer(completedMessage)
+          generatorStore.summarizeSession()
         }
       }
     } else {
@@ -833,10 +835,11 @@ const handleImageModelSend = async () => {
       }
       generatorStore.updateMessage(assistantMessage.id, updatedMessage)
 
-      // 同步助手回复到服务器
+      // 同步助手回复到服务器并更新标题
       const completedMessage = generatorStore.messages.find(m => m.id === assistantMessage.id)
       if (completedMessage && generatorStore.sessionSavedToHistory) {
         generatorStore.saveMessageToServer(completedMessage)
+        generatorStore.summarizeSession()
       }
     }
 

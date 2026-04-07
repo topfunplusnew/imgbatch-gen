@@ -151,9 +151,36 @@ async def save_message(request: SaveMessageRequest):
     保存单条消息
 
     保存用户的单条消息到对话消息表中，关联到对应的会话ID。
+    自动去重：同一会话中相同角色+相同内容的消息在5秒内不重复保存。
     """
     try:
         db_manager = get_db_manager()
+
+        # 去重检查：查询最近是否已有相同消息
+        async with db_manager.get_session() as session:
+            recent = await session.scalar(
+                select(ChatConversation)
+                .where(
+                    and_(
+                        ChatConversation.session_id == request.session_id,
+                        ChatConversation.role == request.role,
+                        ChatConversation.content == request.content,
+                    )
+                )
+                .order_by(desc(ChatConversation.created_at))
+                .limit(1)
+            )
+            if recent:
+                from datetime import timedelta
+                now = datetime.now(timezone.utc)
+                created = recent.created_at.replace(tzinfo=timezone.utc) if recent.created_at.tzinfo is None else recent.created_at
+                if (now - created) < timedelta(seconds=5):
+                    logger.debug(f"跳过重复消息: {request.role} - {request.content[:30]}...")
+                    return {
+                        "status": "success",
+                        "session_id": request.session_id,
+                        "message": "消息已存在，跳过"
+                    }
 
         # 使用数据库管理器的消息创建方法
         await db_manager.create_chat_message(

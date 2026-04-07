@@ -1241,7 +1241,7 @@ async def save_conversation_history(request: ChatRequest, http_request: Request,
 
 async def save_assistant_response(db_manager, session_id: str, message: ChatMessage, user_request_id: str):
     """
-    保存AI回复到数据库
+    保存AI回复到数据库（仅后端非流式场景使用）
 
     Args:
         db_manager: 数据库管理器
@@ -1250,12 +1250,6 @@ async def save_assistant_response(db_manager, session_id: str, message: ChatMess
         user_request_id: 用户请求ID
     """
     try:
-        # 更新会话标题（使用第一条用户消息）
-        await db_manager.update_conversation_session(
-            session_id=session_id,
-            title=message.content[:50] + "..." if len(message.content) > 50 else message.content
-        )
-
         # 保存AI回复
         await db_manager.create_chat_message(
             session_id=session_id,
