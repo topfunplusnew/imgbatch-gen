@@ -110,12 +110,9 @@
                 class="relative flex flex-col items-center cursor-pointer group">
                 <div :class="['w-full overflow-hidden rounded-xl border-2',
                   homeSelectedStyle === s.value ? 'border-primary' : 'border-transparent hover:border-primary/30']">
-                  <div class="aspect-square overflow-hidden bg-primary-soft/20">
-                    <img v-if="s.cover" :src="s.cover" :alt="s.label"
-                      class="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-                    <div v-else class="flex h-full items-center justify-center">
-                      <span class="text-2xl font-bold text-ink-400">{{ s.label }}</span>
-                    </div>
+                  <div class="overflow-hidden bg-primary-soft/10 rounded-xl">
+                    <img :src="s.cover" :alt="s.label"
+                      class="w-full h-auto object-contain group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                   </div>
                 </div>
                 <div v-if="homeSelectedStyle === s.value"
@@ -359,10 +356,10 @@ const homeStyles = ref([
   { value: 'watercolor', label: '水彩', cover: '/covers/styles/watercolor.webp' },
   { value: 'flat', label: '扁平', cover: '/covers/styles/flat.webp' },
   { value: 'cartoon', label: '卡通', cover: '/covers/styles/cartoon.webp' },
-  { value: 'realistic', label: '写实', cover: '' },
+  { value: 'realistic', label: '写实', cover: '/covers/styles/illustration.webp' },
   { value: 'retro', label: '复古', cover: '/covers/styles/retro.webp' },
-  { value: 'anime', label: '动漫', cover: '' },
-  { value: '3d', label: '3D', cover: '' },
+  { value: 'anime', label: '动漫', cover: '/covers/styles/cartoon.webp' },
+  { value: '3d', label: '3D', cover: '/covers/styles/clay.webp' },
   { value: 'minimalist', label: '极简', cover: '/covers/styles/minimalist.webp' },
   { value: 'ink', label: '水墨', cover: '/covers/styles/ink.webp' },
   { value: 'sketch', label: '素描', cover: '/covers/styles/sketch.webp' },
