@@ -426,15 +426,15 @@
                   </div>
 
                   <!-- 图片预览 -->
-                  <div class="bg-gray-200 relative group">
+                  <div class="aspect-[4/5] bg-gray-100 relative group overflow-hidden">
                     <img
                       v-if="record.image_urls && record.image_urls.length > 0"
                       :src="resolveImageSrc(record.image_urls[0])"
                       :alt="record.prompt"
-                      class="w-full h-auto object-contain"
+                      class="w-full h-full object-contain"
                       @error="handleImageFallback"
                     />
-                    <div v-else class="w-full aspect-square flex items-center justify-center">
+                    <div v-else class="w-full h-full flex items-center justify-center">
                       <span class="material-symbols-outlined !text-6xl text-gray-400">image_not_supported</span>
                     </div>
                     <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
