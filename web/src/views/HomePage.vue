@@ -94,14 +94,35 @@
             </span>
           </div>
           <div v-show="showHomeTypePanel">
-            <!-- 类型：纯文字标签 -->
-            <div v-if="homeTab === 'type'" class="flex flex-wrap gap-2">
-              <button v-for="t in homeTypes" :key="t.value"
-                @click="homeSelectedType = homeSelectedType === t.value ? '' : t.value"
-                :class="['rounded-lg border px-3 py-1.5 text-xs font-medium cursor-pointer',
-                  homeSelectedType === t.value ? 'border-primary bg-primary/8 text-primary' : 'border-border-dark bg-white text-ink-700 hover:border-primary/30']">
-                {{ t.label }}
-              </button>
+            <!-- 类型：有封面图用卡片，无封面图用文字标签 -->
+            <div v-if="homeTab === 'type'">
+              <div v-if="homeTypesHasCover" class="grid grid-cols-3 gap-2.5 xs:grid-cols-4 md:grid-cols-5">
+                <button v-for="t in homeTypes" :key="t.value"
+                  @click="homeSelectedType = homeSelectedType === t.value ? '' : t.value"
+                  class="relative flex flex-col items-center cursor-pointer group">
+                  <div :class="['w-full overflow-hidden rounded-xl border-2',
+                    homeSelectedType === t.value ? 'border-primary' : 'border-transparent hover:border-primary/30']">
+                    <div class="overflow-hidden bg-primary-soft/10 rounded-xl">
+                      <img v-if="t.cover" :src="t.cover" :alt="t.label"
+                        class="w-full h-auto object-contain group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                      <div v-else class="w-full aspect-square flex items-center justify-center text-sm font-bold text-ink-400">{{ t.label }}</div>
+                    </div>
+                  </div>
+                  <div v-if="homeSelectedType === t.value"
+                    class="absolute top-1.5 right-1.5 grid h-5 w-5 place-items-center rounded-full bg-primary text-white">
+                    <span class="material-symbols-outlined !text-xs">check</span>
+                  </div>
+                  <span class="mt-1 text-xs text-ink-700 font-medium">{{ t.label }}</span>
+                </button>
+              </div>
+              <div v-else class="flex flex-wrap gap-2">
+                <button v-for="t in homeTypes" :key="t.value"
+                  @click="homeSelectedType = homeSelectedType === t.value ? '' : t.value"
+                  :class="['rounded-lg border px-3 py-1.5 text-xs font-medium cursor-pointer',
+                    homeSelectedType === t.value ? 'border-primary bg-primary/8 text-primary' : 'border-border-dark bg-white text-ink-700 hover:border-primary/30']">
+                  {{ t.label }}
+                </button>
+              </div>
             </div>
             <!-- 风格：带封面图卡片 -->
             <div v-if="homeTab === 'style'" class="grid grid-cols-3 gap-2.5 xs:grid-cols-4 md:grid-cols-5">
@@ -369,6 +390,7 @@ const homeStyles = ref([
 
 const homeTypeObj = computed(() => homeTypes.value.find(t => t.value === homeSelectedType.value))
 const homeStyleObj = computed(() => homeStyles.value.find(s => s.value === homeSelectedStyle.value))
+const homeTypesHasCover = computed(() => homeTypes.value.some(t => t.cover))
 
 // 从后台加载类型和风格
 async function loadTypesStyles() {

@@ -114,14 +114,35 @@
       </div>
 
       <div v-show="showTypePanel">
-        <!-- 类型：纯文字标签 -->
-        <div v-if="activeTab === 'type'" class="flex flex-wrap gap-2">
-          <button v-for="t in filteredTypes" :key="t.value"
-            @click="selectedType = selectedType === t.value ? '' : t.value"
-            :class="['rounded-lg border px-3 py-1.5 text-xs font-medium cursor-pointer',
-              selectedType === t.value ? 'border-primary bg-primary/8 text-primary' : 'border-border-dark bg-white text-ink-700 hover:border-primary/30']">
-            {{ t.label }}
-          </button>
+        <!-- 类型：有封面图用卡片，无封面图用文字标签 -->
+        <div v-if="activeTab === 'type'">
+          <div v-if="typesHasCover" class="grid grid-cols-3 gap-2.5 xs:grid-cols-4 md:grid-cols-5">
+            <button v-for="t in filteredTypes" :key="t.value"
+              @click="selectedType = selectedType === t.value ? '' : t.value"
+              class="relative flex flex-col items-center cursor-pointer group">
+              <div :class="['w-full overflow-hidden rounded-xl border-2',
+                selectedType === t.value ? 'border-primary' : 'border-transparent hover:border-primary/30']">
+                <div class="overflow-hidden bg-primary-soft/10 rounded-xl">
+                  <img v-if="t.cover" :src="t.cover" :alt="t.label"
+                    class="w-full h-auto object-contain group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                  <div v-else class="w-full aspect-square flex items-center justify-center text-sm font-bold text-ink-400">{{ t.label }}</div>
+                </div>
+              </div>
+              <div v-if="selectedType === t.value"
+                class="absolute top-1.5 right-1.5 grid h-5 w-5 place-items-center rounded-full bg-primary text-white">
+                <span class="material-symbols-outlined !text-xs">check</span>
+              </div>
+              <span class="mt-1 text-xs text-ink-700 font-medium">{{ t.label }}</span>
+            </button>
+          </div>
+          <div v-else class="flex flex-wrap gap-2">
+            <button v-for="t in filteredTypes" :key="t.value"
+              @click="selectedType = selectedType === t.value ? '' : t.value"
+              :class="['rounded-lg border px-3 py-1.5 text-xs font-medium cursor-pointer',
+                selectedType === t.value ? 'border-primary bg-primary/8 text-primary' : 'border-border-dark bg-white text-ink-700 hover:border-primary/30']">
+              {{ t.label }}
+            </button>
+          </div>
         </div>
 
         <!-- 风格：带封面图卡片（完整显示） -->
@@ -311,6 +332,7 @@ const imageTypes = ref([
 ])
 
 const filteredTypes = computed(() => imageTypes.value)
+const typesHasCover = computed(() => imageTypes.value.some(t => t.cover))
 
 const selectedTypeObj = computed(() => imageTypes.value.find(t => t.value === selectedType.value))
 const selectedTypeLabel = computed(() => selectedTypeObj.value?.label || '')

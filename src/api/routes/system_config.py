@@ -1,8 +1,10 @@
 """System configuration endpoints for admin-only settings."""
 
+import os
+import uuid
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -333,21 +335,21 @@ async def update_scenes_data(
 
 TYPES_STYLES_CONFIG_KEY = "home.types_styles"
 
-# 默认数据 — 类型为纯文字标签，风格带封面图
+# 默认数据 — 类型和风格都带封面图（可选）
 _DEFAULT_TYPES = [
-    {"value": "poster", "label": "海报设计"},
-    {"value": "reading_notes", "label": "读书笔记"},
-    {"value": "mind_map", "label": "思维导图"},
-    {"value": "infographic", "label": "信息图表"},
-    {"value": "flow_guide", "label": "流程指南"},
-    {"value": "comic", "label": "漫画故事"},
-    {"value": "timeline", "label": "时间线"},
-    {"value": "comparison", "label": "对比分析"},
-    {"value": "tutorial", "label": "教程指南"},
-    {"value": "concept_map", "label": "概念地图"},
-    {"value": "visual_summary", "label": "视觉总结"},
-    {"value": "poetry", "label": "诗词解读"},
-    {"value": "formula", "label": "公式原理"},
+    {"value": "poster", "label": "海报设计", "cover": ""},
+    {"value": "reading_notes", "label": "读书笔记", "cover": ""},
+    {"value": "mind_map", "label": "思维导图", "cover": ""},
+    {"value": "infographic", "label": "信息图表", "cover": ""},
+    {"value": "flow_guide", "label": "流程指南", "cover": ""},
+    {"value": "comic", "label": "漫画故事", "cover": ""},
+    {"value": "timeline", "label": "时间线", "cover": ""},
+    {"value": "comparison", "label": "对比分析", "cover": ""},
+    {"value": "tutorial", "label": "教程指南", "cover": ""},
+    {"value": "concept_map", "label": "概念地图", "cover": ""},
+    {"value": "visual_summary", "label": "视觉总结", "cover": ""},
+    {"value": "poetry", "label": "诗词解读", "cover": ""},
+    {"value": "formula", "label": "公式原理", "cover": ""},
 ]
 
 _DEFAULT_STYLES = [
@@ -427,3 +429,58 @@ async def update_types_styles(
     except Exception as exc:
         logger.error(f"Failed to update types/styles: {exc}")
         raise HTTPException(status_code=500, detail="更新失败")
+
+
+# ==================== 封面图上传接口 ====================
+
+@router.post("/upload-cover", summary="上传封面图（管理员）")
+async def upload_cover_image(
+    file: UploadFile = File(...),
+    user: dict = Depends(RequiredAuthDependency()),
+):
+    """管理员接口，上传类型/风格封面图到 MinIO covers 目录。"""
+    if not await verify_admin(user["id"]):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+
+    # 校验文件类型
+    allowed_types = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"}
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail=f"不支持的文件类型: {file.content_type}")
+
+    try:
+        from ...config.settings import settings as app_settings
+        from minio import Minio
+
+        minio_client = Minio(
+            endpoint=app_settings.minio_endpoint,
+            access_key=app_settings.minio_access_key,
+            secret_key=app_settings.minio_secret_key,
+            secure=app_settings.minio_secure,
+        )
+        bucket_name = app_settings.minio_bucket_name or "images"
+
+        # 生成唯一文件名
+        ext = os.path.splitext(file.filename or "cover.webp")[1] or ".webp"
+        object_name = f"covers/{uuid.uuid4().hex}{ext}"
+
+        content = await file.read()
+        from io import BytesIO
+
+        minio_client.put_object(
+            bucket_name,
+            object_name,
+            BytesIO(content),
+            length=len(content),
+            content_type=file.content_type,
+        )
+
+        # 返回前端可访问的路径
+        cover_url = f"/storage/{object_name}"
+        logger.info(f"封面图上传成功: {object_name}")
+
+        return {"success": True, "url": cover_url}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"封面图上传失败: {exc}")
+        raise HTTPException(status_code=500, detail="上传失败")
