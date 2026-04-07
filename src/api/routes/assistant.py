@@ -558,10 +558,18 @@ async def handle_single_generate(message: ChatMessage, intent: Intent, task_mana
                 int(reference_image_input.get("count") or 1),
             )
 
-        # 使用 LLM 分析提示词，提取参数
-        try:
-            client = await _get_openai_client(api_key)
-            analysis_prompt = f"""分析以下图像生成提示词，提取尺寸和质量参数。
+        # 确定尺寸：用户明确选择的尺寸（非0）优先，否则用 LLM 从提示词中分析
+        if ip.width and ip.height:
+            # 用户已选择具体尺寸，直接使用
+            width = ip.width
+            height = ip.height
+            quality = ip.quality or "standard"
+            logger.info(f"使用用户指定尺寸: width={width}, height={height}, quality={quality}")
+        else:
+            # auto模式：尝试用 LLM 分析提示词提取尺寸
+            try:
+                client = await _get_openai_client(api_key)
+                analysis_prompt = f"""分析以下图像生成提示词，提取尺寸和质量参数。
 
 提示词: {prompt_text}
 
@@ -579,25 +587,25 @@ async def handle_single_generate(message: ChatMessage, intent: Intent, task_mana
 - "2k 3:2"表示在2k(2048)基础上按3:2比例计算，结果约为2048x1365
 - "4k 16:9"表示在4k(4096)基础上按16:9比例计算
 - 如果提到高清/超清/HD/4K/2K，quality设为"hd"
-- 如果没有明确尺寸，默认1024x1024"""
+- 如果没有明确尺寸，返回0表示让模型自动决定"""
 
-            response = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": analysis_prompt}],
-                response_format={"type": "json_object"}
-            )
+                response = await client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": analysis_prompt}],
+                    response_format={"type": "json_object"}
+                )
 
-            import json
-            params = json.loads(response.choices[0].message.content)
-            width = params.get("width", ip.width or 1024)
-            height = params.get("height", ip.height or 1024)
-            quality = params.get("quality", ip.quality or "standard")
-            logger.info(f"LLM分析提示词: width={width}, height={height}, quality={quality}")
-        except Exception as e:
-            logger.warning("LLM分析失败，使用默认参数: {}", e)
-            width = ip.width or 1024
-            height = ip.height or 1024
-            quality = ip.quality or "standard"
+                import json
+                params = json.loads(response.choices[0].message.content)
+                width = params.get("width") or 0
+                height = params.get("height") or 0
+                quality = params.get("quality", ip.quality or "standard")
+                logger.info(f"LLM分析提示词: width={width}, height={height}, quality={quality}")
+            except Exception as e:
+                logger.warning("LLM分析失败，使用auto模式: {}", e)
+                width = 0
+                height = 0
+                quality = ip.quality or "standard"
 
         # 优先用外层 request.model，其次用 image_params.model_name
         model_name = request_model or ip.model_name
@@ -807,8 +815,8 @@ async def handle_batch_generate(message: ChatMessage, intent: Intent, task_manag
             params = ImageParams(
                 prompt=prompt,
                 model=model_name,
-                width=ip.width or 1024,
-                height=ip.height or 1024,
+                width=ip.width if ip.width else 0,
+                height=ip.height if ip.height else 0,
                 quality=ip.quality or "standard",
                 n=1,
                 negative_prompt=ip.negative_prompt,
