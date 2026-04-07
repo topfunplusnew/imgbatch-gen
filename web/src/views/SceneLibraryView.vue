@@ -48,8 +48,8 @@
     </div>
 
     <!-- Category filter -->
-    <div class="mt-6 w-full px-4 xs:px-6 md:px-8">
-      <div class="flex flex-wrap items-center gap-2 pb-2">
+    <div class="mx-auto mt-6 w-full max-w-[800px] px-4 xs:px-6 md:px-8">
+      <div class="flex flex-wrap items-center justify-center gap-2 pb-2">
         <el-button
           :type="selectedCategory === null ? 'primary' : 'default'"
           :plain="selectedCategory !== null"
