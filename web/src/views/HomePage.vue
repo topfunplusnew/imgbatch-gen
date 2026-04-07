@@ -313,6 +313,7 @@ import CreationDetailPanel from '@/components/creation/CreationDetailPanel.vue'
 import ModelSelector from '@/components/ModelSelector.vue'
 import { api } from '@/services/api'
 import { notification } from '@/utils/notification'
+import { copyText } from '@/utils/clipboard'
 
 const generatorStore = useGeneratorStore()
 const historyStore = useHistoryStore()
@@ -428,10 +429,10 @@ const previewRecord = (record) => {
 }
 
 const copyPrompt = async (text) => {
-  try {
-    await navigator.clipboard.writeText(text)
+  const ok = await copyText(text)
+  if (ok) {
     notification.success('已复制', '提示词已复制到剪贴板')
-  } catch {
+  } else {
     notification.error('复制失败', '')
   }
 }

@@ -485,6 +485,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
 import { notification } from '@/utils/notification'
+import { copyText } from '@/utils/clipboard'
 import { useApiConfigStore } from '@/store/useApiConfigStore'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import { api } from '@/services/api'
@@ -1366,8 +1367,12 @@ async function shareMessage() {
     const shareUrl = `${window.location.origin}${window.location.pathname}#share=${encodedMarkdown}`
 
     // Copy shareable link to clipboard
-    await navigator.clipboard.writeText(shareUrl)
-    notification.success('分享链接已复制', '对话已转换为 Markdown，分享链接已复制到剪贴板')
+    const ok = await copyText(shareUrl)
+    if (ok) {
+      notification.success('分享链接已复制', '对话已转换为 Markdown，分享链接已复制到剪贴板')
+    } else {
+      notification.error('复制失败', '请手动复制链接')
+    }
 
   } catch (error) {
     console.error('分享失败:', error)

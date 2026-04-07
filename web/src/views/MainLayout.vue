@@ -209,6 +209,7 @@ import UserMenuDropdown from '@/components/layout/UserMenuDropdown.vue'
 import ChatHistorySidebar from '@/components/history/ChatHistorySidebar.vue'
 import { api } from '@/services/api'
 import { notification } from '@/utils/notification'
+import { copyText } from '@/utils/clipboard'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -241,10 +242,10 @@ const openInvite = () => {
 }
 
 const copyInviteLink = async () => {
-  try {
-    await navigator.clipboard.writeText(inviteLink.value)
+  const ok = await copyText(inviteLink.value)
+  if (ok) {
     notification.success('已复制', '邀请链接已复制到剪贴板')
-  } catch {
+  } else {
     notification.error('复制失败', '请手动复制链接')
   }
 }

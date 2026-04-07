@@ -1193,6 +1193,7 @@ import { useNotificationStore } from '@/store/useNotificationStore'
 import { api } from '@/services/api'
 import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
 import { notification } from '@/utils/notification'
+import { copyText } from '@/utils/clipboard'
 import AnnouncementList from '@/components/AnnouncementList.vue'
 import QRCode from 'qrcode'
 
@@ -1760,10 +1761,10 @@ function viewGenerationDetail(record) {
 
 // 复制邀请码
 async function copyInviteCode() {
-  try {
-    await navigator.clipboard.writeText(inviteInfo.value.invite_code)
+  const ok = await copyText(inviteInfo.value.invite_code)
+  if (ok) {
     notification.success('邀请码已复制到剪贴板')
-  } catch (error) {
+  } else {
     notification.error('复制失败，请手动复制')
   }
 }

@@ -180,13 +180,8 @@ export const useCaseStore = defineStore('cases', () => {
       return false
     }
 
-    try {
-      await navigator.clipboard.writeText(caseItem.prompt)
-      return true
-    } catch (error: any) {
-      console.error('复制失败:', error)
-      return false
-    }
+    const { copyText } = await import('@/utils/clipboard')
+    return await copyText(caseItem.prompt)
   }
 
   function resetFilters() {

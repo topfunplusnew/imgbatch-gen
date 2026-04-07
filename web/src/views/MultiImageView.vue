@@ -270,6 +270,7 @@ import RatioDropdown from '@/components/landing/RatioDropdown.vue'
 import ResolutionDropdown from '@/components/landing/ResolutionDropdown.vue'
 import { api } from '@/services/api'
 import { notification } from '@/utils/notification'
+import { copyText } from '@/utils/clipboard'
 
 const generatorStore = useGeneratorStore()
 
@@ -364,10 +365,10 @@ const getFileIcon = (file) => {
 }
 
 const copyPrompt = async (text) => {
-  try {
-    await navigator.clipboard.writeText(text)
+  const ok = await copyText(text)
+  if (ok) {
     notification.success('已复制', '提示词已复制到剪贴板')
-  } catch { notification.error('复制失败', '') }
+  } else { notification.error('复制失败', '') }
 }
 
 const previewMulti = (record, index) => {

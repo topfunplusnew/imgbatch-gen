@@ -108,6 +108,7 @@
 import { computed } from 'vue'
 import { useAppStore } from '@/store/useAppStore'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
+import { copyText } from '@/utils/clipboard'
 
 const appStore = useAppStore()
 const generatorStore = useGeneratorStore()
@@ -132,12 +133,7 @@ const formatDate = (dateString) => {
 
 const copyPrompt = async () => {
   if (!creation.value) return
-  try {
-    await navigator.clipboard.writeText(creation.value.prompt)
-    console.log('提示词已复制')
-  } catch (error) {
-    console.error('复制失败:', error)
-  }
+  await copyText(creation.value.prompt)
 }
 
 const useTemplate = () => {
