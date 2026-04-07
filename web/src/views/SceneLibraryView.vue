@@ -103,12 +103,12 @@
           class="group cursor-pointer overflow-hidden rounded-2xl border border-border-dark bg-white/90 shadow-sm hover:shadow-xl hover:-translate-y-0.5 hover:border-primary/30"
         >
           <!-- Cover image / icon -->
-          <div class="aspect-[4/5] overflow-hidden bg-primary-soft/30">
+          <div class="aspect-[4/3] overflow-hidden bg-primary-soft/20">
             <img
               v-if="scene.coverImage"
               :src="scene.coverImage"
               :alt="scene.name"
-              class="w-full h-full object-contain transition-transform group-hover:scale-105"
+              class="w-full h-full object-cover transition-transform group-hover:scale-105"
               loading="lazy"
             />
             <div v-else class="flex h-full items-center justify-center">
@@ -155,7 +155,7 @@
             class="group overflow-hidden rounded-2xl border border-border-dark bg-white/80 transition hover:shadow-md"
           >
             <div v-if="tpl.exampleImage" class="aspect-[4/3] overflow-hidden bg-primary-soft/20">
-              <img :src="tpl.exampleImage" class="w-full h-full object-contain transition-transform group-hover:scale-105" />
+              <img :src="tpl.exampleImage" class="w-full h-full object-cover transition-transform group-hover:scale-105" />
             </div>
             <div class="p-3">
               <h5 class="text-sm font-semibold text-ink-950">{{ tpl.title }}</h5>
