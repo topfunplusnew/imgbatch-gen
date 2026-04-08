@@ -1334,3 +1334,16 @@ create index if not exists idx_cleanup_history_status
 
 create index if not exists idx_cleanup_history_triggered_by
     on cleanup_history (triggered_by);
+
+-- ==================== 迁移: conversation_sessions 添加 user_id ====================
+do $$
+begin
+    if not exists (
+        select 1 from information_schema.columns
+        where table_name = 'conversation_sessions' and column_name = 'user_id'
+    ) then
+        alter table conversation_sessions add column user_id varchar(100);
+        create index ix_conversation_sessions_user_id on conversation_sessions (user_id);
+        comment on column conversation_sessions.user_id is '登录用户ID';
+    end if;
+end $$;

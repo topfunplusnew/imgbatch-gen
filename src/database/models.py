@@ -122,6 +122,7 @@ class ConversationSession(BaseModel):
 
     # 会话信息
     session_id = Column(String(100), unique=True, nullable=False, index=True, comment="会话ID")
+    user_id = Column(String(100), index=True, nullable=True, comment="登录用户ID")
     client_id = Column(String(100), index=True, comment="客户端Cookie ID，用于区分不同客户端")
     title = Column(String(200), comment="对话标题")
     model = Column(String(100), comment="使用的模型")

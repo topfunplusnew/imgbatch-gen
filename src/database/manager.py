@@ -634,7 +634,8 @@ class DatabaseManager:
         model: str,
         provider: str = "unknown",
         status: str = "active",
-        client_id: str = "anonymous"
+        client_id: str = "anonymous",
+        user_id: str = None,
     ):
         """创建对话会话（如果已存在则直接返回）"""
         async with self.get_session() as session:
@@ -643,11 +644,16 @@ class DatabaseManager:
             result = await session.execute(stmt)
             existing = result.scalar_one_or_none()
             if existing:
+                # 补填 user_id（旧数据可能没有）
+                if user_id and not existing.user_id:
+                    existing.user_id = user_id
+                    await session.commit()
                 return existing
 
             session_obj = ConversationSession(
                 session_id=session_id,
                 client_id=client_id,
+                user_id=user_id,
                 title=title,
                 model=model,
                 provider=provider,

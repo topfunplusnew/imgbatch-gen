@@ -16,6 +16,7 @@ from ...database.models import ConversationSession, ChatConversation, UploadedFi
 from ...engine import TaskManager
 from ...config.settings import settings
 from .chat import _extract_api_key, _get_openai_client
+from ..auth import OptionalAuthDependency
 
 
 router = APIRouter(prefix="/api/v1", tags=["history"])
@@ -95,6 +96,15 @@ def _get_client_id(http_request: Request) -> str:
     return http_request.cookies.get("client_id", "anonymous")
 
 
+def _get_owner_id(http_request: Request, user: Optional[dict] = None) -> tuple:
+    """获取数据隔离标识：登录用户用 user_id，未登录用 client_id。
+    Returns: (user_id_or_none, client_id)
+    """
+    user_id = user.get("id") if user else None
+    client_id = _get_client_id(http_request)
+    return user_id, client_id
+
+
 def _serialize_utc_datetime(value: Optional[datetime]) -> Optional[str]:
     """将数据库中的 UTC 时间统一序列化为带 Z 的 ISO 字符串。"""
     if value is None:
@@ -109,7 +119,11 @@ def _serialize_utc_datetime(value: Optional[datetime]) -> Optional[str]:
 
 
 @router.post("/history/create_session")
-async def create_session(request: CreateSessionRequest, http_request: Request):
+async def create_session(
+    request: CreateSessionRequest,
+    http_request: Request,
+    user: Optional[dict] = Depends(OptionalAuthDependency()),
+):
     """
     创建新的对话会话
 
@@ -117,7 +131,7 @@ async def create_session(request: CreateSessionRequest, http_request: Request):
     """
     try:
         db_manager = get_db_manager()
-        client_id = _get_client_id(http_request)
+        user_id, client_id = _get_owner_id(http_request, user)
 
         # 强制限制标题长度为8个字符
         title = request.title[:8] if len(request.title) > 8 else request.title
@@ -129,7 +143,8 @@ async def create_session(request: CreateSessionRequest, http_request: Request):
             model=request.model,
             provider=request.provider or "unknown",
             status="active",
-            client_id=client_id
+            client_id=client_id,
+            user_id=user_id,
         )
 
         logger.info(f"创建新对话会话: {request.session_id}")
@@ -211,23 +226,30 @@ async def save_message(request: SaveMessageRequest):
 async def list_conversations(
     http_request: Request,
     limit: int = 20,
-    offset: int = 0
+    offset: int = 0,
+    user: Optional[dict] = Depends(OptionalAuthDependency()),
 ):
     """
     获取对话列表
 
-    返回当前客户端的对话摘要信息，按创建时间倒序排列。
+    返回当前用户的对话摘要信息，按创建时间倒序排列。
+    已登录用户按 user_id 过滤，未登录用户按 client_id 过滤。
     """
     try:
         db_manager = get_db_manager()
-        client_id = _get_client_id(http_request)
+        user_id, client_id = _get_owner_id(http_request, user)
 
-        # 查询对话会话列表（按 client_id 过滤）
+        # 查询对话会话列表（优先按 user_id 过滤，未登录按 client_id）
         async with db_manager.get_session() as session:
+            owner_filter = (
+                ConversationSession.user_id == user_id
+                if user_id
+                else ConversationSession.client_id == client_id
+            )
             stmt = (
                 select(ConversationSession)
                 .where(ConversationSession.status == "active")
-                .where(ConversationSession.client_id == client_id)
+                .where(owner_filter)
                 .order_by(ConversationSession.created_at.desc())
                 .offset(offset)
                 .limit(limit)

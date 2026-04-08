@@ -706,11 +706,15 @@ export const useGeneratorStore = defineStore('generator', {
                         .filter(file => file.name || file.file_url)
                     : undefined
 
+                const msgHeaders: Record<string, string> = {
+                    'Content-Type': 'application/json',
+                }
+                const msgToken = localStorage.getItem('access_token')
+                if (msgToken) msgHeaders['Authorization'] = `Bearer ${msgToken}`
+
                 const response = await fetch(apiUrl, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: msgHeaders,
                     body: JSON.stringify({
                         session_id: this.currentSessionId,
                         role: message.role,
@@ -745,11 +749,15 @@ export const useGeneratorStore = defineStore('generator', {
             try {
                 const apiUrl = '/api/v1/history/create_session'
 
+                const headers: Record<string, string> = {
+                    'Content-Type': 'application/json',
+                }
+                const token = localStorage.getItem('access_token')
+                if (token) headers['Authorization'] = `Bearer ${token}`
+
                 const response = await fetch(apiUrl, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers,
                     body: JSON.stringify({
                         session_id: this.currentSessionId,
                         title: this.currentSessionTitle,
@@ -1400,8 +1408,12 @@ export const useGeneratorStore = defineStore('generator', {
         async summarizeSession() {
             if (!this.currentSessionId || !this.sessionSavedToHistory) return
             try {
+                const sumHeaders: Record<string, string> = {}
+                const sumToken = localStorage.getItem('access_token')
+                if (sumToken) sumHeaders['Authorization'] = `Bearer ${sumToken}`
                 const response = await fetch(`/api/v1/history/${this.currentSessionId}/summary`, {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: sumHeaders,
                 })
                 if (response.ok) {
                     const data = await response.json()
