@@ -97,6 +97,9 @@ class ReferralService:
             points_change=self.register_reward_points,
             amount=0,  # 不增加余额
             description=f"邀请注册奖励（用户 {user_id} 使用您的邀请码）",
+            apply_account_change=False,
+            balance_after=inviter_account.balance,
+            points_after=inviter_account.points,
         )
 
         # 给新用户也奖励积分
@@ -110,6 +113,9 @@ class ReferralService:
             points_change=self.register_reward_points,
             amount=0,  # 不增加余额
             description=f"使用邀请码注册奖励",
+            apply_account_change=False,
+            balance_after=account.balance,
+            points_after=account.points,
         )
 
         logger.info(

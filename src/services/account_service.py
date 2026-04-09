@@ -238,6 +238,9 @@ class AccountService:
             points_change=points_change,
             description=f"冻结积分 - {model_name} x{count}（{cost_info['description']}）",
             related_request_id=request_id,
+            apply_account_change=False,
+            balance_after=account.balance,
+            points_after=account.points,
         )
 
         logger.info(
@@ -328,6 +331,9 @@ class AccountService:
                 points_change=-frozen_points if frozen_points else 0,
                 description=f"图片生成扣费 - {model_name} x{image_count}",
                 related_request_id=request_id,
+                apply_account_change=False,
+                balance_after=account.balance,
+                points_after=account.points,
             )
 
             # 创建消费记录
@@ -388,6 +394,9 @@ class AccountService:
                 points_change=frozen_points,
                 description=f"生成失败退还 - {model_name}（{error_reason[:100] if error_reason else '未知错误'}）",
                 related_request_id=request_id,
+                apply_account_change=False,
+                balance_after=account.balance,
+                points_after=account.points,
             )
 
             # 创建消费记录（失败）
@@ -473,6 +482,9 @@ class AccountService:
                 points_change=-cost_info["points_used"],
                 description=f"图片生成 - {model_name} x{image_count}",
                 related_request_id=request_id,
+                apply_account_change=False,
+                balance_after=account.balance,
+                points_after=account.points,
             )
 
         # 创建消费记录（成功）
@@ -654,6 +666,9 @@ class AccountService:
             amount=commission_amount,  # 增加余额（单位：分）
             description=f"分销佣金（用户 {user_id} 消费 ¥{consumed_amount/100:.2f}，获得 {commission_rate}% 佣金）",
             related_request_id=request_id,
+            apply_account_change=False,
+            balance_after=inviter_account.balance,
+            points_after=inviter_account.points,
         )
 
         logger.info(

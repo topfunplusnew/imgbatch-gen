@@ -42,13 +42,14 @@
           <!-- ===== 登录模式 ===== -->
           <form v-if="isLoginMode" @submit.prevent="handleLogin" class="space-y-4">
             <div>
-              <label class="block text-sm font-medium text-ink-700 mb-1">用户名 / 邮箱</label>
+              <label class="block text-sm font-medium text-ink-700 mb-1">
+                {{ allowLocalUsernameLogin ? '用户名 / 邮箱' : '邮箱' }}
+              </label>
               <input
-                v-model="form.username"
-                type="text"
+                v-model="loginForm.identifier"
+                :type="allowLocalUsernameLogin ? 'text' : 'email'"
                 required
-                minlength="2"
-                placeholder="请输入用户名或邮箱"
+                :placeholder="allowLocalUsernameLogin ? '本地调试环境可输入用户名或邮箱' : '请输入注册邮箱'"
                 class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
               />
             </div>
@@ -56,7 +57,7 @@
             <div>
               <label class="block text-sm font-medium text-ink-700 mb-1">密码</label>
               <input
-                v-model="form.password"
+                v-model="loginForm.password"
                 type="password"
                 required
                 minlength="6"
@@ -75,104 +76,22 @@
               </button>
             </div>
 
+            <p v-if="allowLocalUsernameLogin" class="text-xs text-amber-700">
+              本地调试环境已启用用户名密码登录，线上环境仍仅支持邮箱登录。
+            </p>
+
             <button
-              type="submit"
+                type="submit"
               :disabled="loading"
               class="w-full py-3 bg-primary text-white rounded-xl font-medium hover:bg-primary-strong disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
             >
-              {{ loading ? '登录中...' : '登录' }}
+              {{ loading ? '登录中...' : '邮箱登录' }}
             </button>
           </form>
 
           <!-- ===== 注册模式 ===== -->
           <div v-else>
-            <!-- 注册方式切换标签 -->
-            <div class="flex mb-5 bg-gray-100 rounded-xl p-1">
-              <button
-                @click="registerTab = 'username'"
-                :class="[
-                  'flex-1 py-2 text-sm font-medium rounded-lg transition-all',
-                  registerTab === 'username'
-                    ? 'bg-white text-primary shadow-sm'
-                    : 'text-ink-500 hover:text-ink-700'
-                ]"
-              >
-                用户名注册
-              </button>
-              <button
-                @click="registerTab = 'email'"
-                :class="[
-                  'flex-1 py-2 text-sm font-medium rounded-lg transition-all',
-                  registerTab === 'email'
-                    ? 'bg-white text-primary shadow-sm'
-                    : 'text-ink-500 hover:text-ink-700'
-                ]"
-              >
-                邮箱注册
-              </button>
-            </div>
-
-            <!-- 用户名注册表单 -->
-            <form v-if="registerTab === 'username'" @submit.prevent="handleUsernameRegister" class="space-y-4">
-              <div>
-                <label class="block text-sm font-medium text-ink-700 mb-1">用户名</label>
-                <input
-                  v-model="form.username"
-                  type="text"
-                  required
-                  minlength="2"
-                  maxlength="20"
-                  placeholder="2-20位字符"
-                  class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
-                />
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-ink-700 mb-1">密码</label>
-                <input
-                  v-model="form.password"
-                  type="password"
-                  required
-                  minlength="6"
-                  placeholder="至少6位字符"
-                  class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
-                />
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-ink-700 mb-1">确认密码</label>
-                <input
-                  v-model="form.passwordConfirmation"
-                  type="password"
-                  required
-                  minlength="6"
-                  placeholder="再次输入密码"
-                  class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
-                />
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-ink-700 mb-1">邀请码（可选）</label>
-                <input
-                  v-model="form.inviteCode"
-                  type="text"
-                  placeholder="填写邀请码，双方各获奖励"
-                  maxlength="20"
-                  class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
-                />
-              </div>
-
-              <button
-                type="submit"
-                :disabled="loading"
-                class="w-full py-3 bg-primary text-white rounded-xl font-medium hover:bg-primary-strong disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-              >
-                {{ loading ? '注册中...' : '注册并登录' }}
-              </button>
-            </form>
-
-            <!-- 邮箱注册表单 -->
-            <form v-else @submit.prevent="handleEmailRegister" class="space-y-4">
+            <form @submit.prevent="handleEmailRegister" class="space-y-4">
               <!-- 步骤1: 输入邮箱获取验证码 -->
               <div>
                 <label class="block text-sm font-medium text-ink-700 mb-1">邮箱地址</label>
@@ -203,17 +122,6 @@
                   required
                   maxlength="6"
                   placeholder="请输入6位验证码"
-                  class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
-                />
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-ink-700 mb-1">用户名（可选）</label>
-                <input
-                  v-model="emailForm.username"
-                  type="text"
-                  maxlength="20"
-                  placeholder="不填则自动生成"
                   class="w-full px-4 py-3 border border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
                 />
               </div>
@@ -280,7 +188,7 @@
               :disabled="loading"
               class="w-full py-2.5 text-sm text-primary hover:text-primary-strong transition-colors font-medium"
             >
-              {{ isLoginMode ? '没有账户？立即注册' : '已有账户？返回登录' }}
+              {{ isLoginMode ? '没有账户？邮箱注册' : '已有账户？返回邮箱登录' }}
             </button>
           </div>
         </div>
@@ -463,25 +371,24 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 const appStore = useAppStore()
+const allowLocalUsernameLogin = import.meta.env.DEV || (
+  typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
+)
 
 // 状态
 const isLoginMode = ref(true)
-const registerTab = ref('email') // 'username' | 'email'
 const loading = ref(false)
 
-// 登录/用户名注册表单
-const form = ref({
-  username: '',
+// 邮箱登录表单
+const loginForm = ref({
+  identifier: '',
   password: '',
-  passwordConfirmation: '',
-  inviteCode: ''
 })
 
 // 邮箱注册表单
 const emailForm = ref({
   email: '',
   code: '',
-  username: '',
   password: '',
   passwordConfirmation: '',
   inviteCode: ''
@@ -505,8 +412,8 @@ const resetForm = ref({
 // 切换登录/注册模式
 function toggleMode() {
   isLoginMode.value = !isLoginMode.value
-  form.value = { username: '', password: '', passwordConfirmation: '', inviteCode: '' }
-  emailForm.value = { email: '', code: '', username: '', password: '', passwordConfirmation: '', inviteCode: '' }
+  loginForm.value = { identifier: '', password: '' }
+  emailForm.value = { email: '', code: '', password: '', passwordConfirmation: '', inviteCode: '' }
 }
 
 function backToHome() {
@@ -517,7 +424,6 @@ function backToHome() {
 onMounted(() => {
   const code = route.query.code
   if (code) {
-    form.value.inviteCode = String(code)
     emailForm.value.inviteCode = String(code)
     isLoginMode.value = false
   }
@@ -527,32 +433,10 @@ onMounted(() => {
 async function handleLogin() {
   loading.value = true
   try {
-    await authStore.loginByUsername(form.value.username, form.value.password)
+    await authStore.loginByUsername(loginForm.value.identifier, loginForm.value.password)
     router.push('/')
   } catch (error) {
-    notification.error('登录失败', error?.response?.data?.detail || '用户名或密码错误')
-  } finally {
-    loading.value = false
-  }
-}
-
-// 用户名注册
-async function handleUsernameRegister() {
-  if (form.value.password !== form.value.passwordConfirmation) {
-    notification.error('注册失败', '两次输入的密码不一致')
-    return
-  }
-  loading.value = true
-  try {
-    await authStore.registerByUsername({
-      username: form.value.username,
-      password: form.value.password,
-      password_confirmation: form.value.passwordConfirmation,
-      invite_code: form.value.inviteCode || undefined
-    })
-    router.push('/')
-  } catch (error) {
-    notification.error('注册失败', error?.response?.data?.detail || '请重试')
+    notification.error('登录失败', error?.response?.data?.detail || (allowLocalUsernameLogin ? '用户名/邮箱或密码错误' : '邮箱或密码错误'))
   } finally {
     loading.value = false
   }
@@ -601,7 +485,6 @@ async function handleEmailRegister() {
       code: emailForm.value.code,
       password: emailForm.value.password,
       password_confirmation: emailForm.value.passwordConfirmation,
-      username: emailForm.value.username || undefined,
       invite_code: emailForm.value.inviteCode || undefined
     })
     router.push('/')

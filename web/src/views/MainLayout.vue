@@ -207,7 +207,6 @@ import { useAuthStore } from '@/store/useAuthStore'
 import { useAppStore } from '@/store/useAppStore'
 import UserMenuDropdown from '@/components/layout/UserMenuDropdown.vue'
 import ChatHistorySidebar from '@/components/history/ChatHistorySidebar.vue'
-import { api } from '@/services/api'
 import { notification } from '@/utils/notification'
 import { copyText } from '@/utils/clipboard'
 
@@ -217,8 +216,8 @@ const appStore = useAppStore()
 
 const showMobileSidebar = ref(false)
 const showInviteDialog = ref(false)
-const accountPoints = ref(0)
-const accountGiftPoints = ref(0)
+const accountPoints = computed(() => (authStore.accountInfo?.points || 0) + (authStore.accountInfo?.gift_points || 0))
+const accountGiftPoints = computed(() => authStore.accountInfo?.gift_points || 0)
 
 const menuItems = [
   { icon: 'home', text: '首页', to: '/' },
@@ -253,9 +252,7 @@ const copyInviteLink = async () => {
 const loadAccountInfo = async () => {
   if (!authStore.isAuthenticated) return
   try {
-    const info = await api.getAccountInfo()
-    accountPoints.value = (info.points || 0) + (info.gift_points || 0)
-    accountGiftPoints.value = info.gift_points || 0
+    await authStore.fetchAccountInfo()
   } catch {
     // silently fail
   }

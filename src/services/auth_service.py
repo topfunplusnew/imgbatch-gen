@@ -172,6 +172,9 @@ class AuthService:
                     points_change=reward,
                     amount=0,
                     description=f"邀请奖励（用户 {account.user_id} 使用您的邀请码注册）",
+                    apply_account_change=False,
+                    balance_after=inviter_account.balance,
+                    points_after=inviter_account.points,
                 )
 
                 await self.db_manager.add_transaction(
@@ -180,6 +183,9 @@ class AuthService:
                     points_change=reward,
                     amount=0,
                     description=f"注册奖励（使用邀请码 {invite_code}）",
+                    apply_account_change=False,
+                    balance_after=account.balance,
+                    points_after=account.points,
                 )
 
                 # 提交邀请人账户的更改到数据库

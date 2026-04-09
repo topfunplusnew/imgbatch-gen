@@ -264,6 +264,8 @@ async def test_build_image_plan_wraps_prompt_with_context_and_system_prompt(monk
     assert plan.mode == "image"
     assert "System instructions:" in plan.prompt
     assert "Recent conversation context:" in plan.prompt
+    assert "all visible text in the image must be in Chinese" in plan.prompt
+    assert "there must be no typos, misspellings, or incorrect characters" in plan.prompt
     assert "Latest user request:\n做成电影海报风格" in plan.prompt
     assert "Final grounded generation brief:\n保留海报主标题与主体人物，生成一张电影感海报" in plan.prompt
 

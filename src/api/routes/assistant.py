@@ -1394,7 +1394,11 @@ async def get_batch_task_status(
                         model_price = await account_service.get_model_price(first_task.params.model or "default")
                         refund_points = model_price["points"] * failed_count
                         account = await account_service.get_or_create_account(user_id)
-                        account.points += refund_points
+                        refund_cost_type = billing_result.get("cost_type")
+                        if refund_cost_type == "gift_points":
+                            account.gift_points = (account.gift_points or 0) + refund_points
+                        else:
+                            account.points += refund_points
                         await account_service.db_manager.update_account(account)
                         await account_service.db_manager.add_transaction(
                             user_id=user_id,
@@ -1403,9 +1407,13 @@ async def get_batch_task_status(
                             points_change=refund_points,
                             description=f"批量生成部分失败退还 - {failed_count}/{total_count} 张失败",
                             related_request_id=batch_id,
+                            apply_account_change=False,
+                            balance_after=account.balance,
+                            points_after=account.points,
                         )
                         billing_result["description"] += f"，已退还 {refund_points} 积分（{failed_count} 张失败）"
                         billing_result["balance_after"]["points"] = account.points
+                        billing_result["balance_after"]["gift_points"] = account.gift_points or 0
 
                 # 标记已结算，避免重复
                 for t in batch_task.tasks:

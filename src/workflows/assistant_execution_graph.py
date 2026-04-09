@@ -284,6 +284,8 @@ IMAGE_MODEL_SYSTEM_PROMPT = (
     "IMPORTANT: Unless the user explicitly requests English or another language, "
     "always generate images with Chinese text (中文). All text, labels, titles, captions, "
     "and annotations in the generated image MUST be in Chinese by default. "
+    "When generating images, all visible text in the image must be in Chinese, and there must be no typos, misspellings, "
+    "or incorrect characters. "
     "Write production-ready prompts that instruct the image model to use Chinese for all visible text. "
     "Follow the user's latest explicit request first, use recent conversation only as supporting context, "
     "and treat attachment-derived facts as grounded constraints. "

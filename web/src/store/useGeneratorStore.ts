@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { useHistoryStore } from './useHistoryStore'
+import { useAuthStore } from './useAuthStore'
 import { api } from '@/services/api'
 import { mockGenerateImage, mockGetTaskStatus, isMockMode } from '@/utils/mockApi'
 import {
@@ -321,6 +322,31 @@ export const useGeneratorStore = defineStore('generator', {
 
         setSelectedModelInfo(modelInfo) {
             this.selectedModelInfo = modelInfo
+        },
+
+        async refreshAccountInfoSilently(billing?: any) {
+            const authStore = useAuthStore()
+            if (!authStore.isAuthenticated) return
+
+            if (billing?.balance_after && authStore.accountInfo) {
+                const nextBalance = Number(billing.balance_after.balance)
+                authStore.accountInfo = {
+                    ...authStore.accountInfo,
+                    points: billing.balance_after.points ?? authStore.accountInfo.points ?? 0,
+                    gift_points: billing.balance_after.gift_points ?? authStore.accountInfo.gift_points ?? 0,
+                    balance: Number.isFinite(nextBalance)
+                        ? Math.round(nextBalance * 100)
+                        : authStore.accountInfo.balance,
+                    total_points: (billing.balance_after.points ?? authStore.accountInfo.points ?? 0)
+                        + (billing.balance_after.gift_points ?? authStore.accountInfo.gift_points ?? 0),
+                }
+            }
+
+            try {
+                await authStore.fetchAccountInfo()
+            } catch (error) {
+                console.warn('刷新账户积分失败:', error)
+            }
         },
 
         applyPreferredDefaultModel() {
@@ -852,6 +878,9 @@ export const useGeneratorStore = defineStore('generator', {
                             generationProgress: buildTaskProgressPayload(task, '图像生成完成！'),
                             ...(completedBilling ? { billing: completedBilling } : {})
                         })
+                        if (completedBilling) {
+                            await this.refreshAccountInfoSilently(completedBilling)
+                        }
                         console.log('任务完成，图片数据:', this.messages.find(m => m.id === messageId)?.images)
 
                         // 更新历史记录中的消息
@@ -888,6 +917,9 @@ export const useGeneratorStore = defineStore('generator', {
                             generationProgress: buildTaskProgressPayload(task, `生成失败: ${task.error || '未知错误'}`),
                             ...(failedBilling ? { billing: failedBilling } : {})
                         })
+                        if (failedBilling) {
+                            await this.refreshAccountInfoSilently(failedBilling)
+                        }
                         this.activePollingTasks.delete(taskId)
                         return false
                     }
@@ -1305,6 +1337,9 @@ export const useGeneratorStore = defineStore('generator', {
                             batchProgress: buildBatchProgressPayload(batchTask, orderedImages, progressTotal),
                             ...(batchTask.billing ? { billing: batchTask.billing } : {})
                         })
+                        if (batchTask.billing) {
+                            await this.refreshAccountInfoSilently(batchTask.billing)
+                        }
 
                         if (this.sessionSavedToHistory) {
                             const historyStore = useHistoryStore()
@@ -1545,6 +1580,9 @@ export const useGeneratorStore = defineStore('generator', {
                             billing: response.metadata?.billing || undefined,
                             generationProgress: buildInitialTaskProgressPayload(response.metadata, response.message.content)
                         })
+                        if (response.metadata?.billing) {
+                            await this.refreshAccountInfoSilently(response.metadata.billing)
+                        }
                         this.pollTaskStatus(response.task_id, messageId, 900, 2000)
                         return { success: true, taskId: response.task_id }
 
@@ -1570,6 +1608,9 @@ export const useGeneratorStore = defineStore('generator', {
                                 stageOverview: response.metadata?.status_detail?.stage_overview || [],
                             }
                         })
+                        if (response.metadata?.billing) {
+                            await this.refreshAccountInfoSilently(response.metadata.billing)
+                        }
                         this.pollBatchStatusIncremental(response.batch_id, messageId, totalCount, 900, 2000)
                         return { success: true, batchId: response.batch_id }
 
@@ -1578,6 +1619,9 @@ export const useGeneratorStore = defineStore('generator', {
                             content: response.message.content,
                             status: 'completed'
                         })
+                        if (response.metadata?.billing) {
+                            await this.refreshAccountInfoSilently(response.metadata.billing)
+                        }
                         return { success: true }
                     }
                 } else {
@@ -1585,6 +1629,9 @@ export const useGeneratorStore = defineStore('generator', {
                         content: response.message?.content || '处理完成',
                         status: 'completed'
                     })
+                    if (response.metadata?.billing) {
+                        await this.refreshAccountInfoSilently(response.metadata.billing)
+                    }
                     return { success: true }
                 }
 

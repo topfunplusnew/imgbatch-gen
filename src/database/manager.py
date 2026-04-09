@@ -1101,17 +1101,24 @@ class DatabaseManager:
         related_order_id: str = None,
         related_request_id: str = None,
         metadata: Dict = None,
+        apply_account_change: bool = True,
+        balance_after: Optional[int] = None,
+        points_after: Optional[int] = None,
     ) -> Transaction:
         """添加交易记录"""
         async with self.get_session() as session:
             # 获取当前账户
-            account = await self.get_account_by_user(user_id)
+            stmt = select(Account).where(Account.user_id == user_id)
+            result = await session.execute(stmt)
+            account = result.scalar_one_or_none()
             if not account:
                 raise ValueError(f"用户账户不存在: {user_id}")
 
             # 计算交易后状态
-            balance_after = account.balance + amount
-            points_after = account.points + points_change
+            if balance_after is None:
+                balance_after = account.balance + amount if apply_account_change else account.balance
+            if points_after is None:
+                points_after = account.points + points_change if apply_account_change else account.points
 
             transaction = Transaction(
                 user_id=user_id,
@@ -1127,16 +1134,17 @@ class DatabaseManager:
             )
             session.add(transaction)
 
-            # 更新账户 - 使用显式UPDATE语句确保变更被持久化
-            from sqlalchemy import update
-            await session.execute(
-                update(Account)
-                .where(Account.user_id == user_id)
-                .values(
-                    balance=balance_after,
-                    points=points_after
+            if apply_account_change:
+                # 更新账户 - 使用显式UPDATE语句确保变更被持久化
+                from sqlalchemy import update
+                await session.execute(
+                    update(Account)
+                    .where(Account.user_id == user_id)
+                    .values(
+                        balance=balance_after,
+                        points=points_after
+                    )
                 )
-            )
 
             await session.flush()
             await session.commit()

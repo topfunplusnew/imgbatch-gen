@@ -183,6 +183,9 @@ class WithdrawalService:
             transaction_type="withdrawal",
             amount=-withdrawal.amount,
             description=f"提现申请: {withdrawal_id}",
+            apply_account_change=False,
+            balance_after=user_account.balance,
+            points_after=user_account.points,
         )
 
         # 更新提现记录

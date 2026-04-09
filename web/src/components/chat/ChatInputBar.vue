@@ -765,6 +765,9 @@ const handleImageModelSend = async () => {
             history: []
           }
         })
+        if (response.metadata?.billing) {
+          await generatorStore.refreshAccountInfoSilently(response.metadata.billing)
+        }
 
         notification.info('生成任务已创建', `任务ID: ${response.task_id}`)
 
@@ -799,6 +802,9 @@ const handleImageModelSend = async () => {
             stageOverview: response.metadata?.status_detail?.stage_overview || [],
           }
         })
+        if (response.metadata?.billing) {
+          await generatorStore.refreshAccountInfoSilently(response.metadata.billing)
+        }
 
         notification.info('批量任务已创建', `共 ${totalCount} 张图片`)
 
@@ -818,6 +824,9 @@ const handleImageModelSend = async () => {
           billing: response.metadata?.billing || undefined
         }
         generatorStore.updateMessage(assistantMessage.id, updatedMessage)
+        if (response.metadata?.billing) {
+          await generatorStore.refreshAccountInfoSilently(response.metadata.billing)
+        }
 
         // 同步助手回复到服务器并更新标题
         const completedMessage = generatorStore.messages.find(m => m.id === assistantMessage.id)
