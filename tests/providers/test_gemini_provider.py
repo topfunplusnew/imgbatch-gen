@@ -53,6 +53,8 @@ async def test_gemini_3_image_payload_includes_image_size_for_square_2k():
     result = await provider.generate_images(params)
 
     assert result == [b"fake-image"]
+    thinking_config = provider.client.last_payload["json"]["generationConfig"]["thinkingConfig"]
+    assert thinking_config["thinkingLevel"] == "HIGH"
     image_config = provider.client.last_payload["json"]["generationConfig"]["imageConfig"]
     assert image_config["aspectRatio"] == "1:1"
     assert image_config["imageSize"] == "2K"
@@ -74,6 +76,8 @@ async def test_gemini_25_image_payload_does_not_include_image_size():
     result = await provider.generate_images(params)
 
     assert result == [b"fake-image"]
+    generation_config = provider.client.last_payload["json"]["generationConfig"]
+    assert "thinkingConfig" not in generation_config
     image_config = provider.client.last_payload["json"]["generationConfig"]["imageConfig"]
     assert image_config["aspectRatio"] == "1:1"
     assert "imageSize" not in image_config
@@ -95,5 +99,7 @@ async def test_gemini_3_image_payload_includes_image_size_without_explicit_dimen
     result = await provider.generate_images(params)
 
     assert result == [b"fake-image"]
+    thinking_config = provider.client.last_payload["json"]["generationConfig"]["thinkingConfig"]
+    assert thinking_config["thinkingLevel"] == "HIGH"
     image_config = provider.client.last_payload["json"]["generationConfig"]["imageConfig"]
     assert image_config["imageSize"] == "2K"

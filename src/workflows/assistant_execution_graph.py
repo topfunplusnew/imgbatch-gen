@@ -350,7 +350,7 @@ def _trim_attachment_text(text: str, limit: Optional[int] = None) -> str:
 
 
 def _max_pdf_pages() -> int:
-    return max(1, settings.assistant_pdf_ocr_max_pages or 6)
+    return max(1, settings.assistant_pdf_ocr_max_pages or 50)
 
 
 def _derive_batch_count(user_instruction: str, requested_count: Optional[int]) -> int:
@@ -704,7 +704,7 @@ def _is_doc_heading(text: str, style_name: str) -> bool:
 
 def _extract_docx_section_excerpts(file_bytes: bytes) -> List[str]:
     document = Document(io.BytesIO(file_bytes))
-    max_sections = max(1, min(12, settings.assistant_pdf_ocr_max_pages or 6))
+    max_sections = max(1, settings.assistant_pdf_ocr_max_pages or 50)
     section_char_limit = min(1800, max(600, (settings.assistant_attachment_text_limit or 12000) // 4))
 
     sections: List[str] = []
@@ -1299,6 +1299,21 @@ def _fallback_text_route(
     )
 
 
+def _has_clear_image_generation_cue_for_image_model(user_instruction: str) -> bool:
+    text = (user_instruction or "").strip().lower()
+    if not text:
+        return False
+
+    strong_image_patterns = (
+        r"(帮我|请|给我|为我).{0,20}(做|生成|画|制作|设计|出).{0,20}(一张|海报|图片|图像|封面|插画|配图|宣传图|主视觉|kv)",
+        r"(海报|封面|插画|配图|宣传图|主视觉|kv|视觉稿|设计稿)",
+        r"(风格|排版|版式|配色|字体|比例|分辨率|尺寸|9:16|16:9|3d|2k|4k|高清|超清)",
+        r"(生成一张|做一张|设计一张|出一张).{0,20}(海报|图片|图像|封面|插画)",
+    )
+
+    return any(re.search(pattern, text, re.IGNORECASE) for pattern in strong_image_patterns)
+
+
 async def _classify_text_request(
     *,
     messages: List[Dict[str, Any]],
@@ -1321,6 +1336,18 @@ async def _classify_text_request(
         requested_count,
         messages=messages,
     )
+
+    if explicit_image_model_selected and _has_clear_image_generation_cue_for_image_model(user_instruction):
+        batch_count = _derive_batch_count(user_instruction, requested_count)
+        return RequestRouteDecision(
+            route="image",
+            intent_type="batch_generate" if batch_count > 1 else "single_generate",
+            batch_count=batch_count,
+            confidence=0.96,
+            reasoning="The user selected an image model and the prompt contains clear poster/design/image-generation cues.",
+            source="image-model-cues",
+            planning_basis="text",
+        )
 
     if explicit_image_model_selected and fallback.route == "image":
         return RequestRouteDecision(
@@ -1709,8 +1736,7 @@ async def _build_pdf_page_matched_prompts(
     if not page_items:
         return []
 
-    target_count = max(1, requested_count)
-    repeat_variants = target_count > len(page_items)
+    target_count = len(page_items)
     shared_text_attachments = [
         AttachmentDescriptor(
             name=attachment.name,
@@ -1725,11 +1751,10 @@ async def _build_pdf_page_matched_prompts(
 
     prompts: List[str] = []
     for prompt_index in range(target_count):
-        page_item = page_items[prompt_index % len(page_items)]
+        page_item = page_items[prompt_index]
         attachment_name = str(page_item["attachment_name"])
         page_number = int(page_item["page_number"])
         page_excerpt = str(page_item.get("page_excerpt") or "").strip()
-        variant_index = prompt_index // len(page_items) + 1
         page_fallback_excerpt = (
             page_excerpt
             or f"第 {page_number} 页没有提取到可用文本，请尽量依据该页的版式、图示或结构线索生成与这一页对应的图像。"
@@ -1768,10 +1793,6 @@ async def _build_pdf_page_matched_prompts(
                 f"\"{attachment_name}\". Do not use content from other PDF pages."
             ),
             (
-                f"This is variation {variant_index} for page {page_number}. "
-                "Keep the same factual grounding, but make this image visually distinct from other variations for the same page."
-            ) if repeat_variants else "",
-            (
                 "Primary grounding content from the matched PDF page (must be reflected in the image):\n"
                 f"[Attachment: {attachment_name} | Page {page_number}]\n"
                 f"{_trim_attachment_text(page_fallback_excerpt, limit=1600)}"
@@ -1803,8 +1824,7 @@ async def _build_word_section_matched_prompts(
     if not section_items:
         return []
 
-    target_count = max(1, requested_count)
-    repeat_variants = target_count > len(section_items)
+    target_count = len(section_items)
     shared_text_attachments = [
         AttachmentDescriptor(
             name=attachment.name,
@@ -1819,12 +1839,11 @@ async def _build_word_section_matched_prompts(
 
     prompts: List[str] = []
     for prompt_index in range(target_count):
-        section_item = section_items[prompt_index % len(section_items)]
+        section_item = section_items[prompt_index]
         attachment_name = str(section_item["attachment_name"])
         section_number = int(section_item["section_number"])
         section_excerpt = str(section_item.get("section_excerpt") or "").strip()
         section_kind = str(section_item.get("kind") or "docx")
-        variant_index = prompt_index // len(section_items) + 1
         section_fallback_excerpt = (
             section_excerpt
             or f"第 {section_number} 个章节没有提取到可用文本，请尽量依据该章节的标题、结构或关键信息生成对应图像。"
@@ -1862,10 +1881,6 @@ async def _build_word_section_matched_prompts(
                 f"Must correspond only to section {section_number} of the Word document "
                 f"\"{attachment_name}\". Do not use content from other sections."
             ),
-            (
-                f"This is variation {variant_index} for section {section_number}. "
-                "Keep the same factual grounding, but make this image visually distinct from other variations for the same section."
-            ) if repeat_variants else "",
             (
                 "Primary grounding content from the matched Word document section (must be reflected in the image):\n"
                 f"[Attachment: {attachment_name} | Section {section_number}]\n"

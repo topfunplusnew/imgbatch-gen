@@ -82,16 +82,6 @@
               提现审核
             </button>
             <button
-              @click="activeTab = 'cases'"
-              :class="[
-                'w-full px-4 py-3 rounded-xl text-left font-medium flex items-center gap-3',
-                activeTab === 'cases' ? 'bg-primary text-white' : 'text-ink-700 hover:bg-gray-50'
-              ]"
-            >
-              <span class="material-symbols-outlined !text-xl">folder_special</span>
-              案例管理
-            </button>
-            <button
               @click="activeTab = 'scenes'"
               :class="[
                 'w-full px-4 py-3 rounded-xl text-left font-medium flex items-center gap-3',
@@ -722,11 +712,6 @@
             </div>
           </div>
 
-          <!-- 案例管理 -->
-          <div v-if="activeTab === 'cases'" class="space-y-6">
-            <CaseManagement />
-          </div>
-
           <!-- 场景库管理 -->
           <div v-if="activeTab === 'scenes'" class="space-y-6">
             <div class="flex items-center justify-between">
@@ -1269,7 +1254,6 @@ import { useRouter } from 'vue-router'
 import { useAppStore } from '@/store/useAppStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { api, type SystemConfigItem } from '@/services/api'
-import CaseManagement from '@/components/admin/CaseManagement.vue'
 import AnnouncementForm from '@/components/admin/AnnouncementForm.vue'
 import BillingConfigManagement from '@/components/admin/BillingConfigManagement.vue'
 import TypesStylesManagement from '@/components/admin/TypesStylesManagement.vue'

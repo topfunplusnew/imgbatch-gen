@@ -157,15 +157,14 @@ async def test_plan_assistant_execution_builds_page_matched_pdf_prompts(monkeypa
 
     assert plan.mode == "image"
     assert plan.intent_type == "batch_generate"
-    assert plan.batch_count == 2
+    assert plan.batch_count == 3
     assert plan.metadata["pdf_page_match_enabled"] is True
     assert plan.metadata["pdf_total_pages"] == 3
-    assert plan.metadata["pdf_page_match_count"] == 2
-    assert len(plan.metadata["_batch_prompts"]) == 2
+    assert plan.metadata["pdf_page_match_count"] == 3
+    assert len(plan.metadata["_batch_prompts"]) == 3
     assert "第一页内容" in plan.metadata["_batch_prompts"][0]
     assert "第二页内容" in plan.metadata["_batch_prompts"][1]
-    assert "第三页内容" not in plan.metadata["_batch_prompts"][0]
-    assert "第三页内容" not in plan.metadata["_batch_prompts"][1]
+    assert "第三页内容" in plan.metadata["_batch_prompts"][2]
 
 
 @pytest.mark.asyncio
@@ -322,7 +321,7 @@ async def test_build_image_plan_includes_reference_analysis_and_ocr_for_gemini(m
 
 
 @pytest.mark.asyncio
-async def test_plan_assistant_execution_expands_pdf_page_matching_to_requested_count(monkeypatch):
+async def test_plan_assistant_execution_pdf_page_matching_stays_one_to_one(monkeypatch):
     async def fake_load_attachment_descriptors(files, db_manager, api_key=None):
         return [
             AttachmentDescriptor(
@@ -368,13 +367,11 @@ async def test_plan_assistant_execution_expands_pdf_page_matching_to_requested_c
 
     assert plan.mode == "image"
     assert plan.intent_type == "batch_generate"
-    assert plan.batch_count == 5
-    assert plan.metadata["pdf_page_match_count"] == 5
-    assert len(plan.metadata["_batch_prompts"]) == 5
+    assert plan.batch_count == 2
+    assert plan.metadata["pdf_page_match_count"] == 2
+    assert len(plan.metadata["_batch_prompts"]) == 2
     assert "第一页内容" in plan.metadata["_batch_prompts"][0]
     assert "第二页内容" in plan.metadata["_batch_prompts"][1]
-    assert "variation 2" in plan.metadata["_batch_prompts"][2]
-    assert "variation 3" in plan.metadata["_batch_prompts"][4]
 
 
 @pytest.mark.asyncio
@@ -474,18 +471,18 @@ async def test_plan_assistant_execution_builds_word_section_matched_prompts(monk
 
     assert plan.mode == "image"
     assert plan.intent_type == "batch_generate"
-    assert plan.batch_count == 2
+    assert plan.batch_count == 3
     assert plan.metadata["word_section_match_enabled"] is True
     assert plan.metadata["word_total_sections"] == 3
-    assert plan.metadata["word_section_match_count"] == 2
-    assert len(plan.metadata["_batch_prompts"]) == 2
+    assert plan.metadata["word_section_match_count"] == 3
+    assert len(plan.metadata["_batch_prompts"]) == 3
     assert "森林绿" in plan.metadata["_batch_prompts"][0]
     assert "新品活动" in plan.metadata["_batch_prompts"][1]
-    assert "会员权益" not in plan.metadata["_batch_prompts"][0]
+    assert "会员权益" in plan.metadata["_batch_prompts"][2]
 
 
 @pytest.mark.asyncio
-async def test_plan_assistant_execution_expands_word_section_matching_to_requested_count(monkeypatch):
+async def test_plan_assistant_execution_word_section_matching_stays_one_to_one(monkeypatch):
     async def fake_load_attachment_descriptors(files, db_manager, api_key=None):
         return [
             AttachmentDescriptor(
@@ -531,12 +528,11 @@ async def test_plan_assistant_execution_expands_word_section_matching_to_request
 
     assert plan.mode == "image"
     assert plan.intent_type == "batch_generate"
-    assert plan.batch_count == 4
+    assert plan.batch_count == 2
     assert plan.metadata["word_section_match_enabled"] is True
     assert plan.metadata["word_total_sections"] == 2
-    assert plan.metadata["word_section_match_count"] == 4
-    assert len(plan.metadata["_batch_prompts"]) == 4
-    assert "variation 2" in plan.metadata["_batch_prompts"][2]
+    assert plan.metadata["word_section_match_count"] == 2
+    assert len(plan.metadata["_batch_prompts"]) == 2
 
 
 @pytest.mark.asyncio
@@ -668,4 +664,25 @@ async def test_classify_text_request_prefers_image_when_image_model_selected_and
 
     assert decision.route == "image"
     assert decision.intent_type == "single_generate"
-    assert decision.source == "image-model-rules"
+    assert decision.source == "image-model-cues"
+
+
+@pytest.mark.asyncio
+async def test_classify_text_request_prefers_image_for_long_poster_brief_with_image_model():
+    decision = await graph._classify_text_request(
+        messages=[],
+        user_instruction=(
+            "【598元 家庭AI学习规划系统课程】基于以上内容，帮我做一张高质量海报。"
+            "要求：3D立体风+3D插画风，排版按模块生成，元素用国潮+复古，字体用手写体，"
+            "配色要鲜明，重点部分要涂鸦突出，图片比例9:16，2K分辨率。"
+        ),
+        request_model="gemini-3.1-flash-image-preview",
+        request_model_type="image",
+        requested_count=1,
+        app_state=SimpleNamespace(model_registry=None),
+        api_key=None,
+    )
+
+    assert decision.route == "image"
+    assert decision.intent_type == "single_generate"
+    assert decision.source == "image-model-cues"

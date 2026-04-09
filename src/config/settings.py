@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     assistant_planner_model: str = "gpt-4o-mini"
     assistant_ocr_model: str = "qwen3-vl-plus"
     assistant_attachment_text_limit: int = 12000
-    assistant_pdf_ocr_max_pages: int = 6
+    assistant_pdf_ocr_max_pages: int = 50
     assistant_pdf_native_text_threshold: int = 120
 
     langchain_pdf_prompt_model: str = "gpt-4o-mini"

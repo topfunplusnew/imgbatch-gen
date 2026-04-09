@@ -39,6 +39,13 @@ class GeminiProvider(SyncRelayProvider):
         except ValueError:
             return False
 
+    def _build_thinking_config(self, model: str) -> Optional[dict]:
+        """Only gemini-3.1-flash-image-preview uses explicit thinking config."""
+        normalized_model = (model or "").lower()
+        if normalized_model == "gemini-3.1-flash-image-preview":
+            return {"thinkingLevel": "HIGH"}
+        return None
+
     def _map_quality_to_image_size(self, quality: Optional[str]) -> str:
         normalized_quality = (quality or "2k").lower()
         if normalized_quality == "4k":
@@ -125,8 +132,11 @@ class GeminiProvider(SyncRelayProvider):
 
         # 构建generationConfig — Gemini API 文档统一使用 TEXT+IMAGE
         generation_config = {
-            "responseModalities": ["TEXT", "IMAGE"]
+            "responseModalities": ["TEXT", "IMAGE"],
         }
+        thinking_config = self._build_thinking_config(model)
+        if thinking_config:
+            generation_config["thinkingConfig"] = thinking_config
 
         image_config = {}
         if self._supports_image_size_config(model):
