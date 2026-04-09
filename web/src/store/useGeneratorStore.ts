@@ -378,6 +378,9 @@ export const useGeneratorStore = defineStore('generator', {
             const maxDimMap = { '720p': 1024, '2k': 2048, '4k': 4096 }
             const maxDim = maxDimMap[quality]
             if (maxDim) {
+                if (!Number.isFinite(this.width) || !Number.isFinite(this.height) || this.width <= 0 || this.height <= 0) {
+                    return
+                }
                 const ratio = this.width / this.height
                 if (ratio >= 1) {
                     this.width = maxDim

@@ -78,6 +78,38 @@ class ChatResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
+async def _refund_frozen_billing_if_needed(
+    *,
+    user_id: Optional[str],
+    billing_info: Optional[Dict[str, Any]],
+    model_name: Optional[str],
+    request_id: str,
+    error_reason: str,
+    provider: str = "unknown",
+) -> Optional[Dict[str, Any]]:
+    if not user_id or not billing_info:
+        return billing_info
+
+    if billing_info.get("status") != "frozen" or not billing_info.get("freeze_id"):
+        return billing_info
+
+    try:
+        account_service = get_account_service()
+        return await account_service.settle_frozen_points(
+            user_id=user_id,
+            freeze_id=billing_info["freeze_id"],
+            success=False,
+            model_name=model_name or "unknown",
+            provider=provider or "unknown",
+            request_id=request_id,
+            prompt="",
+            error_reason=error_reason,
+        )
+    except Exception as refund_error:
+        logger.error("冻结积分返还失败: {}", refund_error)
+        return billing_info
+
+
 def _extract_message_text(content: Any) -> str:
     if isinstance(content, str):
         return content.strip()
@@ -502,6 +534,32 @@ async def assistant_chat(
                 **(response.metadata or {}),
             }
 
+        if (
+            execution_plan.mode != "chat"
+            and billing_info
+            and response
+            and not response.task_id
+            and not response.batch_id
+            and (response.metadata or {}).get("status") == "error"
+        ):
+            refunded_billing = await _refund_frozen_billing_if_needed(
+                user_id=user_id,
+                billing_info=billing_info,
+                model_name=(
+                    execution_plan.effective_model
+                    or request.model
+                    or (request.image_params.model_name if request.image_params else None)
+                ),
+                request_id=user_request_id,
+                error_reason=(response.metadata or {}).get("error") or response.message.content or "任务创建失败",
+                provider=(request.image_params.provider if request.image_params else "unknown") or "unknown",
+            )
+            response.metadata = {
+                **(response.metadata or {}),
+                "billing": refunded_billing,
+            }
+            route_metadata["billing"] = refunded_billing
+
         if response and intent and intent.type == "chat" and response.message:
             await save_assistant_response(
                 db_manager,
@@ -530,6 +588,23 @@ async def assistant_chat(
 
     except Exception as e:
         logger.error("聊天接口错误: {}", e)
+
+        if 'billing_info' in locals() and execution_plan.mode != "chat":
+            response_obj = locals().get("response")
+            task_already_created = bool(response_obj and (response_obj.task_id or response_obj.batch_id))
+            if not task_already_created:
+                await _refund_frozen_billing_if_needed(
+                    user_id=locals().get("user_id"),
+                    billing_info=billing_info,
+                    model_name=(
+                        execution_plan.effective_model
+                        or request.model
+                        or (request.image_params.model_name if request.image_params else None)
+                    ),
+                    request_id=locals().get("user_request_id", ""),
+                    error_reason=str(e),
+                    provider=(request.image_params.provider if request.image_params else "unknown") or "unknown",
+                )
 
         # 如果创建了用户请求，更新其状态为失败
         if 'user_request_id' in locals():

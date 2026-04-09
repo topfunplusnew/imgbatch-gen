@@ -82,6 +82,9 @@ const qualityOptions = [
 
 const currentResolutionLabel = computed(() => {
   const quality = qualityOptions.find((item) => item.value === generatorStore.quality)
+  if (!generatorStore.width || !generatorStore.height) {
+    return quality ? `${quality.label} ${quality.desc}` : '自动尺寸'
+  }
   const maxDimMap = { '720p': 1280, '2k': 2048, '4k': 3840 }
   const maxDim = maxDimMap[generatorStore.quality]
 
@@ -116,6 +119,10 @@ const getMaxDim = (qualityValue) => {
 const selectQuality = (qualityValue) => {
   generatorStore.quality = qualityValue
   isOpen.value = false
+
+  if (!generatorStore.width || !generatorStore.height) {
+    return
+  }
 
   const maxDimMap = { '720p': 1280, '2k': 2048, '4k': 3840 }
   const maxDim = maxDimMap[qualityValue]

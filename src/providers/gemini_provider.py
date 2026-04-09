@@ -26,6 +26,29 @@ class GeminiProvider(SyncRelayProvider):
     def _is_imagen_model(self, model: str) -> bool:
         return "imagen" in model.lower()
 
+    def _supports_image_size_config(self, model: str) -> bool:
+        """Gemini 3+ image models support imageConfig.imageSize."""
+        import re
+
+        normalized_model = (model or "").lower()
+        match = re.search(r"gemini-(\d+)", normalized_model)
+        if not match:
+            return False
+        try:
+            return int(match.group(1)) >= 3
+        except ValueError:
+            return False
+
+    def _map_quality_to_image_size(self, quality: Optional[str]) -> str:
+        normalized_quality = (quality or "2k").lower()
+        if normalized_quality == "4k":
+            return "4K"
+        if normalized_quality in {"2k", "hd", "high"}:
+            return "2K"
+        if normalized_quality == "512":
+            return "512"
+        return "1K"
+
     async def generate_image(self, params: ImageParams) -> bytes:
         images = await self.generate_images(params)
         return images[0]
@@ -105,6 +128,10 @@ class GeminiProvider(SyncRelayProvider):
             "responseModalities": ["TEXT", "IMAGE"]
         }
 
+        image_config = {}
+        if self._supports_image_size_config(model):
+            image_config["imageSize"] = self._map_quality_to_image_size(params.quality)
+
         # 添加实际图片尺寸参数 - 按照Gemini API文档设置
         if params.width and params.height:
             # 添加详细调试日志
@@ -120,31 +147,26 @@ class GeminiProvider(SyncRelayProvider):
             # 使用标准化尺寸
             standard_width, standard_height = get_size_for_aspect_ratio(aspect_ratio, quality)
 
-            # 根据标准化尺寸选择最佳的imageSize
-            max_dimension = max(standard_width, standard_height)
-            if max_dimension >= 2048:
-                image_size = "2K"
-            else:
-                image_size = "1K"
-
-            # 按照 Gemini API 文档，imageConfig 只支持 aspectRatio 参数
-            image_config = {}
-
-            # 只有当比例匹配到标准比例且不是默认1:1时才传递 aspectRatio
-            if aspect_ratio in ["3:2", "4:3", "5:4", "16:9", "16:10", "21:9"]:
-                image_config["aspectRatio"] = aspect_ratio
-                logger.info(f"[Gemini] 使用标准比例: {aspect_ratio}")
-            elif aspect_ratio in ["2:3", "3:4", "4:5", "9:16"]:
+            # 传递 Gemini API 支持的标准比例，1:1 也显式传递，避免回落到模型默认值
+            if aspect_ratio in ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"]:
                 image_config["aspectRatio"] = aspect_ratio
                 logger.info(f"[Gemini] 使用标准比例: {aspect_ratio}")
             else:
                 logger.info(f"[Gemini] 使用默认比例 1:1，不传递 aspectRatio 参数")
 
-            # 只在有 aspectRatio 时才添加 imageConfig
+            # 只要有尺寸或比例配置就传递 imageConfig
             if image_config:
                 generation_config["imageConfig"] = image_config
 
-            logger.info(f"[Gemini] 设置API参数: imageConfig={image_config}, 请求尺寸={params.width}x{params.height}, 标准化尺寸={standard_width}x{standard_height}")
+            logger.info(
+                f"[Gemini] 设置API参数: imageConfig={image_config}, 请求尺寸={params.width}x{params.height}, "
+                f"标准化尺寸={standard_width}x{standard_height}, 模型={model}"
+            )
+        elif image_config:
+            generation_config["imageConfig"] = image_config
+            logger.info(
+                f"[Gemini] 未指定明确尺寸，按质量传递 imageConfig={image_config}, 模型={model}"
+            )
 
         parts = [{"text": enhanced_prompt}]
 
