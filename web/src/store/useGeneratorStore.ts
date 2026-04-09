@@ -2,12 +2,16 @@ import { defineStore } from 'pinia'
 import { useHistoryStore } from './useHistoryStore'
 import { api } from '@/services/api'
 import { mockGenerateImage, mockGetTaskStatus, isMockMode } from '@/utils/mockApi'
+import {
+    DEFAULT_IMAGE_MODEL,
+    filterSelectableFrontendModels,
+    normalizeModelName,
+    pickPreferredFrontendModel,
+} from '@/utils/modelSelection'
 
 const ACTIVE_TASK_STATUSES = new Set(['pending', 'processing', 'running'])
 const FAILED_TASK_STATUSES = new Set(['failed', 'error', 'cancelled', 'canceled'])
 const TERMINAL_TASK_STATUSES = new Set(['completed', ...FAILED_TASK_STATUSES])
-const DEFAULT_GEMINI_MODEL = 'gemini-3.1-flash-image-preview'
-
 const STAGE_LABEL_MAP: Record<string, string> = {
     request_received: '请求已接收',
     queued: '排队中',
@@ -260,33 +264,9 @@ function buildBatchProcessingContent(batchTask: any, fallbackTotal: number) {
     return statusDetail.currentStageMessage
 }
 
-function normalizeModelName(value: any) {
-    return String(value || '').trim().toLowerCase()
-}
-
-function isGeminiModel(model: any) {
-    const modelName = normalizeModelName(model?.model_name || model)
-    const displayName = normalizeModelName(model?.display_name)
-    const provider = normalizeModelName(model?.provider)
-
-    return modelName.includes('gemini') || displayName.includes('gemini') || provider.includes('google')
-}
-
-function pickPreferredDefaultModel(models: any[] = []) {
-    if (!Array.isArray(models) || models.length === 0) return null
-
-    const exactGemini = models.find((model) => normalizeModelName(model?.model_name) === DEFAULT_GEMINI_MODEL)
-    if (exactGemini) return exactGemini
-
-    const firstGemini = models.find((model) => isGeminiModel(model))
-    if (firstGemini) return firstGemini
-
-    return models[0]
-}
-
 export const useGeneratorStore = defineStore('generator', {
     state: () => ({
-        model: DEFAULT_GEMINI_MODEL,
+        model: DEFAULT_IMAGE_MODEL,
         width: 0,
         height: 0,
         aspectRatio: 'auto',
@@ -344,8 +324,8 @@ export const useGeneratorStore = defineStore('generator', {
         },
 
         applyPreferredDefaultModel() {
-            const preferredModel = pickPreferredDefaultModel(this.availableModels)
-            const fallbackName = preferredModel?.model_name || DEFAULT_GEMINI_MODEL
+            const preferredModel = pickPreferredFrontendModel(this.availableModels)
+            const fallbackName = preferredModel?.model_name || DEFAULT_IMAGE_MODEL
             const matchedModel = preferredModel || this.availableModels.find((model) =>
                 normalizeModelName(model?.model_name) === normalizeModelName(fallbackName)
             )
@@ -1622,14 +1602,14 @@ export const useGeneratorStore = defineStore('generator', {
             try {
                 const response = await api.getModels()
                 if (response && response.models) {
-                    this.availableModels = response.models.map(model => ({
+                    this.availableModels = filterSelectableFrontendModels(response.models.map(model => ({
                         model_name: model.model_name,
                         display_name: model.display_name || model.model_name,
                         provider: model.provider || 'unknown',
                         model_type: model.model_type || 'image',
                         tags: typeof model.tags === 'string' ? model.tags.split(',').map(t => t.trim()) : (model.tags || []),
                         is_async: model.is_async || false
-                    }))
+                    })))
 
                     const matchedCurrentModel = this.availableModels.find((model) =>
                         normalizeModelName(model.model_name) === normalizeModelName(this.model)

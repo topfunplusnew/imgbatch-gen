@@ -54,6 +54,7 @@ import TemplateListView from './TemplateListView.vue'
 import ProfileModal from '../components/layout/ProfileModal.vue'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import { useAppStore } from '@/store/useAppStore'
+import { isSelectableFrontendModel } from '@/utils/modelSelection'
 
 const generatorStore = useGeneratorStore()
 const appStore = useAppStore()
@@ -155,9 +156,18 @@ onMounted(() => {
     const savedModel = localStorage.getItem('selectedModel')
     if (savedModel) {
       const data = JSON.parse(savedModel)
-      generatorStore.setSelectedModel(data.modelName)
-      generatorStore.setSelectedModelInfo(data.modelInfo)
-      console.log('恢复模型选择:', data.modelName)
+      const restoredModel = {
+        ...(data.modelInfo || {}),
+        model_name: data.modelName || data.modelInfo?.model_name,
+      }
+
+      if (isSelectableFrontendModel(restoredModel)) {
+        generatorStore.setSelectedModel(restoredModel.model_name)
+        generatorStore.setSelectedModelInfo(data.modelInfo || null)
+        console.log('恢复模型选择:', restoredModel.model_name)
+      } else {
+        localStorage.removeItem('selectedModel')
+      }
     }
   } catch (error) {
     console.error('恢复模型选择失败:', error)

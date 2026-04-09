@@ -273,6 +273,7 @@ import { useCaseStore } from '@/store/useCaseStore'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import { useAppStore } from '@/store/useAppStore'
 import CaseCard from './CaseCard.vue'
+import { filterSelectableImageModels } from '@/utils/modelSelection'
 
 const router = useRouter()
 const caseStore = useCaseStore()
@@ -423,7 +424,7 @@ const loadModels = async () => {
       throw new Error('获取模型列表失败')
     }
     const data = await response.json()
-    models.value = data.models || []
+    models.value = filterSelectableImageModels(data.models || [])
   } catch (error) {
     console.error('加载模型失败:', error)
     models.value = []

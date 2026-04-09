@@ -191,6 +191,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { api } from '@/services/api'
+import { filterSelectableImageModels } from '@/utils/modelSelection'
 
 const props = defineProps({
   caseData: {
@@ -283,7 +284,7 @@ const fetchImageModels = async () => {
     console.log('开始获取图像模型列表...')
     const result = await api.getModels('image')
     console.log('模型列表返回结果:', result)
-    imageModels.value = result.models || []
+    imageModels.value = filterSelectableImageModels(result.models || [])
     console.log('imageModels.value设置后:', imageModels.value)
     console.log('===== fetchImageModels函数执行完成 =====')
   } catch (error) {

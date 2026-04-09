@@ -186,6 +186,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { api } from '@/services/api'
+import { filterSelectableFrontendModels } from '@/utils/modelSelection'
 
 const props = defineProps({
   visible: {
@@ -467,7 +468,7 @@ const loadModels = async () => {
   try {
     const response = await api.getModels()
     if (response?.models) {
-      models.value = response.models
+      models.value = filterSelectableFrontendModels(response.models)
     }
   } catch (error) {
     console.error('Failed to load models:', error)

@@ -150,7 +150,7 @@
 
       <!-- Gallery -->
       <div class="px-4 pb-10 xs:px-6 md:px-8">
-        <div class="mx-auto max-w-[720px]">
+        <div class="w-full">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="text-lg font-bold text-ink-950">画廊</h3>
             <router-link v-if="galleryRecords.length > 0" to="/gallery" class="text-xs text-primary hover:underline">查看全部</router-link>
@@ -335,6 +335,7 @@ import ModelSelector from '@/components/ModelSelector.vue'
 import { api } from '@/services/api'
 import { notification } from '@/utils/notification'
 import { copyText } from '@/utils/clipboard'
+import { DEFAULT_IMAGE_MODEL, pickPreferredFrontendModel } from '@/utils/modelSelection'
 
 const generatorStore = useGeneratorStore()
 const historyStore = useHistoryStore()
@@ -497,6 +498,7 @@ const startGeneration = () => {
 
 const backToLanding = () => {
   generatorStore.startNewConversation()
+  applyHomeDefaultModel()
   loadGallery()
 }
 
@@ -506,6 +508,15 @@ const handleModelSelect = (model) => {
   showModelSelector.value = false
   localStorage.setItem('selectedModel', JSON.stringify({ modelName: model.model_name, modelInfo: model }))
   notification.success('模型已切换', `已切换到 ${model.model_name}`)
+}
+
+const applyHomeDefaultModel = () => {
+  const preferredModel = pickPreferredFrontendModel(generatorStore.availableModels)
+  const nextModelName = preferredModel?.model_name || DEFAULT_IMAGE_MODEL
+
+  generatorStore.setSelectedModel(nextModelName)
+  generatorStore.setSelectedModelInfo(preferredModel || null)
+  localStorage.setItem('selectedModel', JSON.stringify({ modelName: nextModelName, modelInfo: preferredModel || null }))
 }
 
 const selectRatio = (ratio) => {
@@ -542,24 +553,17 @@ const scheduleScroll = () => {
 watch(() => generatorStore.messages.length, async () => { await nextTick(); scheduleScroll() })
 watch(() => generatorStore.currentSessionId, async () => { await nextTick(); scheduleScroll() })
 
-onMounted(() => {
+onMounted(async () => {
   if (historyStore.sessions.length === 0) historyStore.loadFromServer()
-  if (generatorStore.availableModels.length === 0) generatorStore.fetchAvailableModels()
+  if (generatorStore.availableModels.length === 0) await generatorStore.fetchAvailableModels()
   loadGallery()
   loadTypesStyles()
+  if (!hasConversation.value) applyHomeDefaultModel()
   // Sync prompt from store (e.g. from scene library "做同款")
   if (generatorStore.prompt && !promptInput.value) {
     promptInput.value = generatorStore.prompt
     generatorStore.prompt = ''
   }
-  try {
-    const saved = localStorage.getItem('selectedModel')
-    if (saved) {
-      const data = JSON.parse(saved)
-      generatorStore.setSelectedModel(data.modelName)
-      generatorStore.setSelectedModelInfo(data.modelInfo)
-    }
-  } catch {}
 })
 </script>
 

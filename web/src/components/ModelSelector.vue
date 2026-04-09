@@ -198,6 +198,7 @@
 import { computed, onMounted, ref, watch, onUnmounted } from 'vue'
 import { api } from '@/services/api'
 import ModelInfoDetail from './ModelInfoDetail.vue'
+import { filterSelectableFrontendModels } from '@/utils/modelSelection'
 
 const props = defineProps({
   currentModel: {
@@ -315,7 +316,7 @@ const loadModels = async () => {
   try {
     const response = await api.getModels()
     if (response?.models) {
-      models.value = response.models
+      models.value = filterSelectableFrontendModels(response.models)
     }
   } catch (error) {
     console.error('加载模型列表失败:', error)
