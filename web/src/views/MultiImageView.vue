@@ -227,44 +227,72 @@
     </div>
 
     <!-- Gallery records -->
-    <div class="mx-auto mt-8 w-full max-w-[760px] px-4 pb-8 xs:px-6">
-      <div v-if="galleryRecords.length > 0" class="mb-4 flex items-center justify-between">
-        <h3 class="text-sm font-semibold text-ink-700">创作记录</h3>
-        <router-link to="/gallery" class="text-xs text-primary hover:underline">查看更多</router-link>
-      </div>
+    <div class="mt-8 px-4 pb-8 xs:px-6 md:px-8">
+      <div class="w-full">
+        <div class="mb-3 flex items-center justify-between">
+          <h3 class="text-lg font-bold text-ink-950">创作记录</h3>
+          <router-link v-if="galleryRecords.length > 0" to="/gallery" class="text-xs text-primary hover:underline">查看更多</router-link>
+        </div>
 
-      <div v-if="galleryRecords.length > 0" class="space-y-4">
-        <div v-for="record in galleryRecords" :key="record.id"
-          class="overflow-hidden rounded-2xl border border-border-dark bg-white/80 transition hover:shadow-md">
-          <div class="grid gap-1"
-            :class="record.image_urls?.length >= 4 ? 'grid-cols-4' :
-                    record.image_urls?.length === 3 ? 'grid-cols-3' :
-                    record.image_urls?.length === 2 ? 'grid-cols-2' : 'grid-cols-1'">
-            <div v-for="(url, i) in (record.image_urls || []).slice(0, 4)" :key="i"
-              class="aspect-square overflow-hidden cursor-pointer" @click="previewMulti(record, i)">
-              <img :src="url" class="h-full w-full object-cover hover:scale-105 transition-transform" loading="lazy" />
+        <div v-if="galleryRecords.length > 0" class="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+          <div
+            v-for="record in galleryRecords"
+            :key="record.id"
+            class="group relative overflow-hidden rounded-xl border border-border-dark bg-white/90 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+          >
+            <div class="aspect-square overflow-hidden cursor-pointer" @click="previewMulti(record, 0)">
+              <img
+                v-if="getRecordImage(record)"
+                :src="getRecordImage(record)"
+                class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                loading="lazy"
+              />
+              <div v-else class="flex h-full items-center justify-center bg-primary-soft text-primary">
+                <span class="material-symbols-outlined !text-4xl">image</span>
+              </div>
             </div>
-          </div>
-          <div class="p-3">
-            <div class="mb-1.5 flex flex-wrap gap-1">
-              <span v-if="record.model" class="rounded-md bg-primary-soft px-1.5 py-0.5 text-[10px] font-medium text-primary">{{ record.model }}</span>
-              <span class="rounded-md bg-ink-300/20 px-1.5 py-0.5 text-[10px] text-ink-500">{{ record.image_urls?.length || 0 }}张</span>
-            </div>
-            <div class="flex items-start gap-2">
-              <p class="flex-1 text-xs text-ink-700 line-clamp-2">{{ record.prompt || '无提示词' }}</p>
-              <button v-if="record.prompt" @click="copyPrompt(record.prompt)"
-                class="shrink-0 text-ink-300 hover:text-primary transition" title="复制提示词">
-                <span class="material-symbols-outlined !text-sm">content_copy</span>
+
+            <div class="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition group-hover:opacity-100">
+              <button
+                v-if="record.prompt"
+                @click.stop="copyPrompt(record.prompt)"
+                class="grid h-7 min-w-7 place-items-center rounded-full bg-white/90 px-2 shadow backdrop-blur-sm hover:bg-white cursor-pointer"
+                :title="record.image_urls?.length ? `${record.image_urls.length} 张图片` : '复制提示词'"
+              >
+                <span class="material-symbols-outlined !text-sm text-ink-700">content_copy</span>
               </button>
             </div>
-            <div class="mt-1.5 text-[10px] text-ink-500">{{ formatTime(record.created_at) }}</div>
+
+            <div v-if="record.image_urls?.length > 1"
+              class="absolute left-1.5 bottom-[54px] rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+              {{ record.image_urls.length }} 张
+            </div>
+
+            <div class="p-2.5">
+              <div class="group/prompt relative">
+                <p class="line-clamp-2 pr-5 text-xs text-ink-700">{{ record.prompt || '无提示词' }}</p>
+                <button
+                  v-if="record.prompt"
+                  @click.stop="copyPrompt(record.prompt)"
+                  class="absolute top-0 right-0 text-ink-300 hover:text-primary cursor-pointer"
+                >
+                  <span class="material-symbols-outlined !text-sm">content_copy</span>
+                </button>
+              </div>
+              <div class="mt-1 text-[10px] text-ink-500">{{ formatTime(record.created_at) }}</div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div v-else-if="!currentTask" class="mt-8 text-center text-ink-500">
-        <span class="material-symbols-outlined !text-5xl text-ink-300">collections</span>
-        <p class="mt-3 text-sm">开始创作你的第一组图片吧</p>
+        <div v-else-if="!currentTask">
+          <div class="rounded-xl border border-dashed border-border-dark bg-white/60 p-6">
+            <div class="mt-1 text-center">
+              <span class="material-symbols-outlined !text-3xl text-ink-300">collections</span>
+              <p class="mt-1.5 text-sm font-medium text-ink-700">暂无作品</p>
+              <p class="mt-0.5 text-xs text-ink-500">在上方输入内容，创建你的第一组图片</p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -397,6 +425,11 @@ const previewMulti = (record, index) => {
   previewRecord.value = record
   previewIndex.value = index
   showPreview.value = true
+}
+
+const getRecordImage = (record) => {
+  if (record.image_urls?.length > 0) return record.image_urls[0]
+  return ''
 }
 
 const formatTime = (timestamp) => {
