@@ -14,6 +14,7 @@ create table accounts
     subscription_quota_used  integer,
     gift_points              integer,
     gift_points_expiry       timestamp,
+    gift_points_date         date,
     last_checkin_date        date,
     consecutive_checkin_days integer,
     invite_code              varchar(20)

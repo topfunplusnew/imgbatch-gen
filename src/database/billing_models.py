@@ -1,6 +1,17 @@
 """账户计费相关数据库模型"""
 
-from sqlalchemy import Column, String, Integer, Float, DateTime, Boolean, ForeignKey, Text, JSON, Date
+from sqlalchemy import (
+    Column,
+    String,
+    Integer,
+    Float,
+    DateTime,
+    Boolean,
+    ForeignKey,
+    Text,
+    JSON,
+    Date,
+)
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .base import Base, BaseModel
@@ -8,10 +19,13 @@ from .base import Base, BaseModel
 
 class Account(BaseModel):
     """用户账户表"""
+
     __tablename__ = "accounts"
 
     # 关联用户
-    user_id = Column(String(100), ForeignKey("users.id"), unique=True, nullable=False, comment="用户ID")
+    user_id = Column(
+        String(100), ForeignKey("users.id"), unique=True, nullable=False, comment="用户ID"
+    )
     user = relationship("User", back_populates="account", foreign_keys=[user_id])
 
     # 余额和积分
@@ -34,6 +48,7 @@ class Account(BaseModel):
     # 赠送积分（每日清零）
     gift_points = Column(Integer, default=0, comment="赠送积分（每日清零）")
     gift_points_expiry = Column(DateTime, nullable=True, comment="赠送积分过期时间")
+    gift_points_date = Column(Date, nullable=True, comment="赠送积分记录日期")
 
     # 签到信息
     last_checkin_date = Column(Date, nullable=True, comment="最后签到日期")
@@ -51,6 +66,7 @@ class Account(BaseModel):
 
 class BillingPlan(BaseModel):
     """计费套餐表"""
+
     __tablename__ = "billing_plans"
 
     # 套餐基本信息
@@ -84,13 +100,20 @@ class BillingPlan(BaseModel):
 
 class Transaction(BaseModel):
     """交易记录表"""
+
     __tablename__ = "transactions"
 
     # 关联用户
-    user_id = Column(String(100), ForeignKey("users.id"), nullable=False, index=True, comment="用户ID")
+    user_id = Column(
+        String(100), ForeignKey("users.id"), nullable=False, index=True, comment="用户ID"
+    )
 
     # 交易基本信息
-    transaction_type = Column(String(50), nullable=False, comment="交易类型: recharge, consumption, refund, subscription, gift, commission, system_adjust")
+    transaction_type = Column(
+        String(50),
+        nullable=False,
+        comment="交易类型: recharge, consumption, refund, subscription, gift, commission, system_adjust",
+    )
     amount = Column(Integer, default=0, comment="金额变化(分，正为增加，负为减少)")
     points_change = Column(Integer, default=0, comment="积分变化(正为增加，负为减少)")
 
@@ -104,7 +127,9 @@ class Transaction(BaseModel):
 
     # 描述和状态
     description = Column(String(255), comment="交易描述")
-    status = Column(String(20), default="success", comment="状态: pending, success, failed, cancelled")
+    status = Column(
+        String(20), default="success", comment="状态: pending, success, failed, cancelled"
+    )
     extra_data = Column(JSON, nullable=True, comment="额外信息(JSON)")
 
     def __repr__(self):
@@ -113,10 +138,13 @@ class Transaction(BaseModel):
 
 class ConsumptionRecord(BaseModel):
     """消费记录表"""
+
     __tablename__ = "consumption_records"
 
     # 关联用户
-    user_id = Column(String(100), ForeignKey("users.id"), nullable=False, index=True, comment="用户ID")
+    user_id = Column(
+        String(100), ForeignKey("users.id"), nullable=False, index=True, comment="用户ID"
+    )
 
     # 关联请求
     request_id = Column(String(100), nullable=True, comment="关联的生成请求ID")
@@ -126,7 +154,9 @@ class ConsumptionRecord(BaseModel):
     provider = Column(String(50), comment="Provider名称")
 
     # 计费信息
-    cost_type = Column(String(20), nullable=False, comment="计费类型: free, subscription, points, balance")
+    cost_type = Column(
+        String(20), nullable=False, comment="计费类型: free, subscription, points, balance"
+    )
     points_used = Column(Integer, default=0, comment="消耗积分")
     amount = Column(Integer, default=0, comment="消耗金额(分)")
 
@@ -148,11 +178,14 @@ class ConsumptionRecord(BaseModel):
 
 class Withdrawal(BaseModel):
     """提现申请表"""
+
     __tablename__ = "withdrawals"
 
     # 基本信息
     withdrawal_id = Column(String(100), unique=True, nullable=False, comment="提现单号")
-    user_id = Column(String(100), ForeignKey("users.id"), nullable=False, index=True, comment="用户ID")
+    user_id = Column(
+        String(100), ForeignKey("users.id"), nullable=False, index=True, comment="用户ID"
+    )
     user = relationship("User", foreign_keys=[user_id])
 
     # 金额信息
@@ -164,7 +197,11 @@ class Withdrawal(BaseModel):
     withdrawal_name = Column(String(100), comment="收款人姓名")
 
     # 状态
-    status = Column(String(20), default="pending", comment="状态: pending, approved, rejected, completed, failed")
+    status = Column(
+        String(20),
+        default="pending",
+        comment="状态: pending, approved, rejected, completed, failed",
+    )
 
     # 审核信息
     admin_id = Column(String(100), nullable=True, comment="审核管理员ID")

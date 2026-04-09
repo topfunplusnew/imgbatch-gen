@@ -1,6 +1,7 @@
 """FastAPI应用入口"""
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from contextlib import asynccontextmanager
@@ -15,7 +16,32 @@ from ..engine import TaskManager
 from ..database import get_db_manager
 from ..services.system_config_service import ensure_startup_system_configs
 from .middleware import setup_cors, logging_middleware
-from .routes import generate, batch, status, models, unified, chat, assistant, health, history, files, async_tasks, auth, account, payment, checkin, download, referral, admin, system_config, withdrawal, case_management, notifications, maintenance, user_config
+from .routes import (
+    generate,
+    batch,
+    status,
+    models,
+    unified,
+    chat,
+    assistant,
+    health,
+    history,
+    files,
+    async_tasks,
+    auth,
+    account,
+    payment,
+    checkin,
+    download,
+    referral,
+    admin,
+    system_config,
+    withdrawal,
+    case_management,
+    notifications,
+    maintenance,
+    user_config,
+)
 
 
 # 配置日志
@@ -23,14 +49,14 @@ logger.remove()
 logger.add(
     sys.stdout,
     format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan> - <level>{message}</level>",
-    level=settings.log_level
+    level=settings.log_level,
 )
 logger.add(
     f"{settings.log_dir}/app.log",
     rotation=settings.log_rotation,
     retention=settings.log_retention,
     level=settings.log_level,
-    encoding="utf-8"
+    encoding="utf-8",
 )
 
 
@@ -80,7 +106,7 @@ async def lifespan(app: FastAPI):
                     password_hash=password_hash,
                     role="admin",
                     status="active",
-                    force_password_change=True  # 强制首次登录后修改密码
+                    force_password_change=True,  # 强制首次登录后修改密码
                 )
                 session.add(admin_user)
                 await session.flush()  # 获取user ID
@@ -98,12 +124,14 @@ async def lifespan(app: FastAPI):
                     subscription_quota_used=0,
                     gift_points=100,
                     consecutive_checkin_days=0,
-                    total_invite_count=0
+                    total_invite_count=0,
                 )
                 session.add(admin_account)
                 await session.commit()
 
-                logger.info(f"初始管理员账户创建成功: {settings.default_admin_username} (ID: {admin_user.id})")
+                logger.info(
+                    f"初始管理员账户创建成功: {settings.default_admin_username} (ID: {admin_user.id})"
+                )
                 logger.warning("⚠️  请在生产环境中修改默认管理员密码！")
             else:
                 logger.info(f"管理员账户已存在: {existing_admin.username}")
@@ -114,6 +142,7 @@ async def lifespan(app: FastAPI):
     # 初始化异步任务数据库
     try:
         from ..database.async_task_manager import get_async_task_manager
+
         async_task_manager = get_async_task_manager()
         await async_task_manager.init_db()
         app.state.async_task_manager = async_task_manager
@@ -121,6 +150,7 @@ async def lifespan(app: FastAPI):
 
         # 启动异步任务处理器
         from ..engine.async_task_processor import AsyncTaskProcessor
+
         async_processor = AsyncTaskProcessor()
         await async_processor.start()
         app.state.async_processor = async_processor
@@ -151,6 +181,7 @@ async def lifespan(app: FastAPI):
     # 初始化SSE管理器
     try:
         from ..utils.sse_manager import get_sse_manager
+
         sse_manager = get_sse_manager()
         await sse_manager.start()
         app.state.sse_manager = sse_manager
@@ -180,7 +211,7 @@ async def lifespan(app: FastAPI):
             coroutine_func=cleanup_service.cleanup_expired_records,
             retention_days=settings.retention_days,
             batch_size=settings.cleanup_batch_size,
-            dry_run=settings.cleanup_dry_run
+            dry_run=settings.cleanup_dry_run,
         )
 
         logger.info(
@@ -193,6 +224,7 @@ async def lifespan(app: FastAPI):
         logger.info("准备注册支付定时任务...")
         try:
             from ..tasks.payment_tasks import poll_pending_orders, check_expired_orders
+
             logger.info("成功导入支付任务模块")
 
             # 轮询pending订单（每1分钟）
@@ -247,8 +279,20 @@ async def lifespan(app: FastAPI):
             )
             logger.info("临时积分清理任务注册成功（每30分钟）")
 
+            # 每日0点清零赠送积分
+            from ..tasks.points_tasks import reset_daily_gift_points
+
+            logger.info("注册每日赠送积分清零任务...")
+            app.state.scheduler.schedule_periodic(
+                name="reset_daily_gift_points",
+                interval_seconds=86400,  # 24小时
+                coroutine_func=reset_daily_gift_points,
+            )
+            logger.info("每日赠送积分清零任务注册成功（每24小时）")
+
         except Exception as e:
             import traceback
+
             logger.error(f"定时任务注册失败: {str(e)}")
             logger.error(f"错误详情: {traceback.format_exc()}")
 
@@ -256,10 +300,11 @@ async def lifespan(app: FastAPI):
         if settings.cleanup_on_startup:
             logger.info("执行启动时清理...")
             from ..models.cleanup import CleanupReport
+
             report = await cleanup_service.cleanup_expired_records(
                 retention_days=settings.retention_days,
                 batch_size=settings.cleanup_batch_size,
-                dry_run=settings.cleanup_dry_run
+                dry_run=settings.cleanup_dry_run,
             )
             report.triggered_by = "startup"
             logger.info(
@@ -283,15 +328,15 @@ async def lifespan(app: FastAPI):
     await task_manager.stop()
 
     # 停止异步任务处理器
-    if hasattr(app.state, 'async_processor') and app.state.async_processor:
+    if hasattr(app.state, "async_processor") and app.state.async_processor:
         await app.state.async_processor.stop()
 
     # 停止SSE管理器
-    if hasattr(app.state, 'sse_manager') and app.state.sse_manager:
+    if hasattr(app.state, "sse_manager") and app.state.sse_manager:
         await app.state.sse_manager.stop()
 
     # 停止后台调度器
-    if hasattr(app.state, 'scheduler') and app.state.scheduler:
+    if hasattr(app.state, "scheduler") and app.state.scheduler:
         await app.state.scheduler.stop()
         logger.info("后台调度器已停止")
 
@@ -307,7 +352,7 @@ app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description="智能体生图应用 - 支持多Provider、并行批量生成",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # 设置中间件
@@ -346,6 +391,7 @@ app.include_router(user_config.router)  # 用户配置路由
 # 仅在使用本地存储时挂载静态文件路由
 if settings.storage_type == "local":
     import os
+
     storage_path = settings.storage_path
     if os.path.exists(storage_path):
         app.mount(settings.storage_url_prefix, StaticFiles(directory=storage_path), name="storage")
@@ -357,11 +403,7 @@ else:
 @app.get("/")
 async def root():
     """根路径"""
-    return {
-        "name": settings.app_name,
-        "version": settings.app_version,
-        "status": "running"
-    }
+    return {"name": settings.app_name, "version": settings.app_version, "status": "running"}
 
 
 @app.get("/health")
@@ -383,4 +425,3 @@ def run() -> None:
 
 if __name__ == "__main__":
     run()
-

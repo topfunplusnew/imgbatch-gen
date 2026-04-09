@@ -54,9 +54,11 @@ class CheckinService:
 
         # 发放签到奖励（临时积分，当日23:59:59过期）
         from datetime import time as dtime
+
         expiry_time = datetime.combine(today, dtime(23, 59, 59))
         account.gift_points = (account.gift_points or 0) + self.daily_reward
         account.gift_points_expiry = expiry_time
+        account.gift_points_date = today
         account.total_points_earned = (account.total_points_earned or 0) + self.daily_reward
         account.last_checkin_date = today
 
@@ -112,21 +114,31 @@ class CheckinService:
             "can_checkin": account.last_checkin_date != today,
             "consecutive_days": account.consecutive_checkin_days or 0,
             "gift_points": account.gift_points or 0,
-            "gift_points_expiry": account.gift_points_expiry.isoformat() if account.gift_points_expiry else None,
-            "last_checkin_date": account.last_checkin_date.isoformat() if account.last_checkin_date else None,
+            "gift_points_expiry": account.gift_points_expiry.isoformat()
+            if account.gift_points_expiry
+            else None,
+            "last_checkin_date": account.last_checkin_date.isoformat()
+            if account.last_checkin_date
+            else None,
         }
 
     async def _check_and_reset_gift_points(self, account: Account):
         """
         检查并重置赠送积分
 
-        如果当前时间已过赠送积分过期时间，则清零赠送积分
+        如果赠送积分记录日期不是今天，则清零赠送积分
         """
-        if account.gift_points_expiry and datetime.now() > account.gift_points_expiry:
-            expired_points = account.gift_points or 0
+        today = date.today()
+        last_date = account.gift_points_date
+
+        if last_date is None or last_date != today:
+            if account.gift_points and account.gift_points > 0:
+                logger.info(
+                    f"用户 {account.user_id} 的 {account.gift_points} 赠送积分已清零（新的一天）"
+                )
             account.gift_points = 0
             account.gift_points_expiry = None
-            logger.info(f"用户 {account.user_id} 的 {expired_points} 赠送积分已过期清零")
+            account.gift_points_date = today
 
 
 # 全局服务实例
