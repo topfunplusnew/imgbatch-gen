@@ -254,7 +254,7 @@
 
             <div class="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition group-hover:opacity-100">
               <button
-                v-if="record.prompt"
+                v-if="extractDisplayPrompt(record.prompt)"
                 @click.stop="copyPrompt(record.prompt)"
                 class="grid h-7 min-w-7 place-items-center rounded-full bg-white/90 px-2 shadow backdrop-blur-sm hover:bg-white cursor-pointer"
                 :title="record.image_urls?.length ? `${record.image_urls.length} 张图片` : '复制提示词'"
@@ -270,9 +270,9 @@
 
             <div class="p-2.5">
               <div class="group/prompt relative">
-                <p class="line-clamp-2 pr-5 text-xs text-ink-700">{{ record.prompt || '无提示词' }}</p>
+                <p class="line-clamp-2 pr-5 text-xs text-ink-700">{{ displayPromptOrFallback(record.prompt) }}</p>
                 <button
-                  v-if="record.prompt"
+                  v-if="extractDisplayPrompt(record.prompt)"
                   @click.stop="copyPrompt(record.prompt)"
                   class="absolute top-0 right-0 text-ink-300 hover:text-primary cursor-pointer"
                 >
@@ -304,7 +304,7 @@
             class="w-full rounded-xl" :class="{ 'ring-2 ring-primary': i === previewIndex }" />
         </div>
         <div class="mt-4">
-          <p class="text-sm text-ink-700">{{ previewRecord.prompt }}</p>
+          <p class="text-sm text-ink-700">{{ displayPromptOrFallback(previewRecord.prompt) }}</p>
         </div>
       </div>
     </el-dialog>
@@ -320,6 +320,7 @@ import ResolutionDropdown from '@/components/landing/ResolutionDropdown.vue'
 import { api } from '@/services/api'
 import { notification } from '@/utils/notification'
 import { copyText } from '@/utils/clipboard'
+import { extractDisplayPrompt, displayPromptOrFallback } from '@/utils/promptDisplay'
 
 const generatorStore = useGeneratorStore()
 
@@ -415,7 +416,7 @@ const getFileIcon = (file) => {
 }
 
 const copyPrompt = async (text) => {
-  const ok = await copyText(text)
+  const ok = await copyText(extractDisplayPrompt(text))
   if (ok) {
     notification.success('已复制', '提示词已复制到剪贴板')
   } else { notification.error('复制失败', '') }

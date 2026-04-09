@@ -35,7 +35,7 @@
       <div class="w-full lg:w-1/2 flex flex-col">
         <div class="flex-1">
           <h3 class="text-lg font-bold text-ink-950 mb-3 line-clamp-2">
-            {{ creation.prompt.substring(0, 100) }}{{ creation.prompt.length > 100 ? '...' : '' }}
+            {{ displayPromptTitle }}
           </h3>
 
           <!-- 元信息 -->
@@ -66,7 +66,7 @@
                 复制
               </button>
             </div>
-            <p class="text-sm text-ink-700 line-clamp-3">{{ creation.prompt }}</p>
+            <p class="text-sm text-ink-700 line-clamp-3">{{ displayPrompt }}</p>
           </div>
 
           <!-- 参数信息 -->
@@ -109,11 +109,18 @@ import { computed } from 'vue'
 import { useAppStore } from '@/store/useAppStore'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import { copyText } from '@/utils/clipboard'
+import { extractDisplayPrompt } from '@/utils/promptDisplay'
 
 const appStore = useAppStore()
 const generatorStore = useGeneratorStore()
 
 const creation = computed(() => appStore.selectedCreation)
+const displayPrompt = computed(() => extractDisplayPrompt(creation.value?.prompt))
+const displayPromptTitle = computed(() => {
+  const prompt = displayPrompt.value
+  if (!prompt) return '无提示词'
+  return `${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`
+})
 
 const formatDate = (dateString) => {
   if (!dateString) return '未知时间'
@@ -133,14 +140,14 @@ const formatDate = (dateString) => {
 
 const copyPrompt = async () => {
   if (!creation.value) return
-  await copyText(creation.value.prompt)
+  await copyText(displayPrompt.value)
 }
 
 const useTemplate = () => {
   if (!creation.value) return
 
   // 应用提示词
-  generatorStore.prompt = creation.value.prompt
+  generatorStore.prompt = displayPrompt.value
 
   // 应用参数
   if (creation.value.extra_params) {

@@ -319,6 +319,27 @@ IMAGE_PROMPT_TRANSLATION_SYSTEM_PROMPT = (
     "Do not add new facts. Return valid JSON only."
 )
 
+TEXT_INTENT_CLASSIFIER_SYSTEM_PROMPT = (
+    "你现在是一个生图或者文本问答意图识别的高手。"
+    "请分析用户最新输入到底是要让模型生图，还是只是进行文本问答、解释、分析、总结、提取、翻译、润色或普通对话。"
+    "如果用户明确要求生成图片、海报、插画、封面、配图、漫画、设计稿，或者要求画、绘制、创建、生成图片，则判断为 route=image。"
+    "如果用户是在提问、解释内容、分析材料、总结信息、翻译文本、识别内容、讨论方案，判断为 route=chat。"
+    "当表达有歧义时，优先判断为 route=chat，不要误判成生图。"
+    "当 route=image 且用户要求多张图片时，intent_type=batch_generate；否则 intent_type=single_generate。"
+    "当 route=chat 时，intent_type=chat。"
+)
+
+IMAGE_MODEL_TEXT_INTENT_CLASSIFIER_SYSTEM_PROMPT = (
+    "你现在是一个生图意图识别高手。用户当前已经明确选择了生图模型。"
+    "你只需要判断用户最新输入是不是明确在要求生成图片。"
+    "如果用户是在要求制作海报、封面、插画、配图、漫画、KV、宣传图、视觉稿、设计图，"
+    "或者要求画、绘制、生成图片、按某种风格排版出图，则判断为 route=image。"
+    "如果用户只是提问、解释、分析、总结、翻译、润色、问答、讨论方案，而没有明确要求出图，则判断为 route=chat。"
+    "当表达有歧义时，在已选择生图模型的前提下，只要存在明确的海报、图片、风格、排版、配色、字体、比例、分辨率、插画、视觉设计等出图信号，就优先判断为 route=image。"
+    "当 route=image 且用户要求多张图片时，intent_type=batch_generate；否则 intent_type=single_generate。"
+    "当 route=chat 时，intent_type=chat。"
+)
+
 
 def _trim_attachment_text(text: str, limit: Optional[int] = None) -> str:
     text = (text or "").strip()
@@ -1193,6 +1214,12 @@ def _fallback_text_route(
         "render",
         "illustration",
         "poster",
+        "banner",
+        "flyer",
+        "layout",
+        "typography",
+        "color palette",
+        "visual design",
         "cover",
         "concept art",
         "生图",
@@ -1201,6 +1228,18 @@ def _fallback_text_route(
         "绘制",
         "创建图片",
         "海报",
+        "宣传图",
+        "kv",
+        "主视觉",
+        "排版",
+        "版式",
+        "配色",
+        "字体",
+        "分辨率",
+        "图片比例",
+        "视觉",
+        "设计稿",
+        "插画风",
         "封面",
         "配图",
         "渲染",
@@ -1270,6 +1309,7 @@ async def _classify_text_request(
     app_state,
     api_key: Optional[str],
 ) -> RequestRouteDecision:
+    explicit_image_model_selected = _is_explicit_image_model_type(request_model_type)
     model_hint = request_model_type
     if not model_hint and request_model:
         model_hint = "image" if await _is_image_model_name(request_model, app_state) else "chat"
@@ -1281,6 +1321,18 @@ async def _classify_text_request(
         requested_count,
         messages=messages,
     )
+
+    if explicit_image_model_selected and fallback.route == "image":
+        return RequestRouteDecision(
+            route="image",
+            intent_type=fallback.intent_type,
+            batch_count=fallback.batch_count,
+            confidence=max(fallback.confidence, 0.9),
+            reasoning="The user selected an image model and the prompt contains clear image-generation cues.",
+            source="image-model-rules",
+            planning_basis="text",
+        )
+
     if (
         not LANGCHAIN_ASSISTANT_AVAILABLE
         or SystemMessage is None
@@ -1307,10 +1359,9 @@ async def _classify_text_request(
             [
                 SystemMessage(
                     content=(
-                        "You route assistant requests. "
-                        "Choose route=chat and intent_type=chat for explanation, summary, QA, extraction, translation, "
-                        "or normal dialogue. Choose route=image only when the user explicitly wants to generate, draw, "
-                        "render, illustrate, or create images. When ambiguous, prefer chat."
+                        IMAGE_MODEL_TEXT_INTENT_CLASSIFIER_SYSTEM_PROMPT
+                        if explicit_image_model_selected
+                        else TEXT_INTENT_CLASSIFIER_SYSTEM_PROMPT
                     )
                 ),
                 HumanMessage(

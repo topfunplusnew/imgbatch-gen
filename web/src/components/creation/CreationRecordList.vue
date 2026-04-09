@@ -72,7 +72,7 @@
 
           <!-- 悬浮信息 -->
           <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
-            <p class="text-white text-xs line-clamp-2 mb-2">{{ record.prompt }}</p>
+            <p class="text-white text-xs line-clamp-2 mb-2">{{ displayPromptOrFallback(record.prompt) }}</p>
             <div class="flex items-center gap-2 text-white/80 text-xs">
               <span>{{ formatDate(record.timestamp || record.created_at) }}</span>
               <span>·</span>
@@ -114,6 +114,7 @@ import { ref, onMounted, watch } from 'vue'
 import { api } from '@/services/api'
 import { useAppStore } from '@/store/useAppStore'
 import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
+import { displayPromptOrFallback } from '@/utils/promptDisplay'
 
 const appStore = useAppStore()
 

@@ -1192,6 +1192,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { useNotificationStore } from '@/store/useNotificationStore'
 import { api } from '@/services/api'
 import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
+import { extractDisplayPrompt } from '@/utils/promptDisplay'
 import { notification } from '@/utils/notification'
 import { copyText } from '@/utils/clipboard'
 import AnnouncementList from '@/components/AnnouncementList.vue'
@@ -1413,20 +1414,7 @@ async function loadMoreConsumption() {
 // 获取计费类型显示文本
 // 过滤掉英文系统提示词，只展示用户输入的提示词
 function cleanPrompt(prompt) {
-  if (!prompt) return ''
-  let cleaned = prompt
-  // 移除 "System instructions: ..." 段落
-  cleaned = cleaned.replace(/System instructions?:[\s\S]*?(?=\n\n|$)/gi, '')
-  // 移除 "gemini-*-flash-image-preview\nSystem..." 段落
-  cleaned = cleaned.replace(/gemini[\w.-]*\s*\n\s*System[\s\S]*?(?=\n\n[^a-zA-Z]|$)/gi, '')
-  // 如果整段都是英文系统提示词，返回空
-  if (/^(You are an expert|Write production-ready|IMPORTANT:|Create a|Generate a)/i.test(cleaned.trim())) {
-    // 尝试提取最后一行中文内容作为用户提示词
-    const lines = prompt.split('\n').filter(l => l.trim())
-    const chineseLine = lines.find(l => /[\u4e00-\u9fff]/.test(l))
-    return chineseLine?.trim() || ''
-  }
-  return cleaned.trim()
+  return extractDisplayPrompt(prompt)
 }
 
 function getCostTypeDisplay(costType) {

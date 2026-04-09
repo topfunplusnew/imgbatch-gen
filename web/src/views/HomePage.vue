@@ -194,8 +194,8 @@
               </div>
               <div class="p-2.5">
                 <div class="group/prompt relative">
-                  <p class="line-clamp-2 text-xs text-ink-700 pr-5">{{ record.prompt || '无提示词' }}</p>
-                  <button v-if="record.prompt" @click.stop="copyPrompt(record.prompt)"
+                  <p class="line-clamp-2 text-xs text-ink-700 pr-5">{{ displayPromptOrFallback(record.prompt) }}</p>
+                  <button v-if="extractDisplayPrompt(record.prompt)" @click.stop="copyPrompt(record.prompt)"
                     class="absolute top-0 right-0 text-ink-300 hover:text-primary cursor-pointer">
                     <span class="material-symbols-outlined !text-sm">content_copy</span>
                   </button>
@@ -309,8 +309,8 @@
             <el-tag v-if="previewItem.style" size="small" type="success">{{ previewItem.style }}</el-tag>
           </div>
           <div class="flex items-start gap-2">
-            <p class="flex-1 text-sm text-ink-700">{{ previewItem.prompt }}</p>
-            <button v-if="previewItem.prompt" @click="copyPrompt(previewItem.prompt)" class="shrink-0 text-ink-500 hover:text-primary">
+            <p class="flex-1 text-sm text-ink-700">{{ displayPromptOrFallback(previewItem.prompt) }}</p>
+            <button v-if="extractDisplayPrompt(previewItem.prompt)" @click="copyPrompt(previewItem.prompt)" class="shrink-0 text-ink-500 hover:text-primary">
               <span class="material-symbols-outlined !text-lg">content_copy</span>
             </button>
           </div>
@@ -336,6 +336,7 @@ import { api } from '@/services/api'
 import { notification } from '@/utils/notification'
 import { copyText } from '@/utils/clipboard'
 import { DEFAULT_IMAGE_MODEL, pickPreferredFrontendModel } from '@/utils/modelSelection'
+import { extractDisplayPrompt, displayPromptOrFallback } from '@/utils/promptDisplay'
 
 const generatorStore = useGeneratorStore()
 const historyStore = useHistoryStore()
@@ -452,7 +453,7 @@ const previewRecord = (record) => {
 }
 
 const copyPrompt = async (text) => {
-  const ok = await copyText(text)
+  const ok = await copyText(extractDisplayPrompt(text))
   if (ok) {
     notification.success('已复制', '提示词已复制到剪贴板')
   } else {

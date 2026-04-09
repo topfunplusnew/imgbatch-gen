@@ -106,7 +106,7 @@
               </div>
 
               <p class="mt-2 line-clamp-2 text-sm font-medium text-ink-800">
-                {{ record.prompt || '无提示词' }}
+                {{ displayPromptOrFallback(record.prompt) }}
               </p>
 
               <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-500">
@@ -296,6 +296,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import { useHistoryStore, type HistorySession } from '@/store/useHistoryStore'
 import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
+import { displayPromptOrFallback } from '@/utils/promptDisplay'
 
 const props = defineProps<{
   onClose?: (() => void) | null

@@ -70,6 +70,7 @@ async def lifespan(app: FastAPI):
     try:
         db_manager = get_db_manager()
         app.state.db_manager = db_manager
+        await db_manager.ensure_account_schema_compatibility()
         logger.info("数据库管理器初始化成功")
     except Exception as e:
         logger.error(f"数据库管理器初始化失败: {str(e)}")

@@ -370,12 +370,12 @@
           @click="openGeneratedImagePreview(0)"
         >
           <img
-            :src="generatedImageEntries[0].preview.url"
-            :alt="generatedImageEntries[0].preview.alt || '生成的图像'"
+            :src="generatedImageEntries[0].full.url"
+            :alt="generatedImageEntries[0].full.alt || '生成的图像'"
             class="w-full rounded-xl shadow-lg transition-transform duration-300 group-hover:scale-[1.01]">
           <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-xl">
             <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between">
-              <p class="text-sm text-white truncate">{{ generatedImageEntries[0].preview.alt || '生成的图像' }}</p>
+              <p class="text-sm text-white truncate">{{ generatedImageEntries[0].full.alt || '生成的图像' }}</p>
               <div class="flex items-center gap-2">
                 <button
                   @click.stop="openGeneratedImagePreview(0)"
@@ -422,12 +422,12 @@
           >
             <template v-if="slot.entry">
               <img
-                :src="slot.entry.preview.url"
-                :alt="slot.entry.preview.alt || `图片 ${slot.index + 1}`"
+                :src="slot.entry.full.url"
+                :alt="slot.entry.full.alt || `图片 ${slot.index + 1}`"
                 class="w-full h-auto object-contain transition-transform duration-300 group-hover:scale-105">
               <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                 <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-                  <p class="text-xs text-white truncate">{{ slot.entry.preview.alt || `图片 ${slot.index + 1}` }}</p>
+                  <p class="text-xs text-white truncate">{{ slot.entry.full.alt || `图片 ${slot.index + 1}` }}</p>
                   <div class="flex items-center gap-1.5">
                     <button
                       @click.stop="openGeneratedImagePreview(slot.entry.index)"

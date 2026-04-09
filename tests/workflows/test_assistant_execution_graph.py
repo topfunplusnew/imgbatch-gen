@@ -609,3 +609,63 @@ async def test_plan_assistant_execution_prefers_chat_for_contextual_summary_even
     assert plan.mode == "chat"
     assert plan.intent_type == "chat"
     assert plan.effective_model == expected_chat_model
+
+
+@pytest.mark.asyncio
+async def test_classify_text_request_uses_explicit_intent_system_prompt(monkeypatch):
+    captured = {}
+
+    class FakeStructuredLLM:
+        async def ainvoke(self, messages):
+            captured["messages"] = messages
+            return graph.TextIntentDecision(
+                route="chat",
+                intent_type="chat",
+                batch_count=1,
+                confidence=0.92,
+                reasoning="classified as chat",
+            )
+
+    class FakeLLM:
+        def with_structured_output(self, schema, method="function_calling"):
+            return FakeStructuredLLM()
+
+    async def fake_build_model(api_key=None, model=None):
+        return FakeLLM()
+
+    monkeypatch.setattr(graph, "LANGCHAIN_ASSISTANT_AVAILABLE", True)
+    monkeypatch.setattr(graph, "_has_llm_credentials", lambda api_key=None: True)
+    monkeypatch.setattr(graph, "_build_model", fake_build_model)
+
+    decision = await graph._classify_text_request(
+        messages=[{"role": "user", "content": "帮我分析这段文案"}],
+        user_instruction="帮我分析这段文案",
+        request_model="gpt-4o-mini",
+        request_model_type="chat",
+        requested_count=1,
+        app_state=SimpleNamespace(model_registry=None),
+        api_key="test-key",
+    )
+
+    assert decision.route == "chat"
+    assert "你现在是一个生图或者文本问答意图识别的高手" in captured["messages"][0].content
+
+
+@pytest.mark.asyncio
+async def test_classify_text_request_prefers_image_when_image_model_selected_and_poster_cues_present():
+    decision = await graph._classify_text_request(
+        messages=[],
+        user_instruction=(
+            "基于以下内容，帮我做一张高质量海报。要求：3D立体风，按模块排版，"
+            "配色鲜明，字体手写体，图片比例9:16，2K分辨率"
+        ),
+        request_model="gemini-3.1-flash-image-preview",
+        request_model_type="image",
+        requested_count=1,
+        app_state=SimpleNamespace(model_registry=None),
+        api_key=None,
+    )
+
+    assert decision.route == "image"
+    assert decision.intent_type == "single_generate"
+    assert decision.source == "image-model-rules"

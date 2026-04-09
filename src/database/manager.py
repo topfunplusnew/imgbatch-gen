@@ -77,6 +77,35 @@ class DatabaseManager:
         async with self.async_session_factory() as session:
             yield session
 
+    async def ensure_account_schema_compatibility(self) -> None:
+        """补齐旧数据库缺失的账户字段，避免模型升级后查询报错。"""
+        async with self.get_session() as session:
+            try:
+                await session.execute(
+                    text(
+                        """
+                        ALTER TABLE accounts
+                        ADD COLUMN IF NOT EXISTS gift_points_date DATE
+                        """
+                    )
+                )
+                await session.execute(
+                    text(
+                        """
+                        UPDATE accounts
+                        SET gift_points_date = DATE(gift_points_expiry)
+                        WHERE gift_points_date IS NULL
+                          AND gift_points_expiry IS NOT NULL
+                        """
+                    )
+                )
+                await session.commit()
+                logger.info("账户表兼容性检查完成: gift_points_date 已就绪")
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"账户表兼容性修复失败: {str(e)}")
+                raise
+
     # ==================== 用户请求记录相关 ====================
 
     async def create_user_request(

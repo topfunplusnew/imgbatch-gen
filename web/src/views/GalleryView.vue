@@ -106,7 +106,7 @@
 
           <!-- Info (grid) -->
           <div v-if="viewMode === 'grid'" class="p-2.5">
-            <p class="truncate text-xs font-medium text-ink-950">{{ item.prompt || '未命名' }}</p>
+            <p class="truncate text-xs font-medium text-ink-950">{{ displayPromptOrFallback(item.prompt, '未命名') }}</p>
             <div class="mt-0.5 flex items-center gap-1.5">
               <span class="text-[10px] text-ink-500">{{ item.model || '' }}</span>
               <span class="text-[10px] text-ink-300">&middot;</span>
@@ -117,7 +117,7 @@
           <!-- Info (list) -->
           <div v-if="viewMode === 'list'" class="flex min-w-0 flex-1 items-center justify-between gap-3 p-3">
             <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium text-ink-950">{{ item.prompt || '未命名' }}</p>
+              <p class="truncate text-sm font-medium text-ink-950">{{ displayPromptOrFallback(item.prompt, '未命名') }}</p>
               <p class="mt-0.5 text-xs text-ink-500">
                 {{ item.model || '未知模型' }} &middot; {{ formatTime(item.created_at) }}
                 <span v-if="item.image_urls?.length > 1"> &middot; {{ item.image_urls.length }}张</span>
@@ -157,7 +157,7 @@
         <img v-else :src="getImageUrl(previewItem)" class="w-full rounded-xl" />
 
         <div class="mt-4 space-y-2">
-          <p class="text-sm text-ink-950">{{ previewItem.prompt }}</p>
+          <p class="text-sm text-ink-950">{{ displayPromptOrFallback(previewItem.prompt) }}</p>
           <div class="flex flex-wrap gap-2">
             <el-tag v-if="previewItem.model" size="small">{{ previewItem.model }}</el-tag>
             <el-tag v-if="previewItem.style" size="small" type="info">{{ previewItem.style }}</el-tag>
@@ -178,6 +178,7 @@ import { useRouter } from 'vue-router'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import { api } from '@/services/api'
 import { notification } from '@/utils/notification'
+import { extractDisplayPrompt, displayPromptOrFallback } from '@/utils/promptDisplay'
 
 const router = useRouter()
 const generatorStore = useGeneratorStore()
@@ -199,7 +200,7 @@ const filteredCreations = computed(() => {
   if (searchQuery.value.trim()) {
     const q = searchQuery.value.toLowerCase()
     result = result.filter(c =>
-      (c.prompt || '').toLowerCase().includes(q) ||
+      extractDisplayPrompt(c.prompt).toLowerCase().includes(q) ||
       (c.model || '').toLowerCase().includes(q)
     )
   }
@@ -286,8 +287,9 @@ const downloadImage = async (item) => {
 }
 
 const reusePrompt = (item) => {
-  if (item.prompt) {
-    generatorStore.prompt = item.prompt
+  const prompt = extractDisplayPrompt(item.prompt)
+  if (prompt) {
+    generatorStore.prompt = prompt
     router.push('/')
     notification.success('已复用', '提示词已填入输入框')
   }
