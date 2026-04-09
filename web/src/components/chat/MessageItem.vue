@@ -546,17 +546,19 @@ const imageAttachments = computed(() => messageFiles.value.filter((file) => isIm
 const fileAttachments = computed(() => messageFiles.value.filter((file) => !isImageAttachment(file)))
 const previewableGeneratedImages = computed(() =>
   (Array.isArray(props.msg.images) ? props.msg.images : [])
-    .map((image, index) => normalizePreviewImage(image, index))
+    .map((image, index) => normalizeOriginalImage(image, index))
     .filter((image) => image.url)
 )
 const generatedImageEntries = computed(() =>
   (Array.isArray(props.msg.images) ? props.msg.images : [])
     .map((image, index) => {
       const preview = normalizePreviewImage(image, index)
-      if (!preview.url) return null
+      const full = normalizeOriginalImage(image, index)
+      if (!preview.url && !full.url) return null
       return {
         raw: image,
         preview,
+        full,
         index,
       }
     })
@@ -988,20 +990,72 @@ function getFileUrl(file) {
   return rawUrl
 }
 
+function getOriginalImageUrl(image) {
+  if (!image) return ''
+  if (typeof image === 'string') return getImageUrl(image)
+
+  const originalCandidate =
+    image.originalUrl ||
+    image.original_url ||
+    image.full_url ||
+    image.source_url ||
+    image.url ||
+    image.file_url ||
+    image.local_url ||
+    image.preview_url
+
+  return originalCandidate ? getImageUrl(originalCandidate) : ''
+}
+
+function getPreviewImageUrl(image) {
+  if (!image) return ''
+  if (typeof image === 'string') return getImageUrl(image)
+
+  const previewCandidate = image.thumbnail_url || image.preview_url
+  return previewCandidate ? getImageUrl(previewCandidate) : getOriginalImageUrl(image)
+}
+
 function normalizePreviewImage(image, index = 0) {
-  if (!image) return { url: '', alt: `图片 ${index + 1}` }
+  if (!image) return { url: '', originalUrl: '', alt: `图片 ${index + 1}` }
+
+  const alt = typeof image === 'object' ? (image.alt || `图片 ${index + 1}`) : `图片 ${index + 1}`
+  const originalUrl = getOriginalImageUrl(image)
 
   if (typeof image === 'string') {
     return {
-      url: getImageUrl(image),
-      alt: `图片 ${index + 1}`,
+      url: originalUrl,
+      originalUrl,
+      alt,
     }
   }
 
   return {
     ...image,
-    url: getImageUrl(image),
-    alt: image.alt || `图片 ${index + 1}`,
+    url: getPreviewImageUrl(image),
+    originalUrl,
+    alt,
+  }
+}
+
+function normalizeOriginalImage(image, index = 0) {
+  if (!image) return { url: '', originalUrl: '', alt: `图片 ${index + 1}` }
+
+  const alt = typeof image === 'object' ? (image.alt || `图片 ${index + 1}`) : `图片 ${index + 1}`
+  const originalUrl = getOriginalImageUrl(image)
+
+  if (typeof image === 'string') {
+    return {
+      url: originalUrl,
+      originalUrl,
+      alt,
+    }
+  }
+
+  return {
+    ...image,
+    url: originalUrl,
+    originalUrl,
+    alt,
   }
 }
 
@@ -1270,9 +1324,12 @@ async function downloadImageAsBlob(url, filename) {
 // 下载单张图片
 async function downloadSingleImage(image) {
   try {
-    const imageUrl = typeof image === 'string' ? image : image.url
+    const imageUrl = getOriginalImageUrl(image)
     const imageAlt = typeof image === 'object' ? (image.alt || '生成的图像') : '生成的图像'
-    await downloadImageAsBlob(getImageUrl(imageUrl), `${imageAlt}-${Date.now()}`)
+    if (!imageUrl) {
+      throw new Error('原图链接不可用')
+    }
+    await downloadImageAsBlob(imageUrl, `${imageAlt}-${Date.now()}`)
     notification.success('下载成功', `已下载: ${imageAlt}`)
   } catch (error) {
     console.error('下载失败:', error)
@@ -1291,9 +1348,12 @@ async function downloadAllImages() {
       const image = props.msg.images[i]
       downloadProgress.value[i] = 0
       try {
-        const imageUrl = typeof image === 'string' ? image : image.url
+        const imageUrl = getOriginalImageUrl(image)
         const imageAlt = typeof image === 'object' ? (image.alt || `image-${i + 1}`) : `image-${i + 1}`
-        await downloadImageAsBlob(getImageUrl(imageUrl), `${imageAlt}-${i + 1}`)
+        if (!imageUrl) {
+          throw new Error('原图链接不可用')
+        }
+        await downloadImageAsBlob(imageUrl, `${imageAlt}-${i + 1}`)
         downloadProgress.value[i] = 100
         await new Promise(r => setTimeout(r, 200))
         delete downloadProgress.value[i]
