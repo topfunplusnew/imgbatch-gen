@@ -9,7 +9,7 @@
             一<span class="text-primary">图</span>胜千言
           </h1>
           <p class="mt-2 text-sm text-ink-500 md:text-base">
-            强大的AI图像生成工具，支持多种模型和风格，轻松创建您想要的图像
+            一悟学舍，一键创图，AI 驱动，全场景省心之选
           </p>
         </div>
 
@@ -512,8 +512,11 @@ const handleModelSelect = (model) => {
 }
 
 const applyHomeDefaultModel = () => {
-  const preferredModel = pickPreferredFrontendModel(generatorStore.availableModels)
-  const nextModelName = preferredModel?.model_name || DEFAULT_IMAGE_MODEL
+  const pinnedModelName = generatorStore.consumeNextPreferredModel()
+  const preferredModel = pinnedModelName
+    ? generatorStore.availableModels.find((model) => model.model_name === pinnedModelName) || pickPreferredFrontendModel(generatorStore.availableModels)
+    : pickPreferredFrontendModel(generatorStore.availableModels)
+  const nextModelName = pinnedModelName || preferredModel?.model_name || DEFAULT_IMAGE_MODEL
 
   generatorStore.setSelectedModel(nextModelName)
   generatorStore.setSelectedModelInfo(preferredModel || null)

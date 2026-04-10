@@ -966,7 +966,7 @@ export const api = {
   /**
    * 获取我的邀请码
    */
-  async getMyInviteCode(): Promise<{ invite_code: string; total_invite_count: number; total_reward_points: number }> {
+  async getMyInviteCode(): Promise<{ invite_code: string; invite_link?: string; total_invite_count: number; total_reward_points: number }> {
     const response = await apiClient.get('/api/v1/referral/my-code')
     return response.data
   },
@@ -982,7 +982,16 @@ export const api = {
   /**
    * 获取邀请记录
    */
-  async getInviteRecords(): Promise<Array<{ user_id: string; username: string; phone: string; created_at: string }>> {
+  async getInviteRecords(): Promise<Array<{
+    user_id: string
+    username: string
+    phone: string
+    created_at: string
+    recharge_count?: number
+    total_recharge_amount?: number
+    last_recharge_at?: string | null
+    has_recharged?: boolean
+  }>> {
     const response = await apiClient.get('/api/v1/referral/records')
     return response.data
   },
@@ -990,7 +999,7 @@ export const api = {
   /**
    * 获取邀请统计
    */
-  async getInviteStats(): Promise<{ invite_code: string; total_invite_count: number; total_reward_points: number }> {
+  async getInviteStats(): Promise<{ invite_code: string; invite_link?: string; total_invite_count: number; total_reward_points: number }> {
     const response = await apiClient.get('/api/v1/referral/stats')
     return response.data
   },
@@ -2262,8 +2271,19 @@ export interface AdminUserDetail {
   total_generated: number
   total_spent: number
   invite_code: string
+  invite_link: string
   invite_count: number
   inviter_id: string
+  invite_records: Array<{
+    user_id: string
+    username: string
+    phone?: string | null
+    created_at: string
+    recharge_count: number
+    total_recharge_amount: number
+    last_recharge_at?: string | null
+    has_recharged: boolean
+  }>
   last_checkin_date: string
   consecutive_checkin_days: number
 }

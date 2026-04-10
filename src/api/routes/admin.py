@@ -1,6 +1,6 @@
 """管理员后台API路由"""
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -79,8 +79,10 @@ class UserDetailResponse(BaseModel):
     total_generated: int
     total_spent: int
     invite_code: str
+    invite_link: str
     invite_count: int
     inviter_id: str
+    invite_records: List[dict]
     # 签到信息
     last_checkin_date: str
     consecutive_checkin_days: int
@@ -168,11 +170,13 @@ async def get_users_count(
 @router.get("/users/{user_id}", response_model=UserDetailResponse, summary="用户详情")
 async def get_user_detail(
     user_id: str,
+    request: Request,
     admin: dict = Depends(require_admin)
 ):
     """获取用户详细信息"""
     from sqlalchemy import select
     from ...database import UserAuth
+    from ...services.referral_service import get_referral_service
 
     db_manager = get_db_manager()
 
@@ -195,6 +199,11 @@ async def get_user_detail(
             )
             phone_verified = auth_result.scalar_one_or_none() is not None
 
+    invite_code = account.invite_code if account else ""
+    invite_link = (str(request.base_url).rstrip("/") + f"/login?code={invite_code}") if invite_code else ""
+    referral_service = get_referral_service()
+    invite_records = await referral_service.get_invite_records(user_id)
+
     return UserDetailResponse(
         id=user.id,
         phone=user.phone or "",
@@ -210,9 +219,11 @@ async def get_user_detail(
         gift_points=account.gift_points if account else 0,
         total_generated=account.total_generated if account else 0,
         total_spent=account.total_spent if account else 0,
-        invite_code=account.invite_code if account else "",
+        invite_code=invite_code,
+        invite_link=invite_link,
         invite_count=account.total_invite_count if account else 0,
         inviter_id=account.inviter_id if account and account.inviter_id else "",
+        invite_records=invite_records,
         last_checkin_date=account.last_checkin_date.isoformat() if account and account.last_checkin_date else "",
         consecutive_checkin_days=account.consecutive_checkin_days if account else 0,
     )

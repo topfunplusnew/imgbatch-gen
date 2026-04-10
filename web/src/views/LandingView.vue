@@ -19,7 +19,7 @@
           {{ heroPrompt }}
         </h1>
         <p class="text-sm md:text-base text-ink-500 max-w-2xl mx-auto">
-          强大的AI图像生成工具，支持多种模型和风格，轻松创建您想要的图像
+          一悟学舍，一键创图，AI 驱动，全场景省心之选
         </p>
       </div>
 

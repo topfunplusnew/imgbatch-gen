@@ -128,6 +128,61 @@ def _request_messages_to_payloads(messages: List[ChatMessage]) -> List[Dict[str,
     return [{"role": message.role, "content": message.content} for message in messages]
 
 
+def _trim_image_context_snippet(text: str, limit: int = 260) -> str:
+    normalized = " ".join(str(text or "").split()).strip()
+    if len(normalized) <= limit:
+        return normalized
+    return f"{normalized[: limit - 1]}…"
+
+
+def _prepare_image_request_messages(messages: List[ChatMessage]) -> List[ChatMessage]:
+    """Prioritize the latest image prompt while keeping recent history as auxiliary context."""
+    normalized_messages: List[ChatMessage] = []
+    for message in messages:
+        role = str(message.role or "").strip()
+        if not role:
+            continue
+        text = _extract_message_text(message.content)
+        if role == "assistant" and (not text or text.startswith("正在处理")):
+            continue
+        normalized_messages.append(ChatMessage(role=role, content=message.content))
+
+    user_messages = [message for message in normalized_messages if message.role == "user"]
+    if not user_messages:
+        return normalized_messages
+
+    latest_user_message = user_messages[-1]
+    previous_messages = [message for message in normalized_messages if message is not latest_user_message]
+
+    previous_user_lines = [
+        f"- {_trim_image_context_snippet(_extract_message_text(message.content), limit=240)}"
+        for message in previous_messages
+        if message.role == "user" and _extract_message_text(message.content)
+    ][-3:]
+    previous_assistant_lines = [
+        f"- {_trim_image_context_snippet(_extract_message_text(message.content), limit=180)}"
+        for message in previous_messages
+        if message.role == "assistant" and _extract_message_text(message.content)
+    ][-2:]
+
+    if not previous_user_lines and not previous_assistant_lines:
+        return [latest_user_message]
+
+    context_sections = [
+        "Image generation context rule: always treat the latest user request as the primary prompt. "
+        "Use prior conversation only as optional supporting context when it clearly helps continuity.",
+    ]
+    if previous_user_lines:
+        context_sections.append("Recent user prompts:\n" + "\n".join(previous_user_lines))
+    if previous_assistant_lines:
+        context_sections.append("Recent assistant outputs:\n" + "\n".join(previous_assistant_lines))
+
+    return [
+        ChatMessage(role="system", content="\n\n".join(context_sections)),
+        latest_user_message,
+    ]
+
+
 def _plan_messages_to_chat_messages(messages: List[Dict[str, Any]]) -> List[ChatMessage]:
     normalized: List[ChatMessage] = []
     for message in messages:
@@ -322,7 +377,13 @@ async def assistant_chat(
         db_manager = get_db_manager()
         user_id = current_user["id"]
 
-        user_messages = [m for m in request.messages if m.role == "user"]
+        effective_request_messages = (
+            _prepare_image_request_messages(request.messages)
+            if (request.model_type == "image" or request.image_params is not None)
+            else request.messages
+        )
+
+        user_messages = [m for m in effective_request_messages if m.role == "user"]
         if not user_messages:
             raise HTTPException(status_code=400, detail="至少需要一条用户消息")
 
@@ -335,7 +396,7 @@ async def assistant_chat(
         logger.info(f"创建用户请求: {user_request_id}")
 
         execution_plan = await plan_assistant_execution(
-            messages=_request_messages_to_payloads(request.messages),
+            messages=_request_messages_to_payloads(effective_request_messages),
             files=request.files,
             user_instruction=original_user_text,
             request_model=request.model,
@@ -420,7 +481,7 @@ async def assistant_chat(
 
         if execution_plan.mode == "chat":
             planned_messages = _plan_messages_to_chat_messages(
-                execution_plan.messages or _request_messages_to_payloads(request.messages)
+                execution_plan.messages or _request_messages_to_payloads(effective_request_messages)
             )
             planned_user_messages = [message for message in planned_messages if message.role == "user"]
             planned_last_message = planned_user_messages[-1] if planned_user_messages else last_message

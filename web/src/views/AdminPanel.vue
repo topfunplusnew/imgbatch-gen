@@ -717,7 +717,7 @@
             <div class="flex items-center justify-between">
               <h2 class="text-2xl font-bold text-ink-950">场景库管理</h2>
               <button
-                @click="showSceneForm = true; editingScene = null"
+                @click="openNewSceneForm"
                 class="px-4 py-2 bg-primary text-white rounded-xl font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
               >
                 <span class="material-symbols-outlined !text-lg">add</span>
@@ -734,7 +734,12 @@
                     {{ scene.icon || '📁' }}
                   </div>
                   <div class="min-w-0 flex-1">
-                    <h4 class="font-semibold text-ink-950">{{ scene.name }}</h4>
+                    <div class="flex items-center gap-2">
+                      <h4 class="font-semibold text-ink-950">{{ scene.name }}</h4>
+                      <span v-if="scene.isHot" class="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
+                        热门场景
+                      </span>
+                    </div>
                     <p class="mt-0.5 text-xs text-ink-500">{{ scene.category }} · {{ scene.templates?.length || 0 }}个模版</p>
                     <p class="mt-1 text-xs text-ink-700 line-clamp-2">{{ scene.description }}</p>
                   </div>
@@ -777,6 +782,10 @@
                 </el-form-item>
                 <el-form-item label="描述">
                   <el-input v-model="sceneForm.description" type="textarea" :rows="3" placeholder="场景描述" />
+                </el-form-item>
+                <el-form-item label="热门场景">
+                  <el-switch v-model="sceneForm.isHot" />
+                  <p class="mt-2 text-xs text-ink-500">开启后，该场景会出现在前台“热门场景”区域</p>
                 </el-form-item>
                 <el-form-item label="封面图片">
                   <el-upload
@@ -1026,17 +1035,55 @@
           <section>
             <h3 class="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-3">邀请信息</h3>
             <div class="grid grid-cols-2 gap-4 bg-gray-50 rounded-xl p-4">
-              <div>
-                <p class="text-xs text-ink-500 mb-1">我的邀请码</p>
-                <p class="text-sm font-mono text-ink-700">{{ selectedUserDetail.invite_code || '-' }}</p>
+              <div class="col-span-2">
+                <p class="text-xs text-ink-500 mb-1">邀请链接</p>
+                <p class="text-sm font-mono break-all text-ink-700">{{ selectedUserDetail.invite_link || '-' }}</p>
               </div>
               <div>
                 <p class="text-xs text-ink-500 mb-1">邀请人数</p>
                 <p class="text-sm text-ink-700">{{ selectedUserDetail.invite_count }}</p>
               </div>
               <div>
+                <p class="text-xs text-ink-500 mb-1">邀请码（底层标识）</p>
+                <p class="text-sm font-mono text-ink-700">{{ selectedUserDetail.invite_code || '-' }}</p>
+              </div>
+              <div>
                 <p class="text-xs text-ink-500 mb-1">邀请人ID</p>
                 <p class="text-sm font-mono text-ink-700">{{ selectedUserDetail.inviter_id ? selectedUserDetail.inviter_id.slice(0, 12) + '...' : '-' }}</p>
+              </div>
+            </div>
+
+            <div class="mt-4 rounded-xl bg-gray-50 p-4">
+              <div class="mb-3 flex items-center justify-between">
+                <p class="text-sm font-semibold text-ink-900">邀请注册与充值记录</p>
+                <p class="text-xs text-ink-500">可查看被邀请用户的注册时间与充值情况</p>
+              </div>
+
+              <div v-if="!selectedUserDetail.invite_records?.length" class="rounded-xl border border-dashed border-border-dark bg-white/70 px-4 py-8 text-center text-sm text-ink-500">
+                暂无邀请记录
+              </div>
+
+              <div v-else class="space-y-3">
+                <div
+                  v-for="record in selectedUserDetail.invite_records"
+                  :key="record.user_id"
+                  class="rounded-xl bg-white px-4 py-3 shadow-sm"
+                >
+                  <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <p class="text-sm font-semibold text-ink-900">{{ record.username || record.user_id }}</p>
+                      <p class="mt-1 text-xs text-ink-500">注册时间：{{ formatDate(record.created_at) }}</p>
+                      <p class="mt-1 text-xs text-ink-500">最近充值：{{ record.last_recharge_at ? formatDate(record.last_recharge_at) : '暂无' }}</p>
+                    </div>
+                    <div class="text-right">
+                      <p :class="record.has_recharged ? 'text-sm font-semibold text-green-600' : 'text-sm font-semibold text-ink-500'">
+                        {{ record.has_recharged ? '已充值' : '未充值' }}
+                      </p>
+                      <p class="mt-1 text-xs text-ink-500">充值次数：{{ record.recharge_count || 0 }}</p>
+                      <p class="mt-1 text-xs text-ink-500">充值金额：¥{{ ((record.total_recharge_amount || 0) / 100).toFixed(2) }}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -1270,11 +1317,24 @@ const sceneList = ref<any[]>([])
 const showSceneForm = ref(false)
 const showTemplateManager = ref(false)
 const editingScene = ref<any>(null)
-const sceneForm = ref({ name: '', icon: '', category: 'education', description: '', coverImage: '' })
+const sceneForm = ref({ name: '', icon: '', category: 'education', description: '', coverImage: '', isHot: false })
+
+function openNewSceneForm() {
+  editingScene.value = null
+  sceneForm.value = { name: '', icon: '', category: 'education', description: '', coverImage: '', isHot: false }
+  showSceneForm.value = true
+}
 
 function editScene(scene: any) {
   editingScene.value = scene
-  sceneForm.value = { name: scene.name, icon: scene.icon, category: scene.category, description: scene.description, coverImage: scene.coverImage || '' }
+  sceneForm.value = {
+    name: scene.name,
+    icon: scene.icon,
+    category: scene.category,
+    description: scene.description,
+    coverImage: scene.coverImage || '',
+    isHot: Boolean(scene.isHot),
+  }
   showSceneForm.value = true
 }
 
@@ -1307,7 +1367,13 @@ async function syncScenesToServer() {
 }
 
 function saveScene() {
-  const data = { ...sceneForm.value, id: editingScene.value?.id || `scene_${Date.now()}`, templates: editingScene.value?.templates || [], templateCount: editingScene.value?.templates?.length || 0 }
+  const data = {
+    ...sceneForm.value,
+    isHot: Boolean(sceneForm.value.isHot),
+    id: editingScene.value?.id || `scene_${Date.now()}`,
+    templates: editingScene.value?.templates || [],
+    templateCount: editingScene.value?.templates?.length || 0,
+  }
   if (editingScene.value) {
     const idx = sceneList.value.findIndex(s => s.id === editingScene.value.id)
     if (idx >= 0) sceneList.value[idx] = { ...sceneList.value[idx], ...data }

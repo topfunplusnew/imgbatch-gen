@@ -186,6 +186,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import { notification } from '@/utils/notification'
+import { DEFAULT_IMAGE_MODEL } from '@/utils/modelSelection'
 
 const router = useRouter()
 const generatorStore = useGeneratorStore()
@@ -423,6 +424,11 @@ const scenes = ref([
 ])
 
 const hotScenes = computed(() => {
+  const configuredHotScenes = scenes.value.filter(scene => scene.isHot)
+  if (configuredHotScenes.length > 0) {
+    return configuredHotScenes.slice(0, 6)
+  }
+
   return [...scenes.value]
     .sort((a, b) => (b.templates?.length || 0) - (a.templates?.length || 0))
     .slice(0, 6)
@@ -452,16 +458,35 @@ const selectScene = (scene) => {
   showSceneDetail.value = true
 }
 
+const buildSceneTemplatePrompt = (scene, template) => {
+  const sceneName = scene?.name || '场景创作'
+  const templateType = template?.type || sceneName
+  const templateStyle = template?.style || ''
+  const basePrompt = String(template?.prompt || '').trim()
+  const promptSections = [
+    `请围绕“${sceneName}”直接生成一张高完成度图片。`,
+    `目标类型：${templateType}。`,
+    templateStyle ? `推荐风格：${templateStyle}。` : '',
+    '请确保主体明确、版式完整、关键信息有层次、不要偏题，也不要输出与主题无关的装饰内容。',
+    '如果包含中文文案，请尽量让标题短、层级清晰、重点醒目。',
+    basePrompt ? `核心创作要求：${basePrompt}` : '',
+  ].filter(Boolean)
+
+  return promptSections.join('\n')
+}
+
 const useSameStyle = (template) => {
-  // Start a new conversation to avoid previous context affecting generation
+  const scenePrompt = buildSceneTemplatePrompt(selectedScene.value, template)
   generatorStore.startNewConversation()
-  generatorStore.prompt = template.prompt || ''
+  generatorStore.prompt = scenePrompt
   if (template.style) {
     generatorStore.style = template.style
   }
+  generatorStore.setBatchSize(1)
+  generatorStore.setNextPreferredModel(DEFAULT_IMAGE_MODEL)
   showSceneDetail.value = false
   router.push('/')
-  notification.success('已加载模版', '提示词已填入输入框，可直接发送或修改后发送')
+  notification.success('已加载模版', '已补强提示词并固定推荐生图模型，可直接发送或修改后发送')
 }
 
 onMounted(async () => {

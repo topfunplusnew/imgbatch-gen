@@ -222,6 +222,71 @@ const currentModelDisplay = computed(() => {
   return generatorStore.model || '选择模型';
 });
 
+const trimContextSnippet = (value, maxLength = 220) => {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1)}…`;
+};
+
+const isPlaceholderAssistantMessage = (value) => {
+  const text = String(value || '').trim();
+  if (!text) return true;
+  return [
+    '正在处理',
+    '正在上传文件',
+    '请求失败:',
+    '抱歉，对话请求失败',
+  ].some((prefix) => text.startsWith(prefix));
+};
+
+const buildImageGenerationMessages = (latestPrompt) => {
+  const meaningfulMessages = generatorStore.messages.filter((message) => {
+    if (message.status === 'error') return false;
+    if (message.role === 'assistant' && isPlaceholderAssistantMessage(message.content)) return false;
+    return Boolean(String(message.content || '').trim());
+  });
+
+  const latestUserMessage = [...meaningfulMessages].reverse().find((message) => message.role === 'user');
+  const latestRequest = trimContextSnippet(latestPrompt || latestUserMessage?.content || '', 1400);
+
+  const previousMessages = meaningfulMessages.filter((message) => message !== latestUserMessage);
+  const previousUserPrompts = previousMessages
+    .filter((message) => message.role === 'user')
+    .slice(-3)
+    .map((message, index) => `历史提示词 ${index + 1}: ${trimContextSnippet(message.content)}`);
+  const previousAssistantReplies = previousMessages
+    .filter((message) => message.role === 'assistant')
+    .slice(-2)
+    .map((message, index) => `历史辅助结果 ${index + 1}: ${trimContextSnippet(message.content, 180)}`);
+
+  const contextSections = [];
+  if (previousUserPrompts.length > 0) {
+    contextSections.push(previousUserPrompts.join('\n'));
+  }
+  if (previousAssistantReplies.length > 0) {
+    contextSections.push(previousAssistantReplies.join('\n'));
+  }
+
+  const messages = [];
+  if (contextSections.length > 0) {
+    messages.push({
+      role: 'system',
+      content: [
+        '当前是连续生图场景：请始终以“最新用户请求”为主提示词，仅在相关时把历史内容当作辅助参考，不要被旧提示词覆盖。',
+        contextSections.join('\n\n'),
+      ].join('\n\n'),
+    });
+  }
+
+  messages.push({
+    role: 'user',
+    content: latestRequest,
+  });
+
+  return messages;
+};
+
 const canSend = computed(() => {
   return !generatorStore.isGenerating && Boolean(generatorStore.prompt.trim() || generatorStore.attachments.length > 0);
 });
@@ -696,10 +761,7 @@ const handleImageModelSend = async () => {
     // 所有附件统一走 assistant 工作流：
     // 上传附件 -> OCR/内容理解 -> 规划生图 -> 创建任务
     const chatRequest = {
-      messages: generatorStore.messages.map(m => ({
-        role: m.role,
-        content: m.content
-      })),
+      messages: buildImageGenerationMessages(prompt),
       session_id: generatorStore.currentSessionId,
       files: uploadedFiles.length > 0 ? uploadedFiles : undefined,
       model: generatorStore.selectedModelInfo?.model_name || generatorStore.model,

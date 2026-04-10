@@ -112,7 +112,7 @@
               ]"
             >
               <span class="material-symbols-outlined !text-xl">card_giftcard</span>
-              邀请码
+              邀请链接
             </button>
             <button
               @click="appStore.setUserCenterTab('notifications')"
@@ -769,18 +769,18 @@
             </div>
           </div>
 
-          <!-- 邀请码标签页 -->
+          <!-- 邀请链接标签页 -->
           <div v-if="activeTab === 'invite'" class="space-y-6">
-            <!-- 邀请码卡片 -->
+            <!-- 邀请链接卡片 -->
             <div class="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl shadow-lg p-6 text-white">
-              <h2 class="text-lg font-semibold mb-4">我的邀请码</h2>
-              <div class="flex items-center justify-between">
-                <p class="text-4xl font-bold tracking-wider">{{ inviteInfo.invite_code || '加载中...' }}</p>
+              <h2 class="text-lg font-semibold mb-4">我的邀请链接</h2>
+              <div class="flex items-start justify-between gap-4">
+                <p class="break-all text-sm font-medium leading-7 md:text-base">{{ inviteShareLink || '加载中...' }}</p>
                 <button
-                  @click="copyInviteCode"
-                  class="px-6 py-3 bg-white/20 hover:bg-white/30 rounded-xl font-medium transition-colors"
+                  @click="copyInviteLink"
+                  class="shrink-0 px-6 py-3 bg-white/20 hover:bg-white/30 rounded-xl font-medium transition-colors"
                 >
-                  复制邀请码
+                  复制邀请链接
                 </button>
               </div>
               <div class="grid grid-cols-2 gap-6 mt-6">
@@ -802,7 +802,7 @@
               <div v-if="inviteRecords.length === 0" class="text-center py-12">
                 <span class="material-symbols-outlined !text-6xl text-gray-300">person_add</span>
                 <p class="text-gray-500 mt-4">暂无邀请记录</p>
-                <p class="text-sm text-gray-400 mt-2">分享邀请码给朋友，双方各得50积分</p>
+                <p class="text-sm text-gray-400 mt-2">分享邀请链接给朋友，双方各得50积分</p>
               </div>
 
               <div v-else class="space-y-4">
@@ -1216,6 +1216,14 @@ const downloadRecords = ref([])
 const inviteInfo = ref({})
 const inviteRecords = ref([])
 const checkinInfo = ref({})
+const inviteShareLink = computed(() => {
+  const directLink = String(inviteInfo.value?.invite_link || '').trim()
+  if (directLink) return directLink
+
+  const inviteCode = String(inviteInfo.value?.invite_code || '').trim()
+  if (!inviteCode || typeof window === 'undefined') return ''
+  return `${window.location.origin}/login?code=${inviteCode}`
+})
 
 // 提现相关
 const withdrawals = ref([])
@@ -1528,7 +1536,7 @@ async function handleTabChange(tab) {
     await loadDownloadRecords()
   } else if (tab === 'withdrawal' && withdrawals.value.length === 0) {
     await loadWithdrawals()
-  } else if (tab === 'invite' && !inviteInfo.value.invite_code) {
+  } else if (tab === 'invite' && !inviteShareLink.value && !inviteInfo.value.invite_code) {
     await loadInviteInfo()
   }
 }
@@ -1747,11 +1755,11 @@ function viewGenerationDetail(record) {
   showGenerationDetail.value = true
 }
 
-// 复制邀请码
-async function copyInviteCode() {
-  const ok = await copyText(inviteInfo.value.invite_code)
+// 复制邀请链接
+async function copyInviteLink() {
+  const ok = await copyText(inviteShareLink.value)
   if (ok) {
-    notification.success('邀请码已复制到剪贴板')
+    notification.success('邀请链接已复制到剪贴板')
   } else {
     notification.error('复制失败，请手动复制')
   }

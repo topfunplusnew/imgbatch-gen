@@ -291,6 +291,7 @@ export const useGeneratorStore = defineStore('generator', {
         availableModels: [] as Array<{model_name: string, display_name?: string, provider?: string, model_type?: string}>, // 可用模型列表
         quotedMessage: null as {id: string, content: string} | null, // 引用的消息
         pendingAutoSend: false, // 标记是否需要自动发送
+        nextPreferredModelName: null as string | null, // 下次进入落地页时优先使用的模型
     }),
     getters: {
         // 动态计算宽高比
@@ -322,6 +323,16 @@ export const useGeneratorStore = defineStore('generator', {
 
         setSelectedModelInfo(modelInfo) {
             this.selectedModelInfo = modelInfo
+        },
+
+        setNextPreferredModel(modelName) {
+            this.nextPreferredModelName = modelName ? String(modelName) : null
+        },
+
+        consumeNextPreferredModel() {
+            const value = this.nextPreferredModelName
+            this.nextPreferredModelName = null
+            return value
         },
 
         async refreshAccountInfoSilently(billing?: any) {

@@ -1,6 +1,6 @@
 """邀请码API路由"""
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from loguru import logger
@@ -26,6 +26,7 @@ class ApplyInviteCodeRequest(BaseModel):
 class InviteCodeResponse(BaseModel):
     """邀请码响应"""
     invite_code: str
+    invite_link: Optional[str] = None
     total_invite_count: int
     total_reward_points: int
 
@@ -36,13 +37,27 @@ class InviteRecordResponse(BaseModel):
     username: str
     phone: Optional[str] = None
     created_at: str
+    recharge_count: int = 0
+    total_recharge_amount: int = 0
+    last_recharge_at: Optional[str] = None
+    has_recharged: bool = False
+
+
+def _build_invite_link(request: Request, invite_code: str) -> Optional[str]:
+    code = str(invite_code or "").strip()
+    if not code:
+        return None
+    return str(request.base_url).rstrip("/") + f"/login?code={code}"
 
 
 # ==================== 路由 ====================
 
 
 @router.get("/my-code", response_model=InviteCodeResponse, summary="获取我的邀请码")
-async def get_my_invite_code(user: dict = Depends(RequiredAuthDependency())):
+async def get_my_invite_code(
+    request: Request,
+    user: dict = Depends(RequiredAuthDependency()),
+):
     """
     获取我的邀请码
 
@@ -57,6 +72,7 @@ async def get_my_invite_code(user: dict = Depends(RequiredAuthDependency())):
 
         return InviteCodeResponse(
             invite_code=code,
+            invite_link=_build_invite_link(request, code),
             total_invite_count=stats["total_invite_count"],
             total_reward_points=stats["total_reward_points"],
         )
@@ -108,7 +124,10 @@ async def get_invite_records(user: dict = Depends(RequiredAuthDependency())):
 
 
 @router.get("/stats", response_model=InviteCodeResponse, summary="获取邀请统计")
-async def get_invite_stats(user: dict = Depends(RequiredAuthDependency())):
+async def get_invite_stats(
+    request: Request,
+    user: dict = Depends(RequiredAuthDependency()),
+):
     """
     获取邀请统计
 
@@ -126,6 +145,7 @@ async def get_invite_stats(user: dict = Depends(RequiredAuthDependency())):
 
         return InviteCodeResponse(
             invite_code=invite_code,
+            invite_link=_build_invite_link(request, invite_code),
             total_invite_count=stats["total_invite_count"],
             total_reward_points=stats["total_reward_points"],
         )

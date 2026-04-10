@@ -4,8 +4,9 @@ import random
 import string
 from typing import Dict, Any, List, Optional
 from loguru import logger
+from sqlalchemy import select, func
 
-from ..database import get_db_manager, Account, User
+from ..database import get_db_manager, Account, User, PaymentOrder
 
 
 class ReferralService:
@@ -137,22 +138,50 @@ class ReferralService:
         返回所有使用我邀请码注册的用户列表
         """
         async with self.db_manager.get_session() as session:
-            from sqlalchemy import select
-            from ..database import Account
-
             stmt = select(Account).where(Account.inviter_id == user_id)
             result = await session.execute(stmt)
             accounts = list(result.scalars().all())
+
+            invited_user_ids = [acc.user_id for acc in accounts if acc.user_id]
+            recharge_summary: Dict[str, Dict[str, Any]] = {}
+
+            if invited_user_ids:
+                recharge_stmt = (
+                    select(
+                        PaymentOrder.user_id,
+                        func.count(PaymentOrder.id).label("recharge_count"),
+                        func.coalesce(func.sum(PaymentOrder.amount), 0).label("total_recharge_amount"),
+                        func.max(PaymentOrder.paid_at).label("last_recharge_at"),
+                    )
+                    .where(PaymentOrder.user_id.in_(invited_user_ids))
+                    .where(PaymentOrder.order_type == "recharge")
+                    .where(PaymentOrder.status == "paid")
+                    .group_by(PaymentOrder.user_id)
+                )
+                recharge_result = await session.execute(recharge_stmt)
+                recharge_summary = {
+                    row.user_id: {
+                        "recharge_count": int(row.recharge_count or 0),
+                        "total_recharge_amount": int(row.total_recharge_amount or 0),
+                        "last_recharge_at": row.last_recharge_at.isoformat() if row.last_recharge_at else "",
+                    }
+                    for row in recharge_result
+                }
 
         # 获取用户详情
         records = []
         for acc in accounts:
             user = await self.db_manager.get_user_by_id(acc.user_id)
+            recharge_info = recharge_summary.get(acc.user_id, {})
             records.append({
                 "user_id": acc.user_id,
                 "username": user.username if user else "",
                 "phone": user.phone if (user and user.phone) else None,
                 "created_at": acc.created_at.isoformat() if acc.created_at else "",
+                "recharge_count": recharge_info.get("recharge_count", 0),
+                "total_recharge_amount": recharge_info.get("total_recharge_amount", 0),
+                "last_recharge_at": recharge_info.get("last_recharge_at", ""),
+                "has_recharged": recharge_info.get("recharge_count", 0) > 0,
             })
 
         return records
