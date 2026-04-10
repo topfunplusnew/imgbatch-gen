@@ -239,35 +239,9 @@ const isMobile = computed(() => {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
 })
 
-const plans = ref([
-  {
-    id: 'free', name: '免费版', icon: 'gift', badge: '',
-    monthly_price: 0, yearly_price: 0, points_per_month: 3, color: 'emerald',
-    features: ['多种图片类型', '多种图片风格', '多种图片尺寸', '支持1K/2K/4K清晰度']
-  },
-  {
-    id: 'plus', name: 'Plus', icon: 'bolt', badge: '最受欢迎',
-    monthly_price: 9900, yearly_price: 99900, points_per_month: 150, color: 'amber',
-    features: ['免费版全部功能', '高峰期稳定通道', '专属用户社群', '优先客服支持']
-  },
-  {
-    id: 'pro', name: 'Pro', icon: 'workspace_premium', badge: '畅用首选',
-    monthly_price: 29900, yearly_price: 299900, points_per_month: 500, color: 'rose',
-    features: ['Plus全部功能', '更多每月积分', '批量生成优先', '高级模型优先']
-  },
-  {
-    id: 'max', name: 'Max', icon: 'diamond', badge: '超值推荐',
-    monthly_price: 49900, yearly_price: 499900, points_per_month: 1000, color: 'red',
-    features: ['Pro全部功能', '最多每月积分', '全部模型无限制', '1对1专属服务']
-  }
-])
+const plans = ref([])
 
-const rechargeOptions = ref([
-  { id: 'recharge_1', amount_yuan: 20, points: 2000, bonus: 0, popular: false },
-  { id: 'recharge_2', amount_yuan: 50, points: 5500, bonus: 500, popular: true },
-  { id: 'recharge_3', amount_yuan: 100, points: 12000, bonus: 2000, popular: false },
-  { id: 'recharge_4', amount_yuan: 200, points: 26000, bonus: 6000, popular: false },
-])
+const rechargeOptions = ref([])
 
 const colorBg = (color) => {
   const map = { emerald: 'bg-emerald-500', amber: 'bg-amber-500', rose: 'bg-rose-500', red: 'bg-primary' }
@@ -433,14 +407,12 @@ onUnmounted(() => {
 onMounted(async () => {
   try {
     const config = await api.getBillingConfig()
-    if (config?.subscription_plans?.plans?.length > 0) {
-      plans.value = config.subscription_plans.plans
-    }
-    if (config?.recharge_options?.options?.length > 0) {
-      rechargeOptions.value = config.recharge_options.options
-    }
-  } catch {
-    // Use defaults
+    plans.value = config?.subscription_plans?.plans || []
+    rechargeOptions.value = config?.recharge_options?.options || []
+  } catch (error) {
+    console.error('加载计费配置失败:', error)
+    plans.value = []
+    rechargeOptions.value = []
   }
 })
 </script>

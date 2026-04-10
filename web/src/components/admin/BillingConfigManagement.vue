@@ -181,21 +181,21 @@
             <span class="material-symbols-outlined !text-xl text-primary">auto_awesome</span>
             模型定价
           </h3>
-          <el-button size="small" @click="addModelPricing">
-            <span class="material-symbols-outlined !text-sm mr-1">add</span>
-            添加模型
-          </el-button>
         </div>
 
-        <el-table :data="modelPricingList" border stripe>
+        <p class="mb-4 text-sm text-ink-500">
+          当前仅对网站可用的生图模型定价。这里不再使用任何模拟模型数据，价格将直接作用于实际生图扣费。
+        </p>
+
+        <el-table :data="modelPricingRows" border stripe>
           <el-table-column label="模型KEY" min-width="130">
             <template #default="{ row }">
-              <el-input v-model="row.key" size="small" :disabled="row.key === 'default'" />
+              <span class="text-sm text-ink-700">{{ row.key }}</span>
             </template>
           </el-table-column>
           <el-table-column label="显示名称" min-width="120">
             <template #default="{ row }">
-              <el-input v-model="row.name" size="small" />
+              <span class="text-sm text-ink-700">{{ row.name }}</span>
             </template>
           </el-table-column>
           <el-table-column label="积分" width="100">
@@ -211,13 +211,6 @@
           <el-table-column label="≈元" width="70" align="center">
             <template #default="{ row }">
               <span class="text-xs text-ink-500">¥{{ (row.amount / 100).toFixed(2) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="70" align="center">
-            <template #default="{ row, $index }">
-              <el-button v-if="row.key !== 'default'" type="danger" size="small" text @click="removeModelPricing($index)">
-                <span class="material-symbols-outlined !text-lg">delete</span>
-              </el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -278,34 +271,57 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { api } from '@/services/api'
 import { ElMessage } from 'element-plus'
+import { filterSelectableImageModels } from '@/utils/modelSelection'
 
 const config = ref(null)
 const loading = ref(false)
 const saving = ref(false)
 const saveSuccess = ref(false)
+const imageModels = ref([])
+const modelPricingRows = ref([])
 
-// 模型定价转为列表方便编辑
-const modelPricingList = computed({
-  get() {
-    if (!config.value?.model_pricing?.models) return []
-    return Object.entries(config.value.model_pricing.models).map(([key, val]) => ({
-      key,
-      name: val.name || key,
-      points: val.points || 0,
-      amount: val.amount || 0,
-      description: val.description || ''
+function syncModelPricingRows() {
+  if (!config.value) {
+    modelPricingRows.value = []
+    return
+  }
+
+  const savedModels = config.value?.model_pricing?.models || {}
+  modelPricingRows.value = imageModels.value.map((model) => {
+    const saved = savedModels[model.key] || {}
+    return {
+      key: model.key,
+      name: saved.name || model.name || model.key,
+      points: saved.points ?? 0,
+      amount: saved.amount ?? 0,
+      description: saved.description || ''
+    }
+  })
+}
+
+async function loadImageModels() {
+  try {
+    const result = await api.getModels('image')
+    imageModels.value = filterSelectableImageModels(result.models || []).map((model) => ({
+      key: model.model_name,
+      name: model.display_name || model.model_name
     }))
-  },
-  set() {}
-})
+  } catch (err) {
+    imageModels.value = []
+    ElMessage.error('加载生图模型列表失败')
+  }
+}
 
 async function loadConfig() {
   loading.value = true
   try {
-    const data = await api.getAdminBillingConfig()
+    const [data] = await Promise.all([
+      api.getAdminBillingConfig(),
+      imageModels.value.length === 0 ? loadImageModels() : Promise.resolve()
+    ])
     // 为订阅套餐添加元级别字段方便编辑
     if (data.subscription_plans?.plans) {
       data.subscription_plans.plans.forEach(p => {
@@ -314,6 +330,7 @@ async function loadConfig() {
       })
     }
     config.value = data
+    syncModelPricingRows()
   } catch (err) {
     ElMessage.error('加载配置失败')
   } finally {
@@ -324,9 +341,9 @@ async function loadConfig() {
 async function saveConfig() {
   if (!config.value) return
 
-  // 将模型定价列表写回到config
+  // 将生图模型定价写回到config
   const models = {}
-  modelPricingList.value.forEach(m => {
+  modelPricingRows.value.forEach(m => {
     models[m.key] = {
       name: m.name,
       points: m.points,
@@ -334,6 +351,9 @@ async function saveConfig() {
       description: `${m.name}，消耗${m.points}积分或${(m.amount / 100).toFixed(2)}元`
     }
   })
+  if (config.value?.model_pricing?.models?.default) {
+    models.default = { ...config.value.model_pricing.models.default }
+  }
   config.value.model_pricing.models = models
 
   // 确保订阅套餐价格是分
@@ -396,26 +416,6 @@ function addSubscriptionPlan() {
 
 function removeSubscriptionPlan(idx) {
   config.value.subscription_plans.plans.splice(idx, 1)
-}
-
-function addModelPricing() {
-  const key = `model_${Date.now()}`
-  config.value.model_pricing.models[key] = {
-    name: '新模型',
-    points: 10,
-    amount: 10,
-    description: ''
-  }
-  // 触发响应式更新
-  config.value.model_pricing = { ...config.value.model_pricing }
-}
-
-function removeModelPricing(idx) {
-  const item = modelPricingList.value[idx]
-  if (item) {
-    delete config.value.model_pricing.models[item.key]
-    config.value.model_pricing = { ...config.value.model_pricing }
-  }
 }
 
 onMounted(() => {

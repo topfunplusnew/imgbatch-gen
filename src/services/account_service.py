@@ -41,7 +41,11 @@ class AccountService:
 
     def __init__(self):
         self.db_manager = get_db_manager()
-        self.config = get_billing_config()
+
+    @property
+    def config(self) -> Dict[str, Any]:
+        """Always read the latest billing config cache."""
+        return get_billing_config()
 
     async def get_account(self, user_id: str) -> Optional[Account]:
         """获取用户账户"""
@@ -84,7 +88,18 @@ class AccountService:
     async def get_model_price(self, model_name: str) -> Dict[str, int]:
         """获取模型价格"""
         models = self.config.get("model_pricing", {}).get("models", {})
-        model_config = models.get(model_name, models.get("default", {}))
+        model_config = models.get(model_name)
+        if model_config is None:
+            normalized_name = str(model_name or "").strip().lower()
+            for key, value in models.items():
+                if str(key).strip().lower() == normalized_name:
+                    model_config = value
+                    break
+
+        if model_config is None:
+            model_config = models.get("default", {})
+            logger.warning(f"模型 {model_name} 未配置专属价格，回退到默认价格")
+
         return {
             "points": model_config.get("points", 10),
             "amount": model_config.get("amount", 50),  # 分

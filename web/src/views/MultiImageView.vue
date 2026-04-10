@@ -1,329 +1,618 @@
 <template>
-  <main class="flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-background-dark">
-    <!-- Hero -->
-    <div class="px-4 pt-6 pb-4 text-center xs:px-6 md:px-8 md:pt-10">
-      <h1 class="text-2xl font-bold text-primary md:text-3xl">多图创作</h1>
-      <p class="mt-1.5 text-sm text-ink-500">一句话变成一组图片</p>
-    </div>
-
-    <!-- Input card -->
-    <div class="mx-auto w-full max-w-[720px] px-4 xs:px-6">
-      <div class="rounded-2xl border border-border-dark bg-white/95 p-4 shadow-[0_16px_48px_rgba(140,42,46,0.06)]">
-        <el-input
-          v-model="promptInput"
-          type="textarea"
-          :rows="3"
-          placeholder="输入主题或内容描述，例如：三十六计、十二星座、四季变化..."
-          resize="none"
-          @keydown.ctrl.enter="startBatchGeneration"
-          @keydown.meta.enter="startBatchGeneration"
-        />
-        <!-- Toolbar: tags + params + send -->
-        <div class="mt-2.5 flex flex-wrap items-center gap-1.5">
-          <!-- Selected type tag -->
-          <button v-if="selectedTypeLabel"
-            class="inline-flex items-center gap-1 rounded-lg border border-primary/20 bg-primary/8 px-2.5 py-1.5 text-xs font-medium text-primary cursor-pointer hover:bg-primary/15"
-            @click="selectedType = ''">
-            {{ selectedTypeEmoji }} {{ selectedTypeLabel }}
-            <span class="material-symbols-outlined !text-[11px] ml-0.5 opacity-50">close</span>
-          </button>
-          <!-- Selected style tag -->
-          <button v-if="selectedStyleLabel"
-            class="inline-flex items-center gap-1 rounded-lg border border-border-dark bg-white px-2.5 py-1.5 text-xs font-medium text-ink-700 cursor-pointer hover:bg-ink-300/10"
-            @click="selectedStyle = ''">
-            {{ selectedStyleLabel }}
-            <span class="material-symbols-outlined !text-[11px] ml-0.5 opacity-50">close</span>
-          </button>
-          <!-- Ratio -->
-          <RatioDropdown class="shrink-0" />
-          <!-- Resolution -->
-          <ResolutionDropdown class="shrink-0" />
-          <!-- Batch count -->
-          <el-popover placement="bottom" :width="200" trigger="click">
-            <template #reference>
-              <el-button size="small">
-                <span class="material-symbols-outlined !text-sm">grid_on</span>
-                <span class="text-xs">{{ batchCount }}张</span>
-              </el-button>
-            </template>
-            <div class="space-y-3">
-              <div class="text-xs font-semibold text-ink-700">选择生成张数</div>
-              <div class="grid grid-cols-3 gap-2">
-                <el-button v-for="c in presetCounts" :key="c"
-                  :type="batchCount === c ? 'primary' : 'default'" :plain="batchCount !== c"
-                  size="small" @click="batchCount = c">{{ c }}</el-button>
+  <main class="multi-view flex h-full min-h-0 flex-1 flex-col overflow-y-auto">
+    <div class="mx-auto flex w-full max-w-[1380px] flex-1 flex-col gap-6 px-4 pb-10 pt-6 xs:px-6 md:px-8 md:gap-8 md:pt-8">
+      <section class="grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_340px]">
+        <div class="space-y-6">
+          <section class="glass-panel rounded-[30px] p-5 md:p-7">
+            <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div class="max-w-3xl">
+                <div class="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/6 px-3 py-1 text-xs font-semibold tracking-[0.18em] text-primary">
+                  <span class="material-symbols-outlined !text-sm">auto_awesome</span>
+                  多图创作
+                </div>
+                <h1 class="mt-4 text-3xl font-bold tracking-tight text-ink-950 md:text-[2.7rem] md:leading-[1.1]">
+                  一次输入，生成一整组更清晰的图片
+                </h1>
+                <p class="mt-3 max-w-2xl text-sm leading-6 text-ink-500 md:text-base">
+                  适合把教程、知识点、招生内容、流程说明拆成多张图。输入内容后会在下方保留横向历史，生成结果也支持放大查看细节。
+                </p>
               </div>
-              <el-input-number v-model="batchCount" :min="1" :max="36" size="small"
-                controls-position="right" class="w-full" />
+
+              <div class="grid gap-3 sm:grid-cols-3 xl:w-[340px] xl:grid-cols-1">
+                <div class="summary-card">
+                  <span class="summary-card__label">当前模型</span>
+                  <p class="summary-card__value summary-card__value--compact">{{ currentModelLabel }}</p>
+                </div>
+                <div class="summary-card">
+                  <span class="summary-card__label">本次生成</span>
+                  <p class="summary-card__value">{{ batchCount }} 张</p>
+                </div>
+                <div class="summary-card">
+                  <span class="summary-card__label">可用积分</span>
+                  <p class="summary-card__value">{{ accountPointsDisplay }}</p>
+                  <p class="summary-card__hint">{{ accountPointsHint }}</p>
+                </div>
+              </div>
             </div>
-          </el-popover>
-          <!-- File upload -->
-          <el-upload
-            ref="uploadRef"
-            :auto-upload="false"
-            :show-file-list="false"
-            :multiple="true"
-            accept="image/*,.pdf,.docx,.doc,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            :on-change="handleUploadChange"
-          >
-            <el-button size="small" circle>
-              <span class="material-symbols-outlined !text-sm">attach_file</span>
-            </el-button>
-          </el-upload>
-          <div class="flex-1"></div>
-          <!-- Model selector -->
-          <ModelDropdown class="shrink-0" />
-          <!-- Send button -->
-          <el-button type="primary" round size="small" :disabled="(!promptInput.trim() && attachments.length === 0) || isGenerating"
-            :loading="isGenerating" @click="startBatchGeneration"
-            class="!px-4">
-            <span class="material-symbols-outlined !text-base">arrow_upward</span>
-            <span class="material-symbols-outlined !text-base">bolt</span>
-          </el-button>
-        </div>
-        <!-- Attachments -->
-        <div v-if="attachments.length > 0" class="mt-2 flex flex-wrap gap-1.5">
-          <div v-for="(file, i) in attachments" :key="i"
-            class="flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary-soft px-2.5 py-1">
-            <span class="material-symbols-outlined !text-sm text-primary">{{ getFileIcon(file) }}</span>
-            <span class="max-w-[100px] truncate text-xs text-ink-700">{{ file.name }}</span>
-            <button @click="attachments.splice(i, 1)" class="text-ink-500 hover:text-ink-950 cursor-pointer">
-              <span class="material-symbols-outlined !text-xs">close</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- Type/Style selector -->
-    <div class="mx-auto mt-5 w-full max-w-[720px] px-4 xs:px-6">
-      <div class="flex items-center gap-2 mb-3">
-        <button @click="activeTab = 'type'"
-          :class="['rounded-lg px-4 py-1.5 text-sm font-medium cursor-pointer',
-            activeTab === 'type' ? 'bg-ink-950 text-white' : 'bg-white/80 text-ink-700 border border-border-dark hover:bg-white']">
-          类型
-        </button>
-        <button @click="activeTab = 'style'"
-          :class="['rounded-lg px-4 py-1.5 text-sm font-medium cursor-pointer',
-            activeTab === 'style' ? 'bg-ink-950 text-white' : 'bg-white/80 text-ink-700 border border-border-dark hover:bg-white']">
-          风格
-        </button>
-        <span class="material-symbols-outlined !text-lg text-ink-400 cursor-pointer" @click="showTypePanel = !showTypePanel">
-          {{ showTypePanel ? 'expand_less' : 'expand_more' }}
-        </span>
-      </div>
-
-      <div v-show="showTypePanel">
-        <!-- 类型：有封面图用卡片，无封面图用文字标签 -->
-        <div v-if="activeTab === 'type'">
-          <div v-if="typesHasCover" class="grid grid-cols-3 gap-2.5 xs:grid-cols-4 md:grid-cols-5">
-            <button v-for="t in filteredTypes" :key="t.value"
-              @click="selectedType = selectedType === t.value ? '' : t.value"
-              class="relative flex flex-col items-center cursor-pointer group">
-              <div :class="['w-full overflow-hidden rounded-xl border-2',
-                selectedType === t.value ? 'border-primary' : 'border-transparent hover:border-primary/30']">
-                <div class="overflow-hidden bg-primary-soft/10 rounded-xl">
-                  <img v-if="t.cover" :src="t.cover" :alt="t.label"
-                    class="w-full h-auto object-contain group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-                  <div v-else class="w-full aspect-square flex items-center justify-center text-sm font-bold text-ink-400">{{ t.label }}</div>
-                </div>
-              </div>
-              <div v-if="selectedType === t.value"
-                class="absolute top-1.5 right-1.5 grid h-5 w-5 place-items-center rounded-full bg-primary text-white">
-                <span class="material-symbols-outlined !text-xs">check</span>
-              </div>
-              <span class="mt-1 text-xs text-ink-700 font-medium">{{ t.label }}</span>
-            </button>
-          </div>
-          <div v-else class="flex flex-wrap gap-2">
-            <button v-for="t in filteredTypes" :key="t.value"
-              @click="selectedType = selectedType === t.value ? '' : t.value"
-              :class="['rounded-lg border px-3 py-1.5 text-xs font-medium cursor-pointer',
-                selectedType === t.value ? 'border-primary bg-primary/8 text-primary' : 'border-border-dark bg-white text-ink-700 hover:border-primary/30']">
-              {{ t.label }}
-            </button>
-          </div>
-        </div>
-
-        <!-- 风格：带封面图卡片（完整显示） -->
-        <div v-if="activeTab === 'style'">
-          <div class="grid grid-cols-3 gap-2.5 xs:grid-cols-4 md:grid-cols-5">
-            <button v-for="s in imageStyles" :key="s.value"
-              @click="selectedStyle = selectedStyle === s.value ? '' : s.value"
-              class="relative flex flex-col items-center cursor-pointer group">
-              <div :class="['w-full overflow-hidden rounded-xl border-2',
-                selectedStyle === s.value ? 'border-primary' : 'border-transparent hover:border-primary/30']">
-                <div class="overflow-hidden bg-primary-soft/10 rounded-xl">
-                  <img :src="s.cover" :alt="s.label"
-                    class="w-full h-auto object-contain group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-                </div>
-              </div>
-              <div v-if="selectedStyle === s.value"
-                class="absolute top-1.5 right-1.5 grid h-5 w-5 place-items-center rounded-full bg-primary text-white">
-                <span class="material-symbols-outlined !text-xs">check</span>
-              </div>
-              <span :class="['mt-1.5 text-xs font-medium',
-                selectedStyle === s.value ? 'text-primary' : 'text-ink-700']">{{ s.label }}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Generation progress -->
-    <div v-if="currentTask" class="mx-auto mt-6 w-full max-w-[760px] px-4 xs:px-6">
-      <div class="rounded-2xl border border-primary/30 bg-white/90 p-4 shadow-sm">
-        <div class="mb-3 flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <span v-if="currentTask.status === 'generating'" class="relative flex h-3 w-3">
-              <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75"></span>
-              <span class="relative inline-flex h-3 w-3 rounded-full bg-primary"></span>
-            </span>
-            <span v-else-if="currentTask.status === 'completed'" class="material-symbols-outlined !text-lg text-green-600">check_circle</span>
-            <span v-else-if="currentTask.status === 'error'" class="material-symbols-outlined !text-lg text-red-500">error</span>
-            <span class="text-sm font-semibold text-ink-950">{{ currentTask.statusText }}</span>
-          </div>
-          <button v-if="currentTask.status !== 'generating'" @click="currentTask = null" class="text-ink-400 hover:text-ink-700">
-            <span class="material-symbols-outlined !text-lg">close</span>
-          </button>
-        </div>
-
-        <!-- Progress bar -->
-        <div v-if="currentTask.status === 'generating'" class="mb-3">
-          <div class="h-2 w-full overflow-hidden rounded-full bg-primary-soft">
-            <div class="h-full rounded-full bg-primary transition-all duration-500"
-              :style="{ width: currentTask.progress + '%' }"></div>
-          </div>
-          <p class="mt-1 text-xs text-ink-500">{{ currentTask.progressText }}</p>
-        </div>
-
-        <!-- Results grid -->
-        <div v-if="currentTask.images.length > 0" class="grid gap-2"
-          :class="currentTask.images.length >= 4 ? 'grid-cols-4' :
-                  currentTask.images.length === 3 ? 'grid-cols-3' :
-                  currentTask.images.length === 2 ? 'grid-cols-2' : 'grid-cols-1'">
-          <div v-for="(img, i) in currentTask.images" :key="i"
-            class="group relative aspect-square overflow-hidden rounded-xl cursor-pointer"
-            @click="previewMulti({ image_urls: currentTask.images.map(x => x.url), prompt: currentTask.prompt }, i)">
-            <img :src="img.url" class="h-full w-full object-cover transition-transform group-hover:scale-105" />
-            <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition"></div>
-          </div>
-        </div>
-
-        <!-- Placeholder slots while generating -->
-        <div v-else-if="currentTask.status === 'generating'" class="grid gap-2"
-          :class="currentTask.total >= 4 ? 'grid-cols-4' :
-                  currentTask.total === 3 ? 'grid-cols-3' :
-                  currentTask.total === 2 ? 'grid-cols-2' : 'grid-cols-1'">
-          <div v-for="i in currentTask.total" :key="i"
-            class="aspect-square rounded-xl bg-primary-soft/50 flex items-center justify-center animate-pulse">
-            <span class="material-symbols-outlined !text-3xl text-primary/30">image</span>
-          </div>
-        </div>
-
-        <!-- Error message -->
-        <p v-if="currentTask.status === 'error'" class="mt-2 text-sm text-red-500">{{ currentTask.error }}</p>
-      </div>
-    </div>
-
-    <!-- Gallery records -->
-    <div class="mt-8 px-4 pb-8 xs:px-6 md:px-8">
-      <div class="w-full">
-        <div class="mb-3 flex items-center justify-between">
-          <h3 class="text-lg font-bold text-ink-950">创作记录</h3>
-          <router-link v-if="galleryRecords.length > 0" to="/gallery" class="text-xs text-primary hover:underline">查看更多</router-link>
-        </div>
-
-        <div v-if="galleryRecords.length > 0" class="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-          <div
-            v-for="record in galleryRecords"
-            :key="record.id"
-            class="group relative overflow-hidden rounded-xl border border-border-dark bg-white/90 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
-          >
-            <div class="aspect-square overflow-hidden cursor-pointer" @click="previewMulti(record, 0)">
-              <img
-                v-if="getRecordImage(record)"
-                :src="getRecordImage(record)"
-                class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                loading="lazy"
+            <div class="mt-6 rounded-[28px] border border-border-dark/80 bg-white/95 p-4 shadow-[0_24px_60px_rgba(140,42,46,0.06)] md:p-5">
+              <el-input
+                ref="promptRef"
+                v-model="promptInput"
+                type="textarea"
+                :rows="5"
+                placeholder="输入主题或内容描述，例如：三十六计、十二星座、四季变化、初高中化学衔接指南..."
+                resize="none"
+                @keydown.ctrl.enter="startBatchGeneration"
+                @keydown.meta.enter="startBatchGeneration"
               />
-              <div v-else class="flex h-full items-center justify-center bg-primary-soft text-primary">
-                <span class="material-symbols-outlined !text-4xl">image</span>
+
+              <div class="mt-3 flex flex-wrap items-center gap-1.5">
+                <button
+                  v-if="selectedTypeLabel"
+                  class="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-primary/20 bg-primary/8 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/15"
+                  @click="selectedType = ''"
+                >
+                  {{ selectedTypeEmoji }} {{ selectedTypeLabel }}
+                  <span class="material-symbols-outlined !text-[11px] opacity-50">close</span>
+                </button>
+
+                <button
+                  v-if="selectedStyleLabel"
+                  class="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-border-dark bg-white px-2.5 py-1.5 text-xs font-medium text-ink-700 hover:bg-ink-300/10"
+                  @click="selectedStyle = ''"
+                >
+                  {{ selectedStyleLabel }}
+                  <span class="material-symbols-outlined !text-[11px] opacity-50">close</span>
+                </button>
+
+                <RatioDropdown class="shrink-0" />
+                <ResolutionDropdown class="shrink-0" />
+
+                <el-popover placement="bottom" :width="220" trigger="click">
+                  <template #reference>
+                    <el-button size="small">
+                      <span class="material-symbols-outlined !text-sm">grid_on</span>
+                      <span class="text-xs">{{ batchCount }}张</span>
+                    </el-button>
+                  </template>
+                  <div class="space-y-3">
+                    <div class="text-xs font-semibold text-ink-700">选择生成张数</div>
+                    <div class="grid grid-cols-3 gap-2">
+                      <el-button
+                        v-for="count in presetCounts"
+                        :key="count"
+                        :type="batchCount === count ? 'primary' : 'default'"
+                        :plain="batchCount !== count"
+                        size="small"
+                        @click="batchCount = count"
+                      >
+                        {{ count }}
+                      </el-button>
+                    </div>
+                    <el-input-number
+                      v-model="batchCount"
+                      :min="1"
+                      :max="36"
+                      size="small"
+                      controls-position="right"
+                      class="w-full"
+                    />
+                  </div>
+                </el-popover>
+
+                <el-upload
+                  ref="uploadRef"
+                  :auto-upload="false"
+                  :show-file-list="false"
+                  :multiple="true"
+                  accept="image/*,.pdf,.docx,.doc,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  :on-change="handleUploadChange"
+                >
+                  <el-button size="small" circle>
+                    <span class="material-symbols-outlined !text-sm">attach_file</span>
+                  </el-button>
+                </el-upload>
+
+                <div class="flex-1"></div>
+                <ModelDropdown class="shrink-0" />
+
+                <el-button
+                  type="primary"
+                  round
+                  size="small"
+                  class="!px-4"
+                  :disabled="(!promptInput.trim() && attachments.length === 0) || isGenerating"
+                  :loading="isGenerating"
+                  @click="startBatchGeneration"
+                >
+                  <span class="material-symbols-outlined !text-base">arrow_upward</span>
+                  <span class="material-symbols-outlined !text-base">bolt</span>
+                </el-button>
+              </div>
+
+              <div v-if="attachments.length > 0" class="mt-3 flex flex-wrap gap-1.5">
+                <div
+                  v-for="(file, index) in attachments"
+                  :key="`${file.name}-${index}`"
+                  class="flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary-soft px-2.5 py-1"
+                >
+                  <span class="material-symbols-outlined !text-sm text-primary">{{ getFileIcon(file) }}</span>
+                  <span class="max-w-[120px] truncate text-xs text-ink-700">{{ file.name }}</span>
+                  <button
+                    class="cursor-pointer text-ink-500 hover:text-ink-950"
+                    @click="attachments.splice(index, 1)"
+                  >
+                    <span class="material-symbols-outlined !text-xs">close</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="mt-4 flex flex-wrap items-center gap-2 rounded-2xl bg-ink-950/[0.03] px-3 py-2 text-xs text-ink-500">
+                <span class="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-ink-700 shadow-sm">
+                  <span class="material-symbols-outlined !text-sm text-primary">zoom_in</span>
+                  结果支持放大预览
+                </span>
+                <span class="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-ink-700 shadow-sm">
+                  <span class="material-symbols-outlined !text-sm text-primary">history</span>
+                  历史自动保存在下方横向列表
+                </span>
+                <span class="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-ink-700 shadow-sm">
+                  <span class="material-symbols-outlined !text-sm text-primary">sync</span>
+                  积分会跟随生成实时刷新
+                </span>
               </div>
             </div>
+          </section>
 
-            <div class="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition group-hover:opacity-100">
+          <section class="glass-panel rounded-[28px] p-5 md:p-6">
+            <div class="mb-4 flex items-center gap-2">
               <button
-                v-if="extractDisplayPrompt(record.prompt)"
-                @click.stop="copyPrompt(record.prompt)"
-                class="grid h-7 min-w-7 place-items-center rounded-full bg-white/90 px-2 shadow backdrop-blur-sm hover:bg-white cursor-pointer"
-                :title="record.image_urls?.length ? `${record.image_urls.length} 张图片` : '复制提示词'"
+                :class="[
+                  'rounded-lg px-4 py-1.5 text-sm font-medium transition-colors',
+                  activeTab === 'type'
+                    ? 'bg-ink-950 text-white'
+                    : 'border border-border-dark bg-white/80 text-ink-700 hover:bg-white'
+                ]"
+                @click="activeTab = 'type'"
               >
-                <span class="material-symbols-outlined !text-sm text-ink-700">content_copy</span>
+                类型
+              </button>
+              <button
+                :class="[
+                  'rounded-lg px-4 py-1.5 text-sm font-medium transition-colors',
+                  activeTab === 'style'
+                    ? 'bg-ink-950 text-white'
+                    : 'border border-border-dark bg-white/80 text-ink-700 hover:bg-white'
+                ]"
+                @click="activeTab = 'style'"
+              >
+                风格
+              </button>
+              <button
+                class="inline-flex cursor-pointer items-center rounded-full p-1 text-ink-400 transition-colors hover:bg-white hover:text-ink-700"
+                @click="showTypePanel = !showTypePanel"
+              >
+                <span class="material-symbols-outlined !text-lg">
+                  {{ showTypePanel ? 'expand_less' : 'expand_more' }}
+                </span>
               </button>
             </div>
 
-            <div v-if="record.image_urls?.length > 1"
-              class="absolute left-1.5 bottom-[54px] rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
-              {{ record.image_urls.length }} 张
-            </div>
-
-            <div class="p-2.5">
-              <div class="group/prompt relative">
-                <p class="line-clamp-2 pr-5 text-xs text-ink-700">{{ displayPromptOrFallback(record.prompt) }}</p>
-                <button
-                  v-if="extractDisplayPrompt(record.prompt)"
-                  @click.stop="copyPrompt(record.prompt)"
-                  class="absolute top-0 right-0 text-ink-300 hover:text-primary cursor-pointer"
+            <div v-show="showTypePanel">
+              <div v-if="activeTab === 'type'">
+                <div
+                  v-if="typesHasCover"
+                  class="grid grid-cols-3 gap-3 xs:grid-cols-4 md:grid-cols-5"
                 >
-                  <span class="material-symbols-outlined !text-sm">content_copy</span>
+                  <button
+                    v-for="typeItem in filteredTypes"
+                    :key="typeItem.value"
+                    class="relative flex cursor-pointer flex-col items-center group"
+                    @click="selectedType = selectedType === typeItem.value ? '' : typeItem.value"
+                  >
+                    <div
+                      :class="[
+                        'w-full overflow-hidden rounded-xl border-2',
+                        selectedType === typeItem.value
+                          ? 'border-primary'
+                          : 'border-transparent hover:border-primary/30'
+                      ]"
+                    >
+                      <div class="overflow-hidden rounded-xl bg-primary-soft/10">
+                        <img
+                          v-if="typeItem.cover"
+                          :src="typeItem.cover"
+                          :alt="typeItem.label"
+                          class="h-auto w-full object-contain transition-transform duration-300 group-hover:scale-105"
+                          loading="lazy"
+                        />
+                        <div
+                          v-else
+                          class="flex aspect-square w-full items-center justify-center text-sm font-bold text-ink-400"
+                        >
+                          {{ typeItem.label }}
+                        </div>
+                      </div>
+                    </div>
+                    <div
+                      v-if="selectedType === typeItem.value"
+                      class="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-primary text-white"
+                    >
+                      <span class="material-symbols-outlined !text-xs">check</span>
+                    </div>
+                    <span class="mt-1.5 text-xs font-medium text-ink-700">{{ typeItem.label }}</span>
+                  </button>
+                </div>
+
+                <div v-else class="flex flex-wrap gap-2">
+                  <button
+                    v-for="typeItem in filteredTypes"
+                    :key="typeItem.value"
+                    :class="[
+                      'cursor-pointer rounded-lg border px-3 py-1.5 text-xs font-medium',
+                      selectedType === typeItem.value
+                        ? 'border-primary bg-primary/8 text-primary'
+                        : 'border-border-dark bg-white text-ink-700 hover:border-primary/30'
+                    ]"
+                    @click="selectedType = selectedType === typeItem.value ? '' : typeItem.value"
+                  >
+                    {{ typeItem.label }}
+                  </button>
+                </div>
+              </div>
+
+              <div v-else class="grid grid-cols-3 gap-3 xs:grid-cols-4 md:grid-cols-5">
+                <button
+                  v-for="styleItem in imageStyles"
+                  :key="styleItem.value"
+                  class="relative flex cursor-pointer flex-col items-center group"
+                  @click="selectedStyle = selectedStyle === styleItem.value ? '' : styleItem.value"
+                >
+                  <div
+                    :class="[
+                      'w-full overflow-hidden rounded-xl border-2',
+                      selectedStyle === styleItem.value
+                        ? 'border-primary'
+                        : 'border-transparent hover:border-primary/30'
+                    ]"
+                  >
+                    <div class="overflow-hidden rounded-xl bg-primary-soft/10">
+                      <img
+                        :src="styleItem.cover"
+                        :alt="styleItem.label"
+                        class="h-auto w-full object-contain transition-transform duration-300 group-hover:scale-105"
+                        loading="lazy"
+                      />
+                    </div>
+                  </div>
+                  <div
+                    v-if="selectedStyle === styleItem.value"
+                    class="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-primary text-white"
+                  >
+                    <span class="material-symbols-outlined !text-xs">check</span>
+                  </div>
+                  <span
+                    :class="[
+                      'mt-1.5 text-xs font-medium',
+                      selectedStyle === styleItem.value ? 'text-primary' : 'text-ink-700'
+                    ]"
+                  >
+                    {{ styleItem.label }}
+                  </span>
                 </button>
               </div>
-              <div class="mt-1 text-[10px] text-ink-500">{{ formatTime(record.created_at) }}</div>
             </div>
-          </div>
+          </section>
+
+          <section v-if="currentTask" class="glass-panel rounded-[28px] p-5 md:p-6">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold" :class="currentTaskBadgeClass">
+                  <span class="material-symbols-outlined !text-sm">{{ currentTaskIcon }}</span>
+                  {{ currentTask.statusText }}
+                </div>
+                <p class="mt-3 max-w-3xl text-sm leading-6 text-ink-600">
+                  {{ currentTask.prompt || '正在处理本次多图任务' }}
+                </p>
+              </div>
+
+              <button
+                v-if="currentTask.status !== 'generating'"
+                class="inline-flex items-center rounded-full border border-border-dark bg-white px-3 py-1.5 text-xs font-medium text-ink-500 transition-colors hover:text-ink-950"
+                @click="currentTask = null"
+              >
+                <span class="material-symbols-outlined !text-sm">close</span>
+                关闭结果
+              </button>
+            </div>
+
+            <div class="mt-5">
+              <div class="flex items-center justify-between text-xs text-ink-500">
+                <span>{{ currentTask.progressText }}</span>
+                <span>{{ currentTask.progress }}%</span>
+              </div>
+              <div class="mt-2 h-2.5 overflow-hidden rounded-full bg-primary-soft/80">
+                <div
+                  class="h-full rounded-full bg-gradient-to-r from-primary to-primary-deep transition-all duration-500"
+                  :style="{ width: `${currentTask.progress}%` }"
+                ></div>
+              </div>
+            </div>
+
+            <div v-if="currentTask.images.length > 0" class="mt-5 grid gap-4" :class="resultGridClass(currentTask.images.length)">
+              <button
+                v-for="(image, index) in currentTask.images"
+                :key="`${image.url}-${index}`"
+                class="result-card cursor-zoom-in text-left"
+                @click="openCurrentTaskPreview(index)"
+              >
+                <div class="result-card__canvas">
+                  <img
+                    :src="image.url"
+                    :alt="image.alt || `生成图片 ${index + 1}`"
+                    class="h-full w-full object-contain"
+                    @error="handlePreviewImageFallback"
+                  />
+                </div>
+                <div class="flex items-center justify-between gap-3 px-4 py-3 text-xs text-ink-500">
+                  <span class="truncate">{{ image.alt || `生成图片 ${index + 1}` }}</span>
+                  <span class="inline-flex items-center gap-1 text-primary">
+                    <span class="material-symbols-outlined !text-sm">zoom_in</span>
+                    放大查看
+                  </span>
+                </div>
+              </button>
+            </div>
+
+            <div
+              v-else-if="currentTask.status === 'generating'"
+              class="mt-5 grid gap-4"
+              :class="resultGridClass(currentTask.total)"
+            >
+              <div
+                v-for="placeholderIndex in currentTask.total"
+                :key="placeholderIndex"
+                class="result-card result-card--placeholder"
+              >
+                <div class="result-card__skeleton">
+                  <div class="result-card__skeleton-orb result-card__skeleton-orb--one"></div>
+                  <div class="result-card__skeleton-orb result-card__skeleton-orb--two"></div>
+                  <div class="result-card__skeleton-panel"></div>
+                </div>
+                <div class="px-4 py-3 text-xs text-ink-400">
+                  第 {{ placeholderIndex }} 张生成中...
+                </div>
+              </div>
+            </div>
+
+            <p v-if="currentTask.error" class="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-500">
+              {{ currentTask.error }}
+            </p>
+          </section>
+
+          <section class="glass-panel rounded-[28px] p-5 md:p-6">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 class="text-xl font-bold text-ink-950">生图历史</h2>
+                <p class="mt-1 text-sm text-ink-500">
+                  最近完成的作品会保留在这里，横向滚动即可快速回看和放大。
+                </p>
+              </div>
+              <router-link
+                v-if="galleryRecords.length > 0"
+                to="/gallery"
+                class="inline-flex items-center gap-1 rounded-full border border-border-dark bg-white px-3 py-1.5 text-xs font-medium text-ink-600 transition-colors hover:border-primary/30 hover:text-primary"
+              >
+                查看全部
+                <span class="material-symbols-outlined !text-sm">arrow_forward</span>
+              </router-link>
+            </div>
+
+            <div v-if="galleryRecords.length > 0" class="history-scroller mt-5 flex gap-4 overflow-x-auto pb-2">
+              <article
+                v-for="record in galleryRecords"
+                :key="record.id"
+                class="history-card shrink-0 snap-start"
+              >
+                <button class="block w-full cursor-zoom-in text-left" @click="openRecordPreview(record, 0)">
+                  <div class="history-card__image">
+                    <img
+                      v-if="getRecordImage(record)"
+                      :src="getRecordImage(record)"
+                      :alt="displayPromptOrFallback(record.prompt)"
+                      class="h-full w-full object-contain"
+                      loading="lazy"
+                      @error="handlePreviewImageFallback"
+                    />
+                    <div v-else class="flex h-full items-center justify-center text-primary">
+                      <span class="material-symbols-outlined !text-4xl">image</span>
+                    </div>
+                  </div>
+                </button>
+
+                <div class="p-4">
+                  <div class="flex items-center justify-between gap-3 text-[11px] text-ink-400">
+                    <span>{{ formatTime(record.created_at || record.timestamp) }}</span>
+                    <span v-if="record.image_urls?.length" class="inline-flex items-center gap-1 rounded-full bg-primary/8 px-2 py-1 font-medium text-primary">
+                      <span class="material-symbols-outlined !text-sm">photo_library</span>
+                      {{ record.image_urls.length }} 张
+                    </span>
+                  </div>
+
+                  <p class="mt-3 line-clamp-2 text-sm font-medium leading-6 text-ink-800">
+                    {{ displayPromptOrFallback(record.prompt) }}
+                  </p>
+
+                  <div class="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-ink-500">
+                    <span class="rounded-full bg-white px-2.5 py-1 shadow-sm">{{ record.model || '未知模型' }}</span>
+                    <span v-if="record.provider" class="rounded-full bg-white px-2.5 py-1 shadow-sm">{{ record.provider }}</span>
+                  </div>
+
+                  <div class="mt-4 flex items-center justify-between gap-2">
+                    <button
+                      class="inline-flex items-center gap-1 rounded-full border border-border-dark bg-white px-3 py-1.5 text-xs font-medium text-ink-600 transition-colors hover:border-primary/30 hover:text-primary"
+                      @click="openRecordPreview(record, 0)"
+                    >
+                      <span class="material-symbols-outlined !text-sm">zoom_in</span>
+                      放大查看
+                    </button>
+                    <button
+                      v-if="extractDisplayPrompt(record.prompt)"
+                      class="inline-flex items-center gap-1 rounded-full border border-border-dark bg-white px-3 py-1.5 text-xs font-medium text-ink-500 transition-colors hover:text-ink-950"
+                      @click="copyPrompt(record.prompt)"
+                    >
+                      <span class="material-symbols-outlined !text-sm">content_copy</span>
+                      复制提示词
+                    </button>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <div v-else class="mt-5 rounded-[24px] border border-dashed border-border-dark bg-white/70 p-6 text-center">
+              <span class="material-symbols-outlined !text-4xl text-ink-300">history</span>
+              <p class="mt-2 text-sm font-medium text-ink-700">还没有生图历史</p>
+              <p class="mt-1 text-xs text-ink-500">生成完成后，作品会以更大的横向卡片展示在这里</p>
+            </div>
+          </section>
         </div>
 
-        <div v-else-if="!currentTask">
-          <div class="rounded-xl border border-dashed border-border-dark bg-white/60 p-6">
-            <div class="mt-1 text-center">
-              <span class="material-symbols-outlined !text-3xl text-ink-300">collections</span>
-              <p class="mt-1.5 text-sm font-medium text-ink-700">暂无作品</p>
-              <p class="mt-0.5 text-xs text-ink-500">在上方输入内容，创建你的第一组图片</p>
+        <aside class="space-y-5 xl:sticky xl:top-6 xl:self-start">
+          <section class="glass-panel rounded-[28px] p-5">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined !text-xl text-primary">school</span>
+              <h2 class="text-lg font-bold text-ink-950">上手教程</h2>
             </div>
-          </div>
-        </div>
-      </div>
+            <p class="mt-2 text-sm leading-6 text-ink-500">
+              第一次使用可以直接套用示例。系统会自动把内容拆成多张图，再到下方历史里回看与放大。
+            </p>
+
+            <div class="mt-4 space-y-3">
+              <div v-for="step in quickStartSteps" :key="step.title" class="quick-step">
+                <div class="quick-step__index">{{ step.index }}</div>
+                <div>
+                  <p class="text-sm font-semibold text-ink-900">{{ step.title }}</p>
+                  <p class="mt-1 text-xs leading-5 text-ink-500">{{ step.description }}</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-5 space-y-2.5">
+              <button
+                v-for="example in tutorialExamples"
+                :key="example.title"
+                class="tutorial-example"
+                @click="applyTutorialExample(example)"
+              >
+                <div>
+                  <p class="text-sm font-semibold text-ink-900">{{ example.title }}</p>
+                  <p class="mt-1 text-xs leading-5 text-ink-500">{{ example.description }}</p>
+                </div>
+                <span class="material-symbols-outlined !text-lg text-primary">north_east</span>
+              </button>
+            </div>
+
+            <div class="mt-4 flex flex-wrap gap-2">
+              <button class="secondary-ghost-button" @click="router.push('/scenes')">
+                <span class="material-symbols-outlined !text-sm">grid_view</span>
+                打开场景库
+              </button>
+              <button class="secondary-ghost-button" @click="applyTutorialExample(tutorialExamples[0])">
+                <span class="material-symbols-outlined !text-sm">play_circle</span>
+                一键填入示例
+              </button>
+            </div>
+          </section>
+
+          <section class="glass-panel rounded-[28px] p-5">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined !text-xl text-primary">groups</span>
+              <h2 class="text-lg font-bold text-ink-950">适合这些人群</h2>
+            </div>
+            <p class="mt-2 text-sm leading-6 text-ink-500">
+              我把人群提示做成了更醒目的标签，方便用户快速判断自己适合做哪类图。
+            </p>
+
+            <div class="mt-4 flex flex-wrap gap-2.5">
+              <span
+                v-for="audience in audienceChips"
+                :key="audience"
+                class="audience-chip"
+              >
+                <span class="material-symbols-outlined !text-sm">arrow_outward</span>
+                {{ audience }}
+              </span>
+            </div>
+
+            <div class="mt-5 rounded-[22px] border border-primary/10 bg-primary/6 p-4">
+              <p class="text-sm font-semibold text-ink-900">推荐使用方式</p>
+              <p class="mt-2 text-xs leading-5 text-ink-500">
+                教程指南适合做步骤拆解，海报设计适合做招生宣传，信息图表适合做知识总结。先选类型，再调整风格，成功率会更高。
+              </p>
+            </div>
+          </section>
+
+          <section class="glass-panel rounded-[28px] p-5">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <h2 class="text-lg font-bold text-ink-950">积分与状态</h2>
+                <p class="mt-1 text-xs text-ink-500">生成提交后会立即同步余额显示</p>
+              </div>
+              <span class="material-symbols-outlined !text-xl text-primary">account_balance_wallet</span>
+            </div>
+
+            <div class="mt-4 rounded-[22px] border border-border-dark/70 bg-white/90 p-4">
+              <p class="text-xs uppercase tracking-[0.18em] text-ink-400">可用积分</p>
+              <p class="mt-2 text-3xl font-bold text-ink-950">{{ accountPointsDisplay }}</p>
+              <p class="mt-1 text-xs text-ink-500">{{ accountPointsHint }}</p>
+            </div>
+
+            <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <button class="secondary-ghost-button justify-between" @click="router.push('/pricing')">
+                <span class="inline-flex items-center gap-1">
+                  <span class="material-symbols-outlined !text-sm">payments</span>
+                  去充值
+                </span>
+                <span class="material-symbols-outlined !text-sm">arrow_forward</span>
+              </button>
+              <button class="secondary-ghost-button justify-between" @click="reloadAccountInfo">
+                <span class="inline-flex items-center gap-1">
+                  <span class="material-symbols-outlined !text-sm">refresh</span>
+                  刷新积分
+                </span>
+                <span class="material-symbols-outlined !text-sm">sync</span>
+              </button>
+            </div>
+          </section>
+        </aside>
+      </section>
     </div>
 
-    <!-- Preview dialog -->
-    <el-dialog v-model="showPreview" width="min(90vw, 800px)" align-center>
-      <div v-if="previewRecord">
-        <div class="grid gap-2" :class="previewRecord.image_urls?.length > 1 ? 'grid-cols-2' : 'grid-cols-1'">
-          <img v-for="(url, i) in previewRecord.image_urls" :key="i" :src="url"
-            class="w-full rounded-xl" :class="{ 'ring-2 ring-primary': i === previewIndex }" />
-        </div>
-        <div class="mt-4">
-          <p class="text-sm text-ink-700">{{ displayPromptOrFallback(previewRecord.prompt) }}</p>
-        </div>
-      </div>
-    </el-dialog>
+    <ImagePreviewModal ref="imagePreviewModalRef" />
   </main>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/store/useAuthStore'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import ModelDropdown from '@/components/landing/ModelDropdown.vue'
 import RatioDropdown from '@/components/landing/RatioDropdown.vue'
 import ResolutionDropdown from '@/components/landing/ResolutionDropdown.vue'
+import ImagePreviewModal from '@/components/ImagePreviewModal.vue'
 import { api } from '@/services/api'
 import { notification } from '@/utils/notification'
 import { copyText } from '@/utils/clipboard'
 import { extractDisplayPrompt, displayPromptOrFallback } from '@/utils/promptDisplay'
+import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
 
+const router = useRouter()
+const authStore = useAuthStore()
 const generatorStore = useGeneratorStore()
 
+const promptRef = ref(null)
 const promptInput = ref('')
 const batchCount = ref(4)
 const activeTab = ref('type')
@@ -331,19 +620,16 @@ const selectedType = ref('poster')
 const selectedStyle = ref('hand_drawn')
 const isGenerating = ref(false)
 const galleryRecords = ref([])
-const showPreview = ref(false)
-const previewRecord = ref(null)
-const previewIndex = ref(0)
 const currentTask = ref(null)
 const attachments = ref([])
 const uploadRef = ref(null)
-let pollTimer = null
+const imagePreviewModalRef = ref(null)
+const showTypePanel = ref(true)
 
 const presetCounts = [4, 8, 12, 16, 20, 36]
-const showTypePanel = ref(true)
-const selectedTypeCategory = ref('all')
+let pollTimer = null
+let accountRefreshTimer = null
 
-// 类型：纯文字标签（从API加载）
 const imageTypes = ref([
   { value: 'poster', label: '海报设计' },
   { value: 'reading_notes', label: '读书笔记' },
@@ -360,18 +646,6 @@ const imageTypes = ref([
   { value: 'formula', label: '公式原理' },
 ])
 
-const filteredTypes = computed(() => imageTypes.value)
-const typesHasCover = computed(() => imageTypes.value.some(t => t.cover))
-
-const selectedTypeObj = computed(() => imageTypes.value.find(t => t.value === selectedType.value))
-const selectedTypeLabel = computed(() => selectedTypeObj.value?.label || '')
-const selectedTypeEmoji = computed(() => selectedTypeObj.value?.emoji || '')
-const selectedStyleLabel = computed(() => {
-  if (!selectedStyle.value) return ''
-  return imageStyles.value.find(s => s.value === selectedStyle.value)?.label || ''
-})
-
-// 风格：带封面图（从API加载）
 const imageStyles = ref([
   { value: 'hand_drawn', label: '手绘', cover: '/covers/styles/hand_drawn.webp' },
   { value: 'watercolor', label: '水彩', cover: '/covers/styles/watercolor.webp' },
@@ -387,27 +661,273 @@ const imageStyles = ref([
   { value: 'pixel', label: '像素', cover: '/covers/styles/pixel.webp' },
 ])
 
-const handleUploadChange = (uploadFile) => {
-  const file = uploadFile?.raw || uploadFile
-  if (!file) return
-  attachments.value.push(file)
-  uploadRef.value?.clearFiles?.()
+const quickStartSteps = [
+  {
+    index: '01',
+    title: '先选类型和风格',
+    description: '教程指南、信息图表、海报设计这三类最适合做多图排版。',
+  },
+  {
+    index: '02',
+    title: '一句话写清主题',
+    description: '把核心内容、受众和期望张数写进去，系统会更容易拆分版面。',
+  },
+  {
+    index: '03',
+    title: '生成后在下方回看',
+    description: '点击图片即可放大，历史会横向保留，方便挑图和继续复用提示词。',
+  },
+]
 
-  // PDF: auto-detect page count and set batchCount
-  if (file.name.toLowerCase().endsWith('.pdf')) {
-    import('pdfjs-dist').then(async ({ getDocument }) => {
-      try {
-        const buf = await file.arrayBuffer()
-        const pdf = await getDocument({ data: buf }).promise
-        const pages = Math.min(pdf.numPages, 20)
-        batchCount.value = pages
-        notification.info('PDF 已识别', `共 ${pdf.numPages} 页，将生成 ${pages} 张图片`)
-      } catch {}
-    }).catch(() => {})
+const tutorialExamples = [
+  {
+    title: '老师做知识衔接图',
+    description: '自动填入“初高中化学衔接指南”的多图示例',
+    prompt: '把“初高中化学衔接指南”整理成 4 张知识图，要求标题清晰、层级明确、适合学生收藏复习。',
+    type: 'tutorial',
+    style: 'hand_drawn',
+    count: 4,
+  },
+  {
+    title: '机构做招生宣传图',
+    description: '快速生成一组课程卖点与报名引导图',
+    prompt: '围绕“暑期衔接班招生”生成 4 张招生图，包含课程亮点、适合人群、学习成果和报名引导，视觉醒目。',
+    type: 'poster',
+    style: 'flat',
+    count: 4,
+  },
+  {
+    title: '博主做教程拆解图',
+    description: '适合把操作步骤拆成多张流程图',
+    prompt: '将“如何用三步记忆英语单词”做成 4 张教程图，每张图只讲一个重点，适合社交平台发布。',
+    type: 'tutorial',
+    style: 'cartoon',
+    count: 4,
+  },
+]
+
+const audienceChips = ['招生老师', '课程顾问', '知识博主', '自媒体创作者', '新手运营', '培训机构']
+
+const filteredTypes = computed(() => imageTypes.value)
+const typesHasCover = computed(() => imageTypes.value.some((item) => item.cover))
+const selectedTypeObj = computed(() => imageTypes.value.find((item) => item.value === selectedType.value))
+const selectedTypeLabel = computed(() => selectedTypeObj.value?.label || '')
+const selectedTypeEmoji = computed(() => selectedTypeObj.value?.emoji || '')
+const selectedStyleLabel = computed(() => {
+  if (!selectedStyle.value) return ''
+  return imageStyles.value.find((item) => item.value === selectedStyle.value)?.label || ''
+})
+const currentModelLabel = computed(() => {
+  return generatorStore.selectedModelInfo?.display_name
+    || generatorStore.selectedModelInfo?.model_name
+    || generatorStore.model
+    || '未选择模型'
+})
+const accountPointsDisplay = computed(() => {
+  if (!authStore.isAuthenticated) return '登录后查看'
+  const total = (authStore.accountInfo?.points || 0) + (authStore.accountInfo?.gift_points || 0)
+  return `${total}`
+})
+const accountPointsHint = computed(() => {
+  if (!authStore.isAuthenticated) return '登录后可看到实时积分变化'
+  const gift = authStore.accountInfo?.gift_points || 0
+  return gift > 0 ? `其中临时积分 ${gift}，会一起实时刷新` : '生成提交后会自动同步余额'
+})
+const currentTaskIcon = computed(() => {
+  const status = String(currentTask.value?.status || '').toLowerCase()
+  if (status === 'completed') return 'check_circle'
+  if (status === 'error') return 'error'
+  return 'progress_activity'
+})
+const currentTaskBadgeClass = computed(() => {
+  const status = String(currentTask.value?.status || '').toLowerCase()
+  if (status === 'completed') return 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+  if (status === 'error') return 'bg-red-50 text-red-500 border border-red-200'
+  return 'bg-primary/10 text-primary border border-primary/15'
+})
+
+function normalizePreviewEntry(image, index = 0, promptText = '') {
+  if (!image) return null
+
+  const rawUrl = typeof image === 'string' ? image : image.url || image.src || ''
+  const url = resolveImageSrc(rawUrl)
+  if (!url) return null
+
+  const baseAlt = extractDisplayPrompt(promptText || '') || '生成图片'
+  return {
+    url,
+    alt: typeof image === 'string'
+      ? `${baseAlt} ${index + 1}`
+      : image.alt || image.name || `${baseAlt} ${index + 1}`,
   }
 }
 
-const getFileIcon = (file) => {
+function normalizeTaskImages(task) {
+  let images = []
+
+  if (Array.isArray(task?.images) && task.images.length > 0) {
+    images = task.images
+  } else if (typeof task?.images === 'string') {
+    try {
+      images = JSON.parse(task.images)
+    } catch {
+      images = []
+    }
+  } else if (Array.isArray(task?.result) && task.result.length > 0) {
+    images = task.result
+  }
+
+  return images
+    .map((image, index) => normalizePreviewEntry(image, index, currentTask.value?.prompt))
+    .filter(Boolean)
+}
+
+function buildRecordPreviewItems(record) {
+  const images = Array.isArray(record?.image_urls) ? record.image_urls : []
+  return images
+    .map((image, index) => normalizePreviewEntry(image, index, record?.prompt))
+    .filter(Boolean)
+}
+
+function mergeUniqueImages(existingImages, incomingImages) {
+  const seen = new Set()
+  return [...existingImages, ...incomingImages].filter((image) => {
+    const key = image?.url
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function resultGridClass(count) {
+  if (count <= 1) return 'grid-cols-1'
+  if (count === 2) return 'grid-cols-1 md:grid-cols-2'
+  return 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
+}
+
+function handlePreviewImageFallback(event) {
+  handleImageFallback(event)
+}
+
+function openPreviewItems(items, startIndex = 0) {
+  if (!Array.isArray(items) || items.length === 0) return
+  imagePreviewModalRef.value?.show(items, startIndex)
+}
+
+function openCurrentTaskPreview(index = 0) {
+  openPreviewItems(currentTask.value?.images || [], index)
+}
+
+function openRecordPreview(record, index = 0) {
+  openPreviewItems(buildRecordPreviewItems(record), index)
+}
+
+function getRecordImage(record) {
+  return buildRecordPreviewItems(record)[0]?.url || ''
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+function clearAccountRefreshTimer() {
+  if (accountRefreshTimer) {
+    clearTimeout(accountRefreshTimer)
+    accountRefreshTimer = null
+  }
+}
+
+function applyBillingSnapshot(billing) {
+  if (!authStore.isAuthenticated || !authStore.accountInfo || !billing?.balance_after) return
+
+  const nextBalance = Number(billing.balance_after.balance)
+  const nextPoints = billing.balance_after.points ?? authStore.accountInfo.points ?? 0
+  const nextGiftPoints = billing.balance_after.gift_points ?? authStore.accountInfo.gift_points ?? 0
+
+  authStore.accountInfo = {
+    ...authStore.accountInfo,
+    points: nextPoints,
+    gift_points: nextGiftPoints,
+    balance: Number.isFinite(nextBalance)
+      ? Math.round(nextBalance * 100)
+      : authStore.accountInfo.balance,
+    total_points: nextPoints + nextGiftPoints,
+  }
+}
+
+function scheduleAccountRefresh(billing) {
+  applyBillingSnapshot(billing)
+  clearAccountRefreshTimer()
+  accountRefreshTimer = setTimeout(async () => {
+    accountRefreshTimer = null
+    try {
+      await authStore.fetchAccountInfo()
+    } catch (error) {
+      console.warn('刷新积分失败:', error)
+    }
+  }, 260)
+}
+
+async function reloadAccountInfo() {
+  if (!authStore.isAuthenticated) {
+    router.push('/login')
+    return
+  }
+
+  try {
+    await authStore.fetchAccountInfo()
+    notification.success('已刷新', '积分信息已更新')
+  } catch (error) {
+    notification.error('刷新失败', error?.message || '请稍后重试')
+  }
+}
+
+async function loadTypesStyles() {
+  try {
+    const response = await fetch('/api/v1/admin/system-config/types-styles')
+    if (!response.ok) return
+
+    const data = await response.json()
+    if (data.types?.length) imageTypes.value = data.types
+    if (data.styles?.length) imageStyles.value = data.styles
+  } catch {
+    // 使用默认值
+  }
+}
+
+async function loadGallery() {
+  try {
+    const records = await api.getUnifiedGenerationHistory(10, 0, 'completed')
+    galleryRecords.value = (records || []).filter((record) => buildRecordPreviewItems(record).length > 0)
+  } catch {
+    try {
+      const records = await api.getGenerationHistory(10, 0, 'completed')
+      galleryRecords.value = (records || []).filter((record) => buildRecordPreviewItems(record).length > 0)
+    } catch {
+      galleryRecords.value = []
+    }
+  }
+}
+
+function applyTutorialExample(example) {
+  promptInput.value = example.prompt
+  selectedType.value = example.type
+  selectedStyle.value = example.style
+  batchCount.value = example.count
+  showTypePanel.value = true
+  activeTab.value = 'type'
+
+  nextTick(() => {
+    promptRef.value?.focus?.()
+  })
+
+  notification.success('已填入示例', `${example.title} 已写入输入框`)
+}
+
+function getFileIcon(file) {
   const ext = file.name.split('.').pop().toLowerCase()
   if (ext === 'pdf') return 'picture_as_pdf'
   if (['doc', 'docx'].includes(ext)) return 'description'
@@ -415,108 +935,57 @@ const getFileIcon = (file) => {
   return 'insert_drive_file'
 }
 
-const copyPrompt = async (text) => {
-  const ok = await copyText(extractDisplayPrompt(text))
-  if (ok) {
-    notification.success('已复制', '提示词已复制到剪贴板')
-  } else { notification.error('复制失败', '') }
-}
+function handleUploadChange(uploadFile) {
+  const file = uploadFile?.raw || uploadFile
+  if (!file) return
 
-const previewMulti = (record, index) => {
-  previewRecord.value = record
-  previewIndex.value = index
-  showPreview.value = true
-}
+  attachments.value.push(file)
+  uploadRef.value?.clearFiles?.()
 
-const getRecordImage = (record) => {
-  if (record.image_urls?.length > 0) return record.image_urls[0]
-  return ''
-}
-
-const formatTime = (timestamp) => {
-  if (!timestamp) return ''
-  return new Date(timestamp).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
-
-const stopPolling = () => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
+  if (file.name.toLowerCase().endsWith('.pdf')) {
+    import('pdfjs-dist')
+      .then(async ({ getDocument }) => {
+        try {
+          const buffer = await file.arrayBuffer()
+          const pdf = await getDocument({ data: buffer }).promise
+          const pages = Math.min(pdf.numPages, 20)
+          batchCount.value = pages
+          notification.info('PDF 已识别', `共 ${pdf.numPages} 页，将生成 ${pages} 张图片`)
+        } catch {
+          // ignore
+        }
+      })
+      .catch(() => {})
   }
 }
 
-const pollTaskProgress = (taskId) => {
-  stopPolling()
-  let attempts = 0
-  const maxAttempts = 300
-
-  pollTimer = setInterval(async () => {
-    attempts++
-    if (attempts > maxAttempts) {
-      stopPolling()
-      if (currentTask.value) {
-        currentTask.value.status = 'error'
-        currentTask.value.statusText = '生成超时'
-        currentTask.value.error = '任务超时，请重试'
-      }
-      isGenerating.value = false
-      return
-    }
-
-    try {
-      const task = await api.getTaskStatus(taskId)
-      const status = String(task?.status || '').toLowerCase()
-
-      if (!currentTask.value) return
-
-      if (status === 'completed') {
-        stopPolling()
-        let images = []
-        if (task.images) {
-          images = typeof task.images === 'string' ? JSON.parse(task.images) : task.images
-        } else if (task.result && Array.isArray(task.result)) {
-          images = task.result.map(img => ({ url: img.url, alt: img.alt || '生成的图像' }))
-        }
-
-        currentTask.value.status = 'completed'
-        currentTask.value.statusText = `生成完成！共 ${images.length} 张图片`
-        currentTask.value.progress = 100
-        currentTask.value.progressText = '完成'
-        currentTask.value.images = images
-        isGenerating.value = false
-        loadGallery()
-
-      } else if (status === 'failed' || status === 'error') {
-        stopPolling()
-        currentTask.value.status = 'error'
-        currentTask.value.statusText = '生成失败'
-        currentTask.value.error = task.error || '图像生成失败，请重试'
-        isGenerating.value = false
-
-      } else {
-        // Still processing
-        const progress = Math.min(90, Math.round((attempts / maxAttempts) * 100))
-        const stageMsg = task.stage || task.status || '处理中'
-        currentTask.value.progress = progress
-        currentTask.value.progressText = `${stageMsg}... (${attempts * 2}秒)`
-        currentTask.value.statusText = '正在生成中...'
-      }
-    } catch (err) {
-      // Ignore polling errors, keep trying
-      console.warn('轮询任务状态失败:', err.message)
-    }
-  }, 2000)
+async function copyPrompt(text) {
+  const ok = await copyText(extractDisplayPrompt(text))
+  if (ok) {
+    notification.success('已复制', '提示词已复制到剪贴板')
+  } else {
+    notification.error('复制失败', '')
+  }
 }
 
-const pollMultiTasks = (taskIds) => {
+function formatTime(timestamp) {
+  if (!timestamp) return ''
+  return new Date(timestamp).toLocaleDateString('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function startSingleTaskPolling(taskId) {
   stopPolling()
   let attempts = 0
   const maxAttempts = 300
-  const completedTasks = new Set()
-  const failedTasks = new Set()
 
   pollTimer = setInterval(async () => {
-    attempts++
+    attempts += 1
+
     if (attempts > maxAttempts) {
       stopPolling()
       if (currentTask.value) {
@@ -526,70 +995,143 @@ const pollMultiTasks = (taskIds) => {
           : '生成超时'
         currentTask.value.error = currentTask.value.images.length > 0 ? '' : '任务超时，请重试'
         currentTask.value.progress = 100
+        currentTask.value.progressText = '轮询超时'
       }
       isGenerating.value = false
-      loadGallery()
+      void authStore.fetchAccountInfo().catch(() => {})
+      void loadGallery()
+      return
+    }
+
+    try {
+      const task = await api.getTaskStatus(taskId)
+      const status = String(task?.status || '').toLowerCase()
+      if (!currentTask.value) return
+
+      if (status === 'completed') {
+        stopPolling()
+        const images = normalizeTaskImages(task)
+        currentTask.value.images = mergeUniqueImages(currentTask.value.images, images)
+        currentTask.value.status = 'completed'
+        currentTask.value.statusText = `生成完成！共 ${currentTask.value.images.length} 张图片`
+        currentTask.value.progress = 100
+        currentTask.value.progressText = '处理完成'
+        currentTask.value.error = ''
+        isGenerating.value = false
+        if (task?.billing) scheduleAccountRefresh(task.billing)
+        void loadGallery()
+        return
+      }
+
+      if (status === 'failed' || status === 'error') {
+        stopPolling()
+        currentTask.value.status = 'error'
+        currentTask.value.statusText = '生成失败'
+        currentTask.value.error = task?.error || '图像生成失败，请重试'
+        currentTask.value.progress = 100
+        currentTask.value.progressText = '任务失败'
+        isGenerating.value = false
+        if (task?.billing) scheduleAccountRefresh(task.billing)
+        return
+      }
+
+      const progress = Math.min(90, Math.round((attempts / maxAttempts) * 100))
+      currentTask.value.progress = progress
+      currentTask.value.progressText = `${task?.stage || task?.status || '处理中'}...`
+      currentTask.value.statusText = '正在生成中...'
+    } catch (error) {
+      console.warn('轮询任务状态失败:', error?.message || error)
+    }
+  }, 2000)
+}
+
+function startMultiTaskPolling(taskIds) {
+  stopPolling()
+  let attempts = 0
+  const maxAttempts = 300
+  const completedTaskIds = new Set()
+  const failedTaskIds = new Set()
+
+  pollTimer = setInterval(async () => {
+    attempts += 1
+
+    if (attempts > maxAttempts) {
+      stopPolling()
+      if (currentTask.value) {
+        currentTask.value.status = currentTask.value.images.length > 0 ? 'completed' : 'error'
+        currentTask.value.statusText = currentTask.value.images.length > 0
+          ? `生成完成！共 ${currentTask.value.images.length} 张图片（部分超时）`
+          : '生成超时'
+        currentTask.value.error = currentTask.value.images.length > 0 ? '' : '任务超时，请重试'
+        currentTask.value.progress = 100
+        currentTask.value.progressText = '轮询超时'
+      }
+      isGenerating.value = false
+      void authStore.fetchAccountInfo().catch(() => {})
+      void loadGallery()
       return
     }
 
     for (const taskId of taskIds) {
-      if (completedTasks.has(taskId) || failedTasks.has(taskId)) continue
+      if (completedTaskIds.has(taskId) || failedTaskIds.has(taskId)) continue
+
       try {
         const task = await api.getTaskStatus(taskId)
         const status = String(task?.status || '').toLowerCase()
 
         if (status === 'completed') {
-          completedTasks.add(taskId)
-          let images = []
-          if (task.images) {
-            images = typeof task.images === 'string' ? JSON.parse(task.images) : task.images
-          } else if (task.result && Array.isArray(task.result)) {
-            images = task.result.map(img => ({ url: img.url, alt: '生成的图像' }))
-          }
+          completedTaskIds.add(taskId)
+          const incomingImages = normalizeTaskImages(task)
           if (currentTask.value) {
-            currentTask.value.images.push(...images)
+            currentTask.value.images = mergeUniqueImages(currentTask.value.images, incomingImages)
           }
+          if (task?.billing) scheduleAccountRefresh(task.billing)
         } else if (status === 'failed' || status === 'error') {
-          failedTasks.add(taskId)
+          failedTaskIds.add(taskId)
+          if (task?.billing) scheduleAccountRefresh(task.billing)
         }
-      } catch {}
-    }
-
-    const done = completedTasks.size + failedTasks.size
-    const total = taskIds.length
-    if (currentTask.value) {
-      currentTask.value.progress = 25 + Math.round((done / total) * 75)
-      currentTask.value.progressText = `已完成 ${completedTasks.size}/${total} 张`
-      currentTask.value.statusText = `正在生成中... (${completedTasks.size}/${total})`
-    }
-
-    if (done >= total) {
-      stopPolling()
-      if (currentTask.value) {
-        currentTask.value.status = completedTasks.size > 0 ? 'completed' : 'error'
-        currentTask.value.statusText = completedTasks.size > 0
-          ? `生成完成！共 ${currentTask.value.images.length} 张图片`
-          : '全部生成失败'
-        currentTask.value.error = completedTasks.size === 0 ? '图像生成失败，请重试' : ''
-        currentTask.value.progress = 100
+      } catch {
+        // keep polling
       }
+    }
+
+    if (!currentTask.value) return
+
+    const doneCount = completedTaskIds.size + failedTaskIds.size
+    const totalCount = taskIds.length
+
+    currentTask.value.progress = 25 + Math.round((doneCount / totalCount) * 75)
+    currentTask.value.progressText = `已完成 ${completedTaskIds.size}/${totalCount} 张`
+    currentTask.value.statusText = `正在生成中... (${completedTaskIds.size}/${totalCount})`
+
+    if (doneCount >= totalCount) {
+      stopPolling()
+      currentTask.value.status = completedTaskIds.size > 0 ? 'completed' : 'error'
+      currentTask.value.statusText = completedTaskIds.size > 0
+        ? `生成完成！共 ${currentTask.value.images.length} 张图片`
+        : '全部生成失败'
+      currentTask.value.error = completedTaskIds.size === 0 ? '图像生成失败，请重试' : ''
+      currentTask.value.progress = 100
+      currentTask.value.progressText = completedTaskIds.size > 0 ? '处理完成' : '处理失败'
       isGenerating.value = false
-      loadGallery()
+      void authStore.fetchAccountInfo().catch(() => {})
+      void loadGallery()
     }
   }, 2000)
 }
 
-const startBatchGeneration = async () => {
+async function startBatchGeneration() {
   if ((!promptInput.value.trim() && attachments.value.length === 0) || isGenerating.value) return
+
   isGenerating.value = true
 
-  const typeLabel = imageTypes.value.find(t => t.value === selectedType.value)?.label || ''
-  const styleLabel = imageStyles.value.find(s => s.value === selectedStyle.value)?.label || ''
-  let fullPrompt = promptInput.value
+  const typeLabel = imageTypes.value.find((item) => item.value === selectedType.value)?.label || ''
+  const styleLabel = imageStyles.value.find((item) => item.value === selectedStyle.value)?.label || ''
+
+  let fullPrompt = promptInput.value.trim()
   if (typeLabel) fullPrompt += `\n类型：${typeLabel}`
   if (styleLabel) fullPrompt += `\n风格：${styleLabel}`
 
-  // Show progress card
   currentTask.value = {
     status: 'generating',
     statusText: '正在提交生成任务...',
@@ -597,58 +1139,60 @@ const startBatchGeneration = async () => {
     progressText: '提交中...',
     total: batchCount.value,
     images: [],
-    prompt: promptInput.value,
+    prompt: fullPrompt,
     error: '',
   }
 
   try {
-    // Upload files if any
     let uploadedFileUrls = []
     if (attachments.value.length > 0) {
       currentTask.value.progressText = '正在上传文件...'
       try {
         const uploadResults = await api.uploadFiles([...attachments.value], (progress, current, total) => {
+          if (!currentTask.value) return
           currentTask.value.progressText = `上传文件 (${current}/${total}) ${progress}%`
         })
-        uploadedFileUrls = uploadResults.map(f => f.url).filter(Boolean)
+        uploadedFileUrls = uploadResults.map((file) => file.url).filter(Boolean)
         notification.success('文件上传成功', `已上传 ${uploadedFileUrls.length} 个文件`)
-      } catch (e) {
+      } catch (error) {
         currentTask.value.status = 'error'
         currentTask.value.statusText = '文件上传失败'
-        currentTask.value.error = e?.response?.data?.detail || e.message || '上传失败'
+        currentTask.value.error = error?.response?.data?.detail || error?.message || '上传失败'
+        currentTask.value.progress = 100
+        currentTask.value.progressText = '上传失败'
         isGenerating.value = false
         return
       }
     }
 
-    // Remember uploaded file names for display
-    const uploadedFileNames = attachments.value.map(f => f.name)
-
-    // If files were uploaded, add reference instruction to prompt
+    const uploadedFileNames = attachments.value.map((file) => file.name)
     if (uploadedFileUrls.length > 0) {
       fullPrompt = `请参考我上传的图片/文件内容来生成图片。${fullPrompt}`
+      currentTask.value.prompt = fullPrompt
+      currentTask.value.progressText = `已上传 ${uploadedFileNames.join('、')}，正在提交任务...`
     }
 
-    // Show uploaded info in progress card
-    if (uploadedFileNames.length > 0) {
-      currentTask.value.progressText = `已上传 ${uploadedFileNames.join(', ')}，正在提交...`
-    }
-
-    // 多图 = 发 N 次单图请求，走和首页一样的 assistant 工作流
     const taskIds = []
-    for (let i = 0; i < batchCount.value; i++) {
-      const itemPrompt = `${fullPrompt}\n这是第${i + 1}/${batchCount.value}张`
-      // Build messages with file context so AI understands the reference
+    for (let index = 0; index < batchCount.value; index += 1) {
+      const itemPrompt = `${fullPrompt}\n这是第${index + 1}/${batchCount.value}张`
       const messages = []
-      if (uploadedFileUrls.length > 0 && i === 0) {
-        // First request: include file upload context message
-        messages.push({ role: 'user', content: `我上传了以下文件作为参考：${uploadedFileNames.join('、')}，请基于文件内容来生成图片。` })
-        messages.push({ role: 'assistant', content: '好的，我已收到您的文件，将基于文件内容为您生成图片。' })
+
+      if (uploadedFileUrls.length > 0 && index === 0) {
+        messages.push({
+          role: 'user',
+          content: `我上传了以下文件作为参考：${uploadedFileNames.join('、')}，请基于文件内容来生成图片。`,
+        })
+        messages.push({
+          role: 'assistant',
+          content: '好的，我已收到您的文件，将基于文件内容为您生成图片。',
+        })
       }
+
       messages.push({ role: 'user', content: itemPrompt })
+
       const chatRequest = {
         messages,
-        session_id: `multi_${Date.now()}_${i}`,
+        session_id: `multi_${Date.now()}_${index}`,
         files: uploadedFileUrls.length > 0 ? uploadedFileUrls : undefined,
         model: generatorStore.selectedModelInfo?.model_name || generatorStore.model,
         model_type: 'image',
@@ -659,17 +1203,22 @@ const startBatchGeneration = async () => {
           n: 1,
           model_name: generatorStore.model || undefined,
           provider: generatorStore.selectedModelInfo?.provider || undefined,
-        }
+        },
       }
+
       try {
         const response = await api.assistantChat(chatRequest)
         const taskId = response.task_id || response.batch_id
         if (taskId) taskIds.push(taskId)
-      } catch (e) {
-        console.warn(`第${i + 1}张提交失败:`, e.message)
+        if (response.metadata?.billing) scheduleAccountRefresh(response.metadata.billing)
+      } catch (error) {
+        console.warn(`第${index + 1}张提交失败:`, error?.message || error)
       }
-      currentTask.value.progress = Math.round(((i + 1) / batchCount.value) * 20)
-      currentTask.value.progressText = `已提交 ${i + 1}/${batchCount.value} 张...`
+
+      if (currentTask.value) {
+        currentTask.value.progress = Math.round(((index + 1) / batchCount.value) * 20)
+        currentTask.value.progressText = `已提交 ${index + 1}/${batchCount.value} 张...`
+      }
     }
 
     if (taskIds.length === 0) throw new Error('所有任务提交失败')
@@ -677,43 +1226,267 @@ const startBatchGeneration = async () => {
     currentTask.value.statusText = `正在生成 ${taskIds.length} 张图片...`
     currentTask.value.progress = 25
     currentTask.value.progressText = '等待生成结果...'
-    pollMultiTasks(taskIds)
-  } catch (err) {
+
+    if (taskIds.length === 1) {
+      startSingleTaskPolling(taskIds[0])
+    } else {
+      startMultiTaskPolling(taskIds)
+    }
+  } catch (error) {
     currentTask.value.status = 'error'
     currentTask.value.statusText = '提交失败'
-    currentTask.value.error = err?.response?.data?.detail || err.message || '请稍后重试'
+    currentTask.value.error = error?.response?.data?.detail || error?.message || '请稍后重试'
+    currentTask.value.progress = 100
+    currentTask.value.progressText = '提交失败'
     isGenerating.value = false
   }
 }
 
-const loadGallery = async () => {
-  try {
-    const records = await api.getUnifiedGenerationHistory(6, 0, 'completed')
-    galleryRecords.value = (records || []).filter(r => r.image_urls?.length > 0)
-  } catch {
-    try {
-      const records = await api.getGenerationHistory(6, 0, 'completed')
-      galleryRecords.value = (records || []).filter(r => r.image_urls?.length > 0)
-    } catch { galleryRecords.value = [] }
+onMounted(async () => {
+  if (authStore.isAuthenticated && !authStore.accountInfo) {
+    void authStore.fetchAccountInfo().catch(() => {})
   }
-}
 
-// 从后台加载类型和风格（与首页保持一致）
-async function loadTypesStyles() {
-  try {
-    const res = await fetch('/api/v1/admin/system-config/types-styles')
-    if (res.ok) {
-      const data = await res.json()
-      if (data.types?.length) imageTypes.value = data.types
-      if (data.styles?.length) imageStyles.value = data.styles
-    }
-  } catch { /* 使用默认值 */ }
-}
+  if (generatorStore.availableModels.length === 0) {
+    await generatorStore.fetchAvailableModels()
+  }
 
-onMounted(() => { loadGallery(); loadTypesStyles() })
-onUnmounted(() => { stopPolling() })
+  await Promise.all([loadGallery(), loadTypesStyles()])
+})
+
+onUnmounted(() => {
+  stopPolling()
+  clearAccountRefreshTimer()
+})
 </script>
 
 <style scoped>
-.line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.multi-view {
+  background:
+    radial-gradient(circle at top right, rgba(140, 42, 46, 0.16), transparent 24%),
+    radial-gradient(circle at top left, rgba(179, 134, 0, 0.12), transparent 22%),
+    linear-gradient(180deg, rgba(255, 252, 251, 0.94) 0%, rgba(247, 241, 239, 0.98) 100%);
+}
+
+.glass-panel {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 24px 72px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(16px);
+}
+
+.summary-card {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.86);
+  border-radius: 1.25rem;
+  padding: 0.95rem 1rem;
+}
+
+.summary-card__label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(100, 106, 115, 0.82);
+}
+
+.summary-card__value {
+  margin-top: 0.45rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2329;
+  line-height: 1.1;
+}
+
+.summary-card__value--compact {
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.summary-card__hint {
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
+  color: rgba(100, 106, 115, 0.9);
+}
+
+.quick-step {
+  display: grid;
+  grid-template-columns: 2.35rem minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.quick-step__index {
+  display: grid;
+  height: 2.35rem;
+  width: 2.35rem;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(20, 86, 240, 0.08);
+  color: rgb(20, 86, 240);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.tutorial-example {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-radius: 1.15rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0.95rem 1rem;
+  text-align: left;
+  transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.tutorial-example:hover {
+  border-color: rgba(20, 86, 240, 0.24);
+  box-shadow: 0 12px 24px rgba(20, 86, 240, 0.08);
+  transform: translateY(-1px);
+}
+
+.audience-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid rgba(20, 86, 240, 0.14);
+  background: rgba(20, 86, 240, 0.08);
+  padding: 0.55rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgb(20, 86, 240);
+}
+
+.secondary-ghost-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0.7rem 0.9rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(31, 35, 41, 0.72);
+  transition: border-color 180ms ease, color 180ms ease, background-color 180ms ease;
+}
+
+.secondary-ghost-button:hover {
+  border-color: rgba(20, 86, 240, 0.22);
+  color: rgb(20, 86, 240);
+  background: rgba(20, 86, 240, 0.03);
+}
+
+.history-scroller {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 23, 42, 0.18) transparent;
+  scroll-snap-type: x mandatory;
+}
+
+.history-scroller::-webkit-scrollbar {
+  height: 8px;
+}
+
+.history-scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.history-scroller::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.18);
+}
+
+.history-card {
+  width: min(360px, 82vw);
+  overflow: hidden;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
+}
+
+.history-card__image {
+  display: flex;
+  min-height: 260px;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at top, rgba(20, 86, 240, 0.08), transparent 50%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(247, 247, 249, 0.92));
+  padding: 1.1rem;
+}
+
+.result-card {
+  overflow: hidden;
+  border-radius: 1.4rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
+}
+
+.result-card__canvas {
+  display: flex;
+  min-height: 280px;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at top, rgba(20, 86, 240, 0.09), transparent 52%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(245, 246, 250, 0.96));
+  padding: 1.1rem;
+}
+
+.result-card--placeholder {
+  position: relative;
+}
+
+.result-card__skeleton {
+  position: relative;
+  min-height: 280px;
+  overflow: hidden;
+  background:
+    linear-gradient(120deg, rgba(20, 86, 240, 0.07), rgba(255, 255, 255, 0.7), rgba(20, 86, 240, 0.05));
+}
+
+.result-card__skeleton-orb {
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(20, 86, 240, 0.12);
+  filter: blur(6px);
+}
+
+.result-card__skeleton-orb--one {
+  top: 18%;
+  left: 18%;
+  height: 5rem;
+  width: 5rem;
+}
+
+.result-card__skeleton-orb--two {
+  right: 14%;
+  bottom: 18%;
+  height: 6rem;
+  width: 6rem;
+}
+
+.result-card__skeleton-panel {
+  position: absolute;
+  inset: 18% 14%;
+  border-radius: 1.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(20, 86, 240, 0.04);
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
 </style>
