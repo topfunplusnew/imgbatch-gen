@@ -1423,11 +1423,11 @@ const sceneCategories = ref([])
 async function loadScenesFromServer() {
   try {
     const res = await fetch('/api/v1/admin/system-config/scenes')
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
     const data = await res.json()
-    if (data.scenes?.length) {
-      sceneList.value = data.scenes
-    }
-    if (data.categories?.length) sceneCategories.value = data.categories
+    sceneList.value = Array.isArray(data.scenes) ? data.scenes : []
+    sceneCategories.value = Array.isArray(data.categories) ? data.categories : []
     // 如果没有分类数据，从场景中自动提取
     if (!sceneCategories.value.length && sceneList.value.length) {
       const catMap = new Map()
@@ -1438,14 +1438,10 @@ async function loadScenesFromServer() {
       })
       sceneCategories.value = Array.from(catMap.values())
     }
-  } catch {
-    // Fallback: load from static JSON
-    try {
-      const res = await fetch('/data/scenes.json')
-      const data = await res.json()
-      if (data.scenes?.length) sceneList.value = data.scenes
-      if (data.categories?.length) sceneCategories.value = data.categories
-    } catch {}
+  } catch (error) {
+    console.error('加载场景库失败:', error)
+    sceneList.value = []
+    sceneCategories.value = []
   }
 }
 loadScenesFromServer()

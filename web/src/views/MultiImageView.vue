@@ -616,8 +616,8 @@ const promptRef = ref(null)
 const promptInput = ref('')
 const batchCount = ref(4)
 const activeTab = ref('type')
-const selectedType = ref('poster')
-const selectedStyle = ref('hand_drawn')
+const selectedType = ref('')
+const selectedStyle = ref('')
 const isGenerating = ref(false)
 const galleryRecords = ref([])
 const currentTask = ref(null)
@@ -630,36 +630,9 @@ const presetCounts = [4, 8, 12, 16, 20, 36]
 let pollTimer = null
 let accountRefreshTimer = null
 
-const imageTypes = ref([
-  { value: 'poster', label: '海报设计' },
-  { value: 'reading_notes', label: '读书笔记' },
-  { value: 'mind_map', label: '思维导图' },
-  { value: 'infographic', label: '信息图表' },
-  { value: 'flow_guide', label: '流程指南' },
-  { value: 'comic', label: '漫画故事' },
-  { value: 'timeline', label: '时间线' },
-  { value: 'comparison', label: '对比分析' },
-  { value: 'tutorial', label: '教程指南' },
-  { value: 'concept_map', label: '概念地图' },
-  { value: 'visual_summary', label: '视觉总结' },
-  { value: 'poetry', label: '诗词解读' },
-  { value: 'formula', label: '公式原理' },
-])
+const imageTypes = ref([])
 
-const imageStyles = ref([
-  { value: 'hand_drawn', label: '手绘', cover: '/covers/styles/hand_drawn.webp' },
-  { value: 'watercolor', label: '水彩', cover: '/covers/styles/watercolor.webp' },
-  { value: 'flat', label: '扁平', cover: '/covers/styles/flat.webp' },
-  { value: 'cartoon', label: '卡通', cover: '/covers/styles/cartoon.webp' },
-  { value: 'realistic', label: '写实', cover: '/covers/styles/illustration.webp' },
-  { value: 'retro', label: '复古', cover: '/covers/styles/retro.webp' },
-  { value: 'anime', label: '动漫', cover: '/covers/styles/cartoon.webp' },
-  { value: '3d', label: '3D', cover: '/covers/styles/clay.webp' },
-  { value: 'minimalist', label: '极简', cover: '/covers/styles/minimalist.webp' },
-  { value: 'ink', label: '水墨', cover: '/covers/styles/ink.webp' },
-  { value: 'sketch', label: '素描', cover: '/covers/styles/sketch.webp' },
-  { value: 'pixel', label: '像素', cover: '/covers/styles/pixel.webp' },
-])
+const imageStyles = ref([])
 
 const quickStartSteps = [
   {
@@ -888,13 +861,23 @@ async function reloadAccountInfo() {
 async function loadTypesStyles() {
   try {
     const response = await fetch('/api/v1/admin/system-config/types-styles')
-    if (!response.ok) return
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
 
     const data = await response.json()
-    if (data.types?.length) imageTypes.value = data.types
-    if (data.styles?.length) imageStyles.value = data.styles
+    imageTypes.value = Array.isArray(data.types) ? data.types : []
+    imageStyles.value = Array.isArray(data.styles) ? data.styles : []
+
+    if (!imageTypes.value.find((item) => item.value === selectedType.value)) {
+      selectedType.value = imageTypes.value[0]?.value || ''
+    }
+    if (!imageStyles.value.find((item) => item.value === selectedStyle.value)) {
+      selectedStyle.value = imageStyles.value[0]?.value || ''
+    }
   } catch {
-    // 使用默认值
+    imageTypes.value = []
+    imageStyles.value = []
+    selectedType.value = ''
+    selectedStyle.value = ''
   }
 }
 

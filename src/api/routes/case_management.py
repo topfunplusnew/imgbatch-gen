@@ -574,17 +574,23 @@ async def get_published_cases_count(
 @router.get("/categories", summary="获取所有行业分类")
 async def get_case_categories():
     """获取所有行业分类（用于筛选器）"""
-    # 预定义分类
-    categories = [
-        {"value": "电商", "label": "电商"},
-        {"value": "广告", "label": "广告"},
-        {"value": "动漫", "label": "动漫"},
-        {"value": "室内", "label": "室内设计"},
-        {"value": "logo", "label": "Logo设计"},
-        {"value": "摄影", "label": "摄影"},
-        {"value": "插画", "label": "插画"},
-        {"value": "其他", "label": "其他"},
-    ]
+    from sqlalchemy import select
+
+    db_manager = get_db_manager()
+
+    async with db_manager.get_session() as session:
+        result = await session.execute(
+            select(Case.category)
+            .where(Case.is_published == True)
+            .where(Case.category.is_not(None))
+            .distinct()
+            .order_by(Case.category.asc())
+        )
+        categories = [
+            {"value": category, "label": category}
+            for category in (row[0] for row in result.fetchall())
+            if category
+        ]
 
     return {"categories": categories}
 

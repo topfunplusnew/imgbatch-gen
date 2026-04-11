@@ -2,7 +2,6 @@ import { defineStore } from 'pinia'
 import { useHistoryStore } from './useHistoryStore'
 import { useAuthStore } from './useAuthStore'
 import { api } from '@/services/api'
-import { mockGenerateImage, mockGetTaskStatus, isMockMode } from '@/utils/mockApi'
 import {
     DEFAULT_IMAGE_MODEL,
     filterSelectableFrontendModels,
@@ -571,43 +570,29 @@ export const useGeneratorStore = defineStore('generator', {
             this.messages = this.messages.filter(msg => msg.status !== 'error')
 
             try {
-                let response
-
-                // 使用模拟模式或真实API
-                if (isMockMode()) {
-                    console.log('[模拟模式] 创建图像生成任务')
-                    response = await mockGenerateImage({
-                        prompt: promptToUse,
-                        width: this.width,
-                        height: this.height,
-                        quality: this.quality,
-                    })
-                } else {
-                    // 调用后端API生成图像
-                    const params: any = {
-                        prompt: promptToUse,
-                        model_name: this.model,
-                        width: this.width,
-                        height: this.height,
-                        quality: this.quality,
-                        n: this.batchSize,
-                        provider: undefined,
-                    }
-
-                    // 添加负面提示词
-                    if (this.negativePrompt) {
-                        params.negative_prompt = this.negativePrompt
-                    }
-
-                    // 添加随机种子
-                    if (this.seed) {
-                        params.seed = parseInt(this.seed)
-                    }
-
-                    console.log('[生成图像] 请求参数:', params)
-                    response = await api.generateImage(params)
-                    console.log('[生成图像] 响应数据:', response)
+                const params: any = {
+                    prompt: promptToUse,
+                    model_name: this.model,
+                    width: this.width,
+                    height: this.height,
+                    quality: this.quality,
+                    n: this.batchSize,
+                    provider: undefined,
                 }
+
+                // 添加负面提示词
+                if (this.negativePrompt) {
+                    params.negative_prompt = this.negativePrompt
+                }
+
+                // 添加随机种子
+                if (this.seed) {
+                    params.seed = parseInt(this.seed)
+                }
+
+                console.log('[生成图像] 请求参数:', params)
+                const response = await api.generateImage(params)
+                console.log('[生成图像] 响应数据:', response)
 
                 // 保存任务ID
                 const taskId = response.task_id
@@ -634,14 +619,6 @@ export const useGeneratorStore = defineStore('generator', {
                 }
             } catch (error: any) {
                 console.error('图像生成失败:', error)
-
-                // 如果是404错误，提示用户使用模拟模式
-                if (error?.response?.status === 404) {
-                    return {
-                        success: false,
-                        error: '后端API未正确配置。请在浏览器控制台输入: localStorage.setItem("mockMode", "true") 启用模拟模式进行测试'
-                    }
-                }
 
                 return {
                     success: false,
@@ -826,12 +803,7 @@ export const useGeneratorStore = defineStore('generator', {
                 }
 
                 try {
-                    let task
-                    if (isMockMode()) {
-                        task = await mockGetTaskStatus(taskId)
-                    } else {
-                        task = await api.getTaskStatus(taskId)
-                    }
+                    const task = await api.getTaskStatus(taskId)
 
                     // 再次检查会话是否已切换（在API调用之后）
                     if (this.currentSessionId !== sessionWhenStarted) {
@@ -981,32 +953,15 @@ export const useGeneratorStore = defineStore('generator', {
             this.isGenerating = true
 
             try {
-                let response
-
-                // 使用模拟模式或真实API
-                if (isMockMode()) {
-                    console.log('[模拟模式] 创建批量生成任务')
-                    // 模拟批量生成
-                    response = {
-                        batch_id: `batch_${Date.now()}`,
-                        tasks: prompts.map((prompt, i) => ({
-                            task_id: `task_${Date.now()}_${i}`,
-                            status: 'pending',
-                            params: { prompt }
-                        }))
+                const response = await api.batchGenerate({
+                    prompts: prompts,
+                    provider: undefined,
+                    default_params: {
+                        width: this.width,
+                        height: this.height,
+                        quality: this.quality
                     }
-                } else {
-                    // 调用真实的批量生成API
-                    response = await api.batchGenerate({
-                        prompts: prompts,
-                        provider: undefined,
-                        default_params: {
-                            width: this.width,
-                            height: this.height,
-                            quality: this.quality
-                        }
-                    })
-                }
+                })
 
                 console.log('批量生成任务已创建:', response.batch_id)
 
@@ -1030,7 +985,6 @@ export const useGeneratorStore = defineStore('generator', {
             const sessionWhenStarted = this.currentSessionId
             let attempts = 0
             const results = []
-            let completedCount = 0
 
             // 注册轮询任务
             this.activePollingTasks.set(batchId, sessionWhenStarted)
@@ -1044,29 +998,7 @@ export const useGeneratorStore = defineStore('generator', {
                 }
 
                 try {
-                    let batchTask
-                    if (isMockMode()) {
-                        // 模拟批量任务进度
-                        batchTask = {
-                            batch_id: batchId,
-                            tasks: results.map((r, i) => ({
-                                task_id: `${batchId}_${i}`,
-                                status: i < completedCount ? 'completed' : 'processing',
-                                result: i < completedCount ? {
-                                    images: [{
-                                        url: `https://picsum.photos/1024/1024?random=${Date.now()}_${i}`
-                                    }]
-                                } : undefined
-                            }))
-                        }
-
-                        // 模拟进度
-                        if (attempts % 5 === 0 && completedCount < totalCount) {
-                            completedCount++
-                        }
-                    } else {
-                        batchTask = await api.getBatchTaskStatus(batchId)
-                    }
+                    const batchTask = await api.getBatchTaskStatus(batchId)
 
                     // 再次检查会话是否已切换（在API调用之后）
                     if (this.currentSessionId !== sessionWhenStarted) {
@@ -1074,8 +1006,6 @@ export const useGeneratorStore = defineStore('generator', {
                         this.activePollingTasks.delete(batchId)
                         return false
                     }
-
-                    console.log(`批量任务状态更新 [${batchId}]:`, completedCount, '/', totalCount)
 
                     // 收集结果
                     if (batchTask.tasks) {
@@ -1100,6 +1030,7 @@ export const useGeneratorStore = defineStore('generator', {
 
                     // 更新消息内容
                     const currentCompleted = results.filter(r => r).length
+                    console.log(`批量任务状态更新 [${batchId}]:`, currentCompleted, '/', totalCount)
                     const batchProgress = buildBatchProgressPayload(batchTask, results, totalCount)
                     this.updateMessage(messageId, {
                         content: buildBatchProcessingContent(batchTask, totalCount),
@@ -1111,14 +1042,16 @@ export const useGeneratorStore = defineStore('generator', {
                     const batchStatus = String(batchTask?.status || '').toLowerCase()
                     if (currentCompleted >= totalCount || (TERMINAL_TASK_STATUSES.has(batchStatus) && currentCompleted > 0)) {
                         // 全部完成
-                        const finalImages = results.map((url, i) => ({
-                            url: url || `https://picsum.photos/1024/1024?random=${Date.now()}_${i}`,
-                            alt: `生成图片 ${i + 1}`
-                        }))
+                        const finalImages = results
+                            .filter(Boolean)
+                            .map((url, i) => ({
+                                url,
+                                alt: `生成图片 ${i + 1}`
+                            }))
                         console.log('批量任务全部完成，图片数据:', finalImages)
                         this.updateMessage(messageId, {
                             content: `批量生成完成！共 ${finalImages.length} 张图片`,
-                            status: 'completed',
+                            status: finalImages.length > 0 ? 'completed' : 'error',
                             images: finalImages,
                             batchProgress: buildBatchProgressPayload(batchTask, finalImages, totalCount)
                         })
@@ -1141,7 +1074,7 @@ export const useGeneratorStore = defineStore('generator', {
                         }
 
                         this.activePollingTasks.delete(batchId)
-                        return true
+                        return finalImages.length > 0
                     }
 
                     if (FAILED_TASK_STATUSES.has(batchStatus) && currentCompleted === 0) {
@@ -1173,13 +1106,16 @@ export const useGeneratorStore = defineStore('generator', {
             // 超时
             if (this.currentSessionId === sessionWhenStarted) {
                 const currentMessage = this.messages.find(m => m.id === messageId)
+                const timeoutImages = results
+                    .filter(Boolean)
+                    .map((url, i) => ({
+                        url,
+                        alt: `图片 ${i + 1}`
+                    }))
                 this.updateMessage(messageId, {
                     content: `批量生成超时，已完成 ${results.filter(r => r).length}/${totalCount}`,
                     status: 'timeout',
-                    images: results.map((url, i) => ({
-                        url: url || `https://via.placeholder.com/400x300?text=Image+${i+1}`,
-                        alt: `图片 ${i + 1}`
-                    })),
+                    images: timeoutImages,
                     batchProgress: currentMessage?.batchProgress
                         ? {
                             ...currentMessage.batchProgress,
@@ -1195,7 +1131,6 @@ export const useGeneratorStore = defineStore('generator', {
         async pollBatchStatusIncremental(batchId: string, messageId: number, totalCount: number, maxAttempts: number = 900, interval: number = 2000): Promise<boolean> {
             const sessionWhenStarted = this.currentSessionId
             let attempts = 0
-            let mockCompletedCount = 0
             const completedTaskImages = new Map<string, any[]>()
 
             const normalizeImage = (image: any, taskIndex: number, imageIndex: number) => {
@@ -1272,26 +1207,7 @@ export const useGeneratorStore = defineStore('generator', {
                 }
 
                 try {
-                    let batchTask
-                    if (isMockMode()) {
-                        if (attempts % 3 === 0 && mockCompletedCount < totalCount) {
-                            mockCompletedCount++
-                        }
-
-                        batchTask = {
-                            batch_id: batchId,
-                            status: mockCompletedCount >= totalCount ? 'completed' : 'processing',
-                            tasks: Array.from({ length: totalCount }, (_, i) => ({
-                                task_id: `${batchId}_${i}`,
-                                status: i < mockCompletedCount ? 'completed' : 'processing',
-                                images: i < mockCompletedCount ? [{
-                                    url: `https://picsum.photos/1024/1024?random=${Date.now()}_${i}`
-                                }] : []
-                            }))
-                        }
-                    } else {
-                        batchTask = await api.getBatchTaskStatus(batchId)
-                    }
+                    const batchTask = await api.getBatchTaskStatus(batchId)
 
                     if (this.currentSessionId !== sessionWhenStarted) {
                         console.log(`批量轮询停止: 会话已切换 (${batchId})`)

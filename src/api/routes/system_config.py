@@ -1,7 +1,9 @@
 """System configuration endpoints for admin-only settings."""
 
+import json
 import os
 import uuid
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -102,6 +104,49 @@ def _serialize_config(config: SystemConfig) -> ConfigItemResponse:
         description=config.description,
         updated_at=config.updated_at.isoformat() if config.updated_at else None,
     )
+
+
+async def _load_or_seed_json_config(
+    *,
+    config_key: str,
+    default_payload: dict,
+    description: str,
+) -> dict:
+    """Load JSON config from DB and seed it once when missing."""
+
+    db_manager = get_db_manager()
+    async with db_manager.get_session() as session:
+        config = await session.scalar(
+            select(SystemConfig).where(SystemConfig.config_key == config_key)
+        )
+        if config and config.config_value:
+            try:
+                return json.loads(config.config_value)
+            except json.JSONDecodeError as exc:
+                logger.warning(f"Invalid JSON in system config {config_key}, reseeding default payload: {exc}")
+
+        payload_json = json.dumps(default_payload, ensure_ascii=False)
+
+        if config:
+            config.config_value = payload_json
+            config.config_type = "json"
+            config.category = "content"
+            config.description = description
+        else:
+            session.add(
+                SystemConfig(
+                    config_key=config_key,
+                    config_value=payload_json,
+                    config_type="json",
+                    category="content",
+                    description=description,
+                    is_public=True,
+                )
+            )
+
+        await session.commit()
+
+    return default_payload
 
 
 @router.get("/list", response_model=List[ConfigItemResponse], summary="List supported system configs")
@@ -258,31 +303,32 @@ async def batch_update_config(
 # ==================== 场景库数据接口 ====================
 
 SCENES_CONFIG_KEY = "scenes.data"
+SCENES_JSON_PATH = Path(__file__).parent.parent.parent.parent / "web" / "public" / "data" / "scenes.json"
+
+
+def _load_default_scenes_payload() -> dict:
+    try:
+        with open(SCENES_JSON_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                return data
+    except Exception as exc:
+        logger.warning(f"Failed to load default scenes JSON from {SCENES_JSON_PATH}: {exc}")
+
+    return {"categories": [], "scenes": []}
 
 
 @router.get("/scenes", summary="获取场景库数据（公开）")
 async def get_scenes_data():
     """公开接口，所有用户可读取场景库数据。不需要登录。"""
-    import json
-    from pathlib import Path
-
-    db_manager = get_db_manager()
     try:
-        async with db_manager.get_session() as session:
-            config = await session.scalar(
-                select(SystemConfig).where(SystemConfig.config_key == SCENES_CONFIG_KEY)
-            )
-            if config and config.config_value:
-                return json.loads(config.config_value)
+        return await _load_or_seed_json_config(
+            config_key=SCENES_CONFIG_KEY,
+            default_payload=_load_default_scenes_payload(),
+            description="场景库数据",
+        )
     except Exception as exc:
-        logger.warning(f"Failed to load scenes from DB, falling back to JSON file: {exc}")
-
-    # Fallback: load from static JSON file
-    json_path = Path(__file__).parent.parent.parent.parent / "web" / "public" / "data" / "scenes.json"
-    try:
-        with open(json_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
+        logger.error(f"Failed to load scenes config: {exc}")
         return {"categories": [], "scenes": []}
 
 
@@ -371,20 +417,18 @@ _DEFAULT_STYLES = [
 @router.get("/types-styles", summary="获取类型与风格配置（公开）")
 async def get_types_styles():
     """公开接口，获取首页类型和风格选项。"""
-    import json
-
-    db_manager = get_db_manager()
     try:
-        async with db_manager.get_session() as session:
-            config = await session.scalar(
-                select(SystemConfig).where(SystemConfig.config_key == TYPES_STYLES_CONFIG_KEY)
-            )
-            if config and config.config_value:
-                return json.loads(config.config_value)
+        return await _load_or_seed_json_config(
+            config_key=TYPES_STYLES_CONFIG_KEY,
+            default_payload={
+                "types": [dict(item) for item in _DEFAULT_TYPES],
+                "styles": [dict(item) for item in _DEFAULT_STYLES],
+            },
+            description="首页类型与风格配置",
+        )
     except Exception as exc:
-        logger.warning(f"Failed to load types/styles from DB: {exc}")
-
-    return {"types": _DEFAULT_TYPES, "styles": _DEFAULT_STYLES}
+        logger.error(f"Failed to load types/styles config: {exc}")
+        return {"types": [], "styles": []}
 
 
 class UpdateTypesStylesRequest(BaseModel):

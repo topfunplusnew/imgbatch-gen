@@ -28,29 +28,17 @@ export interface Case {
 export const useCaseStore = defineStore('cases', () => {
   // 状态
   const cases = ref<Case[]>([])
+  const categories = ref<string[]>([])
 
-  // 预设分类
-  const presetCategories = [
-    '电商',
-    '广告',
-    '动漫',
-    '室内',
-    'logo',
-    '摄影',
-    '插画',
-    '其他'
-  ]
-
-  // 所有可用的分类（预设 + 从案例中提取的实际分类）
+  // 所有可用的分类（后端返回 + 从已加载案例中补齐）
   const availableCategories = computed(() => {
-    const usedCategories = new Set<string>()
+    const usedCategories = new Set<string>(categories.value.filter(Boolean))
     cases.value.forEach(c => {
       if (c.category) {
         usedCategories.add(c.category)
       }
     })
-    // 合并预设分类和实际使用的分类
-    return [...presetCategories, ...Array.from(usedCategories)]
+    return Array.from(usedCategories)
   })
 
   const selectedCategory = ref<string | null>(null)
@@ -84,6 +72,18 @@ export const useCaseStore = defineStore('cases', () => {
   })
 
   // Actions
+  async function fetchCategories() {
+    try {
+      const result = await api.getCaseCategories()
+      categories.value = (result.categories || [])
+        .map((item) => item?.value || item?.label)
+        .filter(Boolean)
+    } catch (error: any) {
+      console.error('获取案例分类失败:', error)
+      categories.value = Array.from(new Set(cases.value.map((item) => item.category).filter(Boolean)))
+    }
+  }
+
   async function fetchCases(page: number = 0, append: boolean = false) {
     if (loading.value) return
 
@@ -192,6 +192,7 @@ export const useCaseStore = defineStore('cases', () => {
 
   // 初始化
   function initialize() {
+    fetchCategories()
     refresh()
   }
 
@@ -212,6 +213,7 @@ export const useCaseStore = defineStore('cases', () => {
 
     // Actions
     fetchCases,
+    fetchCategories,
     loadMore,
     refresh,
     setCategory,

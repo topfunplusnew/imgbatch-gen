@@ -204,15 +204,9 @@
             </div>
           </div>
 
-          <!-- Empty state with showcase gallery -->
+          <!-- Empty state -->
           <div v-else>
             <div class="rounded-xl border border-dashed border-border-dark bg-white/60 p-6">
-              <div class="grid grid-cols-3 gap-2.5 md:grid-cols-6">
-                <div v-for="i in 6" :key="i" class="overflow-hidden rounded-lg">
-                  <img :src="`/covers/gallery/showcase_${i}.webp`" alt="示例作品"
-                    class="aspect-square w-full object-cover opacity-80 hover:opacity-100 transition-opacity cursor-pointer" />
-                </div>
-              </div>
               <div class="mt-4 text-center">
                 <span class="material-symbols-outlined !text-3xl text-ink-300">auto_awesome</span>
                 <p class="mt-1.5 text-sm font-medium text-ink-700">暂无作品</p>
@@ -358,37 +352,10 @@ const homeSelectedType = ref('')
 const homeSelectedStyle = ref('')
 
 // 类型：纯文字标签（不带图片）
-const homeTypes = ref([
-  { value: 'poster', label: '海报设计' },
-  { value: 'reading_notes', label: '读书笔记' },
-  { value: 'mind_map', label: '思维导图' },
-  { value: 'infographic', label: '信息图表' },
-  { value: 'flow_guide', label: '流程指南' },
-  { value: 'comic', label: '漫画故事' },
-  { value: 'timeline', label: '时间线' },
-  { value: 'comparison', label: '对比分析' },
-  { value: 'tutorial', label: '教程指南' },
-  { value: 'concept_map', label: '概念地图' },
-  { value: 'visual_summary', label: '视觉总结' },
-  { value: 'poetry', label: '诗词解读' },
-  { value: 'formula', label: '公式原理' },
-])
+const homeTypes = ref([])
 
 // 风格：带封面图
-const homeStyles = ref([
-  { value: 'hand_drawn', label: '手绘', cover: '/covers/styles/hand_drawn.webp' },
-  { value: 'watercolor', label: '水彩', cover: '/covers/styles/watercolor.webp' },
-  { value: 'flat', label: '扁平', cover: '/covers/styles/flat.webp' },
-  { value: 'cartoon', label: '卡通', cover: '/covers/styles/cartoon.webp' },
-  { value: 'realistic', label: '写实', cover: '/covers/styles/illustration.webp' },
-  { value: 'retro', label: '复古', cover: '/covers/styles/retro.webp' },
-  { value: 'anime', label: '动漫', cover: '/covers/styles/cartoon.webp' },
-  { value: '3d', label: '3D', cover: '/covers/styles/clay.webp' },
-  { value: 'minimalist', label: '极简', cover: '/covers/styles/minimalist.webp' },
-  { value: 'ink', label: '水墨', cover: '/covers/styles/ink.webp' },
-  { value: 'sketch', label: '素描', cover: '/covers/styles/sketch.webp' },
-  { value: 'pixel', label: '像素', cover: '/covers/styles/pixel.webp' },
-])
+const homeStyles = ref([])
 
 const homeTypeObj = computed(() => homeTypes.value.find(t => t.value === homeSelectedType.value))
 const homeStyleObj = computed(() => homeStyles.value.find(s => s.value === homeSelectedStyle.value))
@@ -398,12 +365,15 @@ const homeTypesHasCover = computed(() => homeTypes.value.some(t => t.cover))
 async function loadTypesStyles() {
   try {
     const res = await fetch('/api/v1/admin/system-config/types-styles')
-    if (res.ok) {
-      const data = await res.json()
-      if (data.types?.length) homeTypes.value = data.types
-      if (data.styles?.length) homeStyles.value = data.styles
-    }
-  } catch { /* 使用默认值 */ }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+    const data = await res.json()
+    homeTypes.value = Array.isArray(data.types) ? data.types : []
+    homeStyles.value = Array.isArray(data.styles) ? data.styles : []
+  } catch {
+    homeTypes.value = []
+    homeStyles.value = []
+  }
 }
 
 // Gallery state
