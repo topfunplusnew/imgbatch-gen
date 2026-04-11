@@ -19,7 +19,7 @@
       <div
         v-if="msg.role === 'assistant' && msg.status === 'processing' && !msg.content"
         :class="[
-          'assistant-message assistant-message--thinking mb-2 block max-w-[90%] text-left xs:max-w-[85%] sm:max-w-[80%]'
+          'assistant-message assistant-message--thinking mb-2 block max-w-[94%] text-left xs:max-w-[90%] sm:max-w-[88%] lg:max-w-[90%]'
         ]">
         <div class="flex items-center gap-3">
           <div class="flex items-center gap-1.5">
@@ -37,8 +37,8 @@
              'leading-relaxed mb-2 block text-left',
              'text-sm xs:text-base md:text-base',
              msg.role === 'user'
-               ? 'user-message-bubble px-3 xs:px-4 py-2.5 xs:py-3 rounded-2xl ml-auto max-w-[90%] xs:max-w-[85%] sm:max-w-[80%]'
-               : getAssistantTextClasses(msg.status) + ' assistant-message max-w-[90%] xs:max-w-[85%] sm:max-w-[80%]'
+               ? 'user-message-bubble px-3 xs:px-4 py-2.5 xs:py-3 rounded-2xl ml-auto max-w-[94%] xs:max-w-[90%] sm:max-w-[88%] lg:max-w-[90%]'
+               : getAssistantTextClasses(msg.status) + ' assistant-message max-w-[94%] xs:max-w-[90%] sm:max-w-[88%] lg:max-w-[90%]'
            ]">
         <span v-if="msg.role === 'assistant'" class="markdown-body" v-html="renderMarkdown(msg.content)"></span>
         <!-- 流式输出时的闪烁光标 -->
@@ -51,7 +51,7 @@
 
       <div
         v-if="isStreamingTextResponse"
-        class="mb-2 inline-flex max-w-[90%] xs:max-w-[85%] sm:max-w-[80%] items-center gap-1.5 rounded-full bg-white/80 px-2.5 py-1 text-[11px] text-ink-400 border border-primary/10"
+        class="mb-2 inline-flex max-w-[94%] xs:max-w-[90%] sm:max-w-[88%] lg:max-w-[90%] items-center gap-1.5 rounded-full bg-white/80 px-2.5 py-1 text-[11px] text-ink-400 border border-primary/10"
       >
         <span class="streaming-indicator__dot"></span>
         <span>实时输出中</span>
@@ -297,7 +297,7 @@
       </div>
 
       <!-- 计费状态卡片 -->
-      <div v-if="billingDisplay" class="mt-2 max-w-[90%] xs:max-w-[85%] sm:max-w-[80%]">
+      <div v-if="billingDisplay" class="mt-2 max-w-[94%] xs:max-w-[90%] sm:max-w-[88%] lg:max-w-[90%]">
         <div
           class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border"
           :class="billingDisplay.classes"
@@ -618,13 +618,13 @@ const generatedGalleryGridClass = computed(() =>
   hasPendingGeneratedSlots.value
     ? (
         generatedGallerySlots.value.length <= 1
-          ? 'grid grid-cols-1 max-w-[180px] md:max-w-[220px] gap-2.5'
-          : 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-w-4xl'
+          ? 'grid grid-cols-1 max-w-[240px] md:max-w-[320px] gap-3'
+          : 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 max-w-full'
       )
     : (
         generatedGallerySlots.value.length <= 1
-          ? 'grid grid-cols-1 max-w-xs md:max-w-md gap-2 xs:gap-3 md:gap-4'
-          : 'grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 xs:gap-3 md:gap-4'
+          ? 'grid grid-cols-1 max-w-sm md:max-w-lg gap-3 xs:gap-4 md:gap-5'
+          : 'grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 xs:gap-3 md:gap-4'
       )
 )
 const batchProgressPercent = computed(() => {

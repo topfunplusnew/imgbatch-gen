@@ -1,7 +1,7 @@
 <template>
   <div class="shrink-0 border-t border-border-dark bg-white/55 backdrop-blur-xl">
     <div class="px-3 py-3 xs:px-4 md:px-6 md:py-4">
-      <div class="mx-auto w-full md:w-[68%]">
+      <div class="mx-auto w-full lg:w-[85%] xl:w-[78%]">
         <div v-if="generatorStore.attachments.length > 0" class="mb-3 flex flex-wrap gap-2">
           <div
             v-for="(file, index) in generatorStore.attachments"

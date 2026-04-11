@@ -18,7 +18,7 @@
       <!-- 创作记录详情面板 -->
       <CreationDetailPanel />
 
-      <div class="max-w-full md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto space-y-6 md:space-y-8">
+      <div class="max-w-full md:max-w-3xl lg:max-w-5xl xl:max-w-[1280px] mx-auto space-y-6 md:space-y-8">
         <MessageItem v-for="msg in generatorStore.messages" :key="msg.id" :msg="msg" />
         <div ref="chatBottomRef" class="h-px w-full"></div>
       </div>
