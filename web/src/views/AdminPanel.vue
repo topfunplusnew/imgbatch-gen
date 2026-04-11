@@ -821,6 +821,45 @@
                     <el-input v-model="tpl.type" placeholder="类型（如：海报设计）" />
                     <el-input v-model="tpl.style" placeholder="风格（如：手绘）" />
                     <el-input v-model="tpl.prompt" type="textarea" :rows="2" placeholder="提示词模版" class="md:col-span-2" />
+                    <div class="md:col-span-2 rounded-xl border border-dashed border-border-dark bg-gray-50 p-3">
+                      <div class="flex flex-col gap-3 sm:flex-row sm:items-start">
+                        <div class="h-24 w-36 shrink-0 overflow-hidden rounded-xl bg-primary-soft/30">
+                          <img
+                            v-if="tpl.exampleImage"
+                            :src="tpl.exampleImage"
+                            class="h-full w-full object-cover"
+                          />
+                          <div v-else class="grid h-full place-items-center text-xs font-medium text-ink-400">
+                            模版封面
+                          </div>
+                        </div>
+                        <div class="min-w-0 flex-1 space-y-2">
+                          <el-input v-model="tpl.exampleImage" placeholder="模版封面 URL 或上传后自动填入" />
+                          <div class="flex flex-wrap items-center gap-2">
+                            <el-upload
+                              :auto-upload="false"
+                              :show-file-list="false"
+                              accept="image/*"
+                              :on-change="(uploadFile) => handleTemplateCoverUpload(uploadFile, tpl)"
+                            >
+                              <el-button size="small">上传模版封面</el-button>
+                            </el-upload>
+                            <el-button
+                              v-if="tpl.exampleImage"
+                              size="small"
+                              text
+                              type="danger"
+                              @click="tpl.exampleImage = ''"
+                            >
+                              清除封面
+                            </el-button>
+                          </div>
+                          <p class="text-xs text-ink-500">
+                            前台会优先展示这里配置的真实封面；未配置时会使用模版标题、类型、风格生成结构化预览。
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   <div class="mt-2 flex justify-end">
                     <el-button size="small" type="danger" text @click="removeTemplate(i)">删除</el-button>
@@ -1414,6 +1453,16 @@ function handleSceneCoverUpload(uploadFile: any) {
   if (!file) return
   const reader = new FileReader()
   reader.onload = (e) => { sceneForm.value.coverImage = e.target?.result as string }
+  reader.readAsDataURL(file)
+}
+
+function handleTemplateCoverUpload(uploadFile: any, template: any) {
+  const file = uploadFile?.raw || uploadFile
+  if (!file || !template) return
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    template.exampleImage = e.target?.result as string
+  }
   reader.readAsDataURL(file)
 }
 

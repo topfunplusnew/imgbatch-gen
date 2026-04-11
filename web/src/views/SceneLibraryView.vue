@@ -150,15 +150,47 @@
         <!-- Templates -->
         <div class="space-y-3">
           <div
-            v-for="tpl in selectedScene.templates"
+            v-for="(tpl, tplIndex) in selectedScene.templates"
             :key="tpl.id"
-            class="group overflow-hidden rounded-2xl border border-border-dark bg-white/80 transition hover:shadow-md"
+            class="template-card group overflow-hidden rounded-2xl border border-border-dark bg-white/90 transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg"
           >
-            <div v-if="tpl.exampleImage" class="aspect-[4/3] overflow-hidden bg-primary-soft/20">
-              <img :src="tpl.exampleImage" class="w-full h-full object-cover transition-transform group-hover:scale-105" />
+            <div class="template-cover aspect-[4/3] overflow-hidden" :style="getTemplateCoverStyle(tpl, tplIndex)">
+              <img
+                v-if="tpl.exampleImage && !tpl.__coverImageFailed"
+                :src="tpl.exampleImage"
+                :alt="tpl.title"
+                class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                loading="lazy"
+                @error="tpl.__coverImageFailed = true"
+              />
+              <div v-else class="template-cover-generated">
+                <div class="template-cover-grid"></div>
+                <div class="template-cover-orbit template-cover-orbit--outer"></div>
+                <div class="template-cover-orbit template-cover-orbit--inner"></div>
+                <div class="template-cover-main">
+                  <span class="material-symbols-outlined template-cover-icon">
+                    {{ getTemplateCoverIcon(tpl) }}
+                  </span>
+                  <div class="template-cover-title">{{ tpl.title }}</div>
+                  <div class="template-cover-subtitle">
+                    {{ tpl.type || selectedScene.name }} · {{ tpl.style || '自定义风格' }}
+                  </div>
+                </div>
+                <div class="template-cover-chips">
+                  <span
+                    v-for="keyword in getTemplateCoverKeywords(tpl)"
+                    :key="keyword"
+                  >
+                    {{ keyword }}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div class="p-3">
-              <h5 class="text-sm font-semibold text-ink-950">{{ tpl.title }}</h5>
+            <div class="p-4">
+              <h5 class="text-base font-semibold text-ink-950">{{ tpl.title }}</h5>
+              <p v-if="tpl.prompt" class="mt-1.5 line-clamp-2 text-xs leading-5 text-ink-500">
+                {{ tpl.prompt }}
+              </p>
               <div class="mt-1.5 flex flex-wrap gap-1.5">
                 <el-tag v-if="tpl.type" size="small">{{ tpl.type }}</el-tag>
                 <el-tag v-if="tpl.style" size="small" type="info">{{ tpl.style }}</el-tag>
@@ -267,6 +299,57 @@ const useSameStyle = (template) => {
   notification.success('已加载模版', '已补强提示词并固定推荐生图模型，可直接发送或修改后发送')
 }
 
+const TEMPLATE_COVER_PALETTES = [
+  { accent: '#2b6cb0', soft: '#dbeafe', gradient: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 44%, #fef3c7 100%)' },
+  { accent: '#b45309', soft: '#ffedd5', gradient: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 46%, #dcfce7 100%)' },
+  { accent: '#047857', soft: '#d1fae5', gradient: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 48%, #e0f2fe 100%)' },
+  { accent: '#be123c', soft: '#ffe4e6', gradient: 'linear-gradient(135deg, #fff1f2 0%, #ffe4e6 46%, #fef3c7 100%)' },
+  { accent: '#6d28d9', soft: '#ede9fe', gradient: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 48%, #e0f2fe 100%)' },
+  { accent: '#334155', soft: '#e2e8f0', gradient: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 48%, #fef9c3 100%)' },
+]
+
+const TEMPLATE_TYPE_ICONS = [
+  { keywords: ['公式', '数学', '函数'], icon: 'functions' },
+  { keywords: ['海报', '封面', '活动'], icon: 'campaign' },
+  { keywords: ['导图', '思维', '流程'], icon: 'account_tree' },
+  { keywords: ['图表', '数据', '信息'], icon: 'analytics' },
+  { keywords: ['卡片', '知识', '笔记'], icon: 'dashboard_customize' },
+  { keywords: ['漫画', '故事', '插画'], icon: 'draw' },
+]
+
+function hashTemplateValue(value) {
+  return String(value || '').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
+}
+
+function getTemplateCoverStyle(tpl, index = 0) {
+  const seed = hashTemplateValue(`${tpl?.title || ''}${tpl?.type || ''}${tpl?.style || ''}`) + index
+  const palette = TEMPLATE_COVER_PALETTES[seed % TEMPLATE_COVER_PALETTES.length]
+  return {
+    '--template-accent': palette.accent,
+    '--template-accent-soft': palette.soft,
+    '--template-gradient': palette.gradient,
+  }
+}
+
+function getTemplateCoverIcon(tpl) {
+  const text = `${tpl?.title || ''}${tpl?.type || ''}${tpl?.style || ''}${tpl?.prompt || ''}`
+  return TEMPLATE_TYPE_ICONS.find((item) => item.keywords.some((keyword) => text.includes(keyword)))?.icon || 'auto_awesome'
+}
+
+function getTemplateCoverKeywords(tpl) {
+  const candidates = [
+    tpl?.type,
+    tpl?.style,
+    ...String(tpl?.prompt || '')
+      .replace(/[，。、“”"：:；;（）()]/g, ' ')
+      .split(/\s+/)
+      .map((item) => item.trim())
+      .filter((item) => item.length >= 2 && item.length <= 8),
+  ].filter(Boolean)
+
+  return Array.from(new Set(candidates)).slice(0, 3)
+}
+
 onMounted(async () => {
   try {
     const res = await fetch('/api/v1/admin/system-config/scenes')
@@ -321,5 +404,119 @@ onMounted(async () => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.template-card {
+  transform: translateZ(0);
+}
+
+.template-cover {
+  background: var(--template-gradient);
+}
+
+.template-cover-generated {
+  position: relative;
+  display: grid;
+  height: 100%;
+  place-items: center;
+  overflow: hidden;
+  padding: 18px;
+  background:
+    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.95), transparent 28%),
+    radial-gradient(circle at 82% 78%, var(--template-accent-soft), transparent 30%),
+    var(--template-gradient);
+}
+
+.template-cover-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.28;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.7) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.7) 1px, transparent 1px);
+  background-size: 18px 18px;
+  mask-image: linear-gradient(to bottom, black, transparent);
+}
+
+.template-cover-orbit {
+  position: absolute;
+  border: 1px solid color-mix(in srgb, var(--template-accent) 40%, transparent);
+  border-radius: 999px;
+  transform: rotate(-14deg);
+}
+
+.template-cover-orbit--outer {
+  height: 168px;
+  width: 268px;
+}
+
+.template-cover-orbit--inner {
+  height: 104px;
+  width: 186px;
+  transform: rotate(18deg);
+}
+
+.template-cover-main {
+  position: relative;
+  z-index: 1;
+  width: min(86%, 320px);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 18px 50px rgba(31, 41, 55, 0.12);
+  padding: 18px;
+  text-align: center;
+  backdrop-filter: blur(14px);
+}
+
+.template-cover-icon {
+  display: inline-grid;
+  height: 44px;
+  width: 44px;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--template-accent);
+  color: #fff;
+  font-size: 24px;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--template-accent) 32%, transparent);
+}
+
+.template-cover-title {
+  margin-top: 12px;
+  color: #1f2937;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.template-cover-subtitle {
+  margin-top: 6px;
+  color: color-mix(in srgb, var(--template-accent) 70%, #475569);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.template-cover-chips {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.template-cover-chips span {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 6px 9px;
+  backdrop-filter: blur(10px);
 }
 </style>
