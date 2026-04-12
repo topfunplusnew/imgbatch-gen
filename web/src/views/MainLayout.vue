@@ -224,6 +224,7 @@ const menuItems = [
   { icon: 'collections', text: '多图创作', to: '/multi' },
   { icon: 'photo_library', text: '我的作品', to: '/gallery' },
   { icon: 'grid_view', text: '场景库', to: '/scenes' },
+  { icon: 'school', text: '上手教程', to: '/guide' },
 ]
 
 const isActive = (to: string) => {

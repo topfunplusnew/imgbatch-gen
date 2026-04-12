@@ -1,38 +1,19 @@
 <template>
   <main class="multi-view flex h-full min-h-0 flex-1 flex-col overflow-y-auto">
     <div class="mx-auto flex w-full max-w-[1380px] flex-1 flex-col gap-6 px-4 pb-10 pt-6 xs:px-6 md:px-8 md:gap-8 md:pt-8">
-      <section class="grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_340px]">
-        <div class="space-y-6">
+      <section class="space-y-6">
           <section class="glass-panel rounded-[30px] p-5 md:p-7">
-            <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div class="max-w-3xl">
-                <div class="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/6 px-3 py-1 text-xs font-semibold tracking-[0.18em] text-primary">
-                  <span class="material-symbols-outlined !text-sm">auto_awesome</span>
-                  多图创作
-                </div>
-                <h1 class="mt-4 text-3xl font-bold tracking-tight text-ink-950 md:text-[2.7rem] md:leading-[1.1]">
-                  一次输入，生成一整组更清晰的图片
-                </h1>
-                <p class="mt-3 max-w-2xl text-sm leading-6 text-ink-500 md:text-base">
-                  适合把教程、知识点、招生内容、流程说明拆成多张图。输入内容后会在下方保留横向历史，生成结果也支持放大查看细节。
-                </p>
+            <div class="max-w-3xl">
+              <div class="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/6 px-3 py-1 text-xs font-semibold tracking-[0.18em] text-primary">
+                <span class="material-symbols-outlined !text-sm">auto_awesome</span>
+                多图创作
               </div>
-
-              <div class="grid gap-3 sm:grid-cols-3 xl:w-[340px] xl:grid-cols-1">
-                <div class="summary-card">
-                  <span class="summary-card__label">当前模型</span>
-                  <p class="summary-card__value summary-card__value--compact">{{ currentModelLabel }}</p>
-                </div>
-                <div class="summary-card">
-                  <span class="summary-card__label">本次生成</span>
-                  <p class="summary-card__value">{{ batchCount }} 张</p>
-                </div>
-                <div class="summary-card">
-                  <span class="summary-card__label">可用积分</span>
-                  <p class="summary-card__value">{{ accountPointsDisplay }}</p>
-                  <p class="summary-card__hint">{{ accountPointsHint }}</p>
-                </div>
-              </div>
+              <h1 class="mt-4 text-3xl font-bold tracking-tight text-ink-950 md:text-[2.7rem] md:leading-[1.1]">
+                一次输入，生成一整组更清晰的图片
+              </h1>
+              <p class="mt-3 max-w-2xl text-sm leading-6 text-ink-500 md:text-base">
+                适合把教程、知识点、招生内容、流程说明拆成多张图。输入内容后会在下方保留横向历史，生成结果也支持放大查看细节。
+              </p>
             </div>
 
             <div class="mt-6 rounded-[28px] border border-border-dark/80 bg-white/95 p-4 shadow-[0_24px_60px_rgba(140,42,46,0.06)] md:p-5">
@@ -396,7 +377,7 @@
               <div>
                 <h2 class="text-xl font-bold text-ink-950">生图历史</h2>
                 <p class="mt-1 text-sm text-ink-500">
-                  最近完成的作品会保留在这里，横向滚动即可快速回看和放大。
+                  最近完成的作品会保留在这里，方便像首页画廊一样快速回看和放大。
                 </p>
               </div>
               <router-link
@@ -409,62 +390,70 @@
               </router-link>
             </div>
 
-            <div v-if="galleryRecords.length > 0" class="history-scroller mt-5 flex gap-4 overflow-x-auto pb-2">
+            <div v-if="galleryLoading && galleryRecords.length === 0" class="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+              <div v-for="i in 4" :key="i" class="animate-pulse overflow-hidden rounded-xl bg-white/60">
+                <div class="aspect-square rounded-t-xl bg-primary-soft/30"></div>
+                <div class="space-y-1.5 p-2.5">
+                  <div class="h-3 w-3/4 rounded bg-primary-soft/30"></div>
+                  <div class="h-2 w-1/2 rounded bg-primary-soft/30"></div>
+                </div>
+              </div>
+            </div>
+
+            <div v-else-if="galleryRecords.length > 0" class="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
               <article
                 v-for="record in galleryRecords"
                 :key="record.id"
-                class="history-card shrink-0 snap-start"
+                class="group relative overflow-hidden rounded-xl border border-border-dark bg-white/90 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
               >
                 <button class="block w-full cursor-zoom-in text-left" @click="openRecordPreview(record, 0)">
-                  <div class="history-card__image">
+                  <div class="relative aspect-square overflow-hidden bg-primary-soft/20">
                     <img
                       v-if="getRecordImage(record)"
                       :src="getRecordImage(record)"
                       :alt="displayPromptOrFallback(record.prompt)"
-                      class="h-full w-full object-contain"
+                      class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                       loading="lazy"
                       @error="handlePreviewImageFallback"
                     />
-                    <div v-else class="flex h-full items-center justify-center text-primary">
+                    <div v-else class="flex h-full items-center justify-center bg-primary-soft text-primary">
                       <span class="material-symbols-outlined !text-4xl">image</span>
+                    </div>
+
+                    <div
+                      v-if="record.image_urls?.length"
+                      class="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-white/92 px-2 py-1 text-[11px] font-medium text-primary shadow-sm backdrop-blur-sm"
+                    >
+                      <span class="material-symbols-outlined !text-sm">photo_library</span>
+                      {{ record.image_urls.length }} 张
                     </div>
                   </div>
                 </button>
 
-                <div class="p-4">
-                  <div class="flex items-center justify-between gap-3 text-[11px] text-ink-400">
-                    <span>{{ formatTime(record.created_at || record.timestamp) }}</span>
-                    <span v-if="record.image_urls?.length" class="inline-flex items-center gap-1 rounded-full bg-primary/8 px-2 py-1 font-medium text-primary">
-                      <span class="material-symbols-outlined !text-sm">photo_library</span>
-                      {{ record.image_urls.length }} 张
-                    </span>
-                  </div>
+                <div class="absolute right-1.5 top-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button
+                    class="grid h-7 w-7 place-items-center rounded-full bg-white/90 shadow backdrop-blur-sm transition-colors hover:bg-white"
+                    @click.stop="openRecordPreview(record, 0)"
+                  >
+                    <span class="material-symbols-outlined !text-sm text-ink-700">zoom_in</span>
+                  </button>
+                  <button
+                    v-if="extractDisplayPrompt(record.prompt)"
+                    class="grid h-7 w-7 place-items-center rounded-full bg-white/90 shadow backdrop-blur-sm transition-colors hover:bg-white"
+                    @click.stop="copyPrompt(record.prompt)"
+                  >
+                    <span class="material-symbols-outlined !text-sm text-ink-700">content_copy</span>
+                  </button>
+                </div>
 
-                  <p class="mt-3 line-clamp-2 text-sm font-medium leading-6 text-ink-800">
+                <div class="p-2.5">
+                  <p class="line-clamp-2 pr-5 text-xs text-ink-700">
                     {{ displayPromptOrFallback(record.prompt) }}
                   </p>
 
-                  <div class="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-ink-500">
-                    <span class="rounded-full bg-white px-2.5 py-1 shadow-sm">{{ record.model || '未知模型' }}</span>
-                    <span v-if="record.provider" class="rounded-full bg-white px-2.5 py-1 shadow-sm">{{ record.provider }}</span>
-                  </div>
-
-                  <div class="mt-4 flex items-center justify-between gap-2">
-                    <button
-                      class="inline-flex items-center gap-1 rounded-full border border-border-dark bg-white px-3 py-1.5 text-xs font-medium text-ink-600 transition-colors hover:border-primary/30 hover:text-primary"
-                      @click="openRecordPreview(record, 0)"
-                    >
-                      <span class="material-symbols-outlined !text-sm">zoom_in</span>
-                      放大查看
-                    </button>
-                    <button
-                      v-if="extractDisplayPrompt(record.prompt)"
-                      class="inline-flex items-center gap-1 rounded-full border border-border-dark bg-white px-3 py-1.5 text-xs font-medium text-ink-500 transition-colors hover:text-ink-950"
-                      @click="copyPrompt(record.prompt)"
-                    >
-                      <span class="material-symbols-outlined !text-sm">content_copy</span>
-                      复制提示词
-                    </button>
+                  <div class="mt-2 flex items-center justify-between gap-2 text-[11px] text-ink-400">
+                    <span class="truncate">{{ formatTime(record.created_at || record.timestamp) }}</span>
+                    <span class="truncate">{{ record.model || record.provider || '未标记模型' }}</span>
                   </div>
                 </div>
               </article>
@@ -476,116 +465,6 @@
               <p class="mt-1 text-xs text-ink-500">生成完成后，作品会以更大的横向卡片展示在这里</p>
             </div>
           </section>
-        </div>
-
-        <aside class="space-y-5 xl:sticky xl:top-6 xl:self-start">
-          <section class="glass-panel rounded-[28px] p-5">
-            <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined !text-xl text-primary">school</span>
-              <h2 class="text-lg font-bold text-ink-950">上手教程</h2>
-            </div>
-            <p class="mt-2 text-sm leading-6 text-ink-500">
-              第一次使用可以直接套用示例。系统会自动把内容拆成多张图，再到下方历史里回看与放大。
-            </p>
-
-            <div class="mt-4 space-y-3">
-              <div v-for="step in quickStartSteps" :key="step.title" class="quick-step">
-                <div class="quick-step__index">{{ step.index }}</div>
-                <div>
-                  <p class="text-sm font-semibold text-ink-900">{{ step.title }}</p>
-                  <p class="mt-1 text-xs leading-5 text-ink-500">{{ step.description }}</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="mt-5 space-y-2.5">
-              <button
-                v-for="example in tutorialExamples"
-                :key="example.title"
-                class="tutorial-example"
-                @click="applyTutorialExample(example)"
-              >
-                <div>
-                  <p class="text-sm font-semibold text-ink-900">{{ example.title }}</p>
-                  <p class="mt-1 text-xs leading-5 text-ink-500">{{ example.description }}</p>
-                </div>
-                <span class="material-symbols-outlined !text-lg text-primary">north_east</span>
-              </button>
-            </div>
-
-            <div class="mt-4 flex flex-wrap gap-2">
-              <button class="secondary-ghost-button" @click="router.push('/scenes')">
-                <span class="material-symbols-outlined !text-sm">grid_view</span>
-                打开场景库
-              </button>
-              <button class="secondary-ghost-button" @click="applyTutorialExample(tutorialExamples[0])">
-                <span class="material-symbols-outlined !text-sm">play_circle</span>
-                一键填入示例
-              </button>
-            </div>
-          </section>
-
-          <section class="glass-panel rounded-[28px] p-5">
-            <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined !text-xl text-primary">groups</span>
-              <h2 class="text-lg font-bold text-ink-950">适合这些人群</h2>
-            </div>
-            <p class="mt-2 text-sm leading-6 text-ink-500">
-              我把人群提示做成了更醒目的标签，方便用户快速判断自己适合做哪类图。
-            </p>
-
-            <div class="mt-4 flex flex-wrap gap-2.5">
-              <span
-                v-for="audience in audienceChips"
-                :key="audience"
-                class="audience-chip"
-              >
-                <span class="material-symbols-outlined !text-sm">arrow_outward</span>
-                {{ audience }}
-              </span>
-            </div>
-
-            <div class="mt-5 rounded-[22px] border border-primary/10 bg-primary/6 p-4">
-              <p class="text-sm font-semibold text-ink-900">推荐使用方式</p>
-              <p class="mt-2 text-xs leading-5 text-ink-500">
-                教程指南适合做步骤拆解，海报设计适合做招生宣传，信息图表适合做知识总结。先选类型，再调整风格，成功率会更高。
-              </p>
-            </div>
-          </section>
-
-          <section class="glass-panel rounded-[28px] p-5">
-            <div class="flex items-center justify-between gap-2">
-              <div>
-                <h2 class="text-lg font-bold text-ink-950">积分与状态</h2>
-                <p class="mt-1 text-xs text-ink-500">生成提交后会立即同步余额显示</p>
-              </div>
-              <span class="material-symbols-outlined !text-xl text-primary">account_balance_wallet</span>
-            </div>
-
-            <div class="mt-4 rounded-[22px] border border-border-dark/70 bg-white/90 p-4">
-              <p class="text-xs uppercase tracking-[0.18em] text-ink-400">可用积分</p>
-              <p class="mt-2 text-3xl font-bold text-ink-950">{{ accountPointsDisplay }}</p>
-              <p class="mt-1 text-xs text-ink-500">{{ accountPointsHint }}</p>
-            </div>
-
-            <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-              <button class="secondary-ghost-button justify-between" @click="router.push('/pricing')">
-                <span class="inline-flex items-center gap-1">
-                  <span class="material-symbols-outlined !text-sm">payments</span>
-                  去充值
-                </span>
-                <span class="material-symbols-outlined !text-sm">arrow_forward</span>
-              </button>
-              <button class="secondary-ghost-button justify-between" @click="reloadAccountInfo">
-                <span class="inline-flex items-center gap-1">
-                  <span class="material-symbols-outlined !text-sm">refresh</span>
-                  刷新积分
-                </span>
-                <span class="material-symbols-outlined !text-sm">sync</span>
-              </button>
-            </div>
-          </section>
-        </aside>
       </section>
     </div>
 
@@ -594,8 +473,8 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useGeneratorStore } from '@/store/useGeneratorStore'
 import ModelDropdown from '@/components/landing/ModelDropdown.vue'
@@ -607,8 +486,10 @@ import { notification } from '@/utils/notification'
 import { copyText } from '@/utils/clipboard'
 import { extractDisplayPrompt, displayPromptOrFallback } from '@/utils/promptDisplay'
 import { handleImageFallback, resolveImageSrc } from '@/utils/imageFallback'
+import { getTutorialExampleById } from '@/constants/multiGuide'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const generatorStore = useGeneratorStore()
 
@@ -620,6 +501,7 @@ const selectedType = ref('')
 const selectedStyle = ref('')
 const isGenerating = ref(false)
 const galleryRecords = ref([])
+const galleryLoading = ref(false)
 const currentTask = ref(null)
 const attachments = ref([])
 const uploadRef = ref(null)
@@ -634,53 +516,6 @@ const imageTypes = ref([])
 
 const imageStyles = ref([])
 
-const quickStartSteps = [
-  {
-    index: '01',
-    title: '先选类型和风格',
-    description: '教程指南、信息图表、海报设计这三类最适合做多图排版。',
-  },
-  {
-    index: '02',
-    title: '一句话写清主题',
-    description: '把核心内容、受众和期望张数写进去，系统会更容易拆分版面。',
-  },
-  {
-    index: '03',
-    title: '生成后在下方回看',
-    description: '点击图片即可放大，历史会横向保留，方便挑图和继续复用提示词。',
-  },
-]
-
-const tutorialExamples = [
-  {
-    title: '老师做知识衔接图',
-    description: '自动填入“初高中化学衔接指南”的多图示例',
-    prompt: '把“初高中化学衔接指南”整理成 4 张知识图，要求标题清晰、层级明确、适合学生收藏复习。',
-    type: 'tutorial',
-    style: 'hand_drawn',
-    count: 4,
-  },
-  {
-    title: '机构做招生宣传图',
-    description: '快速生成一组课程卖点与报名引导图',
-    prompt: '围绕“暑期衔接班招生”生成 4 张招生图，包含课程亮点、适合人群、学习成果和报名引导，视觉醒目。',
-    type: 'poster',
-    style: 'flat',
-    count: 4,
-  },
-  {
-    title: '博主做教程拆解图',
-    description: '适合把操作步骤拆成多张流程图',
-    prompt: '将“如何用三步记忆英语单词”做成 4 张教程图，每张图只讲一个重点，适合社交平台发布。',
-    type: 'tutorial',
-    style: 'cartoon',
-    count: 4,
-  },
-]
-
-const audienceChips = ['招生老师', '课程顾问', '知识博主', '自媒体创作者', '新手运营', '培训机构']
-
 const filteredTypes = computed(() => imageTypes.value)
 const typesHasCover = computed(() => imageTypes.value.some((item) => item.cover))
 const selectedTypeObj = computed(() => imageTypes.value.find((item) => item.value === selectedType.value))
@@ -689,22 +524,6 @@ const selectedTypeEmoji = computed(() => selectedTypeObj.value?.emoji || '')
 const selectedStyleLabel = computed(() => {
   if (!selectedStyle.value) return ''
   return imageStyles.value.find((item) => item.value === selectedStyle.value)?.label || ''
-})
-const currentModelLabel = computed(() => {
-  return generatorStore.selectedModelInfo?.display_name
-    || generatorStore.selectedModelInfo?.model_name
-    || generatorStore.model
-    || '未选择模型'
-})
-const accountPointsDisplay = computed(() => {
-  if (!authStore.isAuthenticated) return '登录后查看'
-  const total = (authStore.accountInfo?.points || 0) + (authStore.accountInfo?.gift_points || 0)
-  return `${total}`
-})
-const accountPointsHint = computed(() => {
-  if (!authStore.isAuthenticated) return '登录后可看到实时积分变化'
-  const gift = authStore.accountInfo?.gift_points || 0
-  return gift > 0 ? `其中临时积分 ${gift}，会一起实时刷新` : '生成提交后会自动同步余额'
 })
 const currentTaskIcon = computed(() => {
   const status = String(currentTask.value?.status || '').toLowerCase()
@@ -844,20 +663,6 @@ function scheduleAccountRefresh(billing) {
   }, 260)
 }
 
-async function reloadAccountInfo() {
-  if (!authStore.isAuthenticated) {
-    router.push('/login')
-    return
-  }
-
-  try {
-    await authStore.fetchAccountInfo()
-    notification.success('已刷新', '积分信息已更新')
-  } catch (error) {
-    notification.error('刷新失败', error?.message || '请稍后重试')
-  }
-}
-
 async function loadTypesStyles() {
   try {
     const response = await fetch('/api/v1/admin/system-config/types-styles')
@@ -882,6 +687,7 @@ async function loadTypesStyles() {
 }
 
 async function loadGallery() {
+  galleryLoading.value = true
   try {
     const records = await api.getUnifiedGenerationHistory(10, 0, 'completed')
     galleryRecords.value = (records || []).filter((record) => buildRecordPreviewItems(record).length > 0)
@@ -892,10 +698,14 @@ async function loadGallery() {
     } catch {
       galleryRecords.value = []
     }
+  } finally {
+    galleryLoading.value = false
   }
 }
 
 function applyTutorialExample(example) {
+  if (!example) return
+
   promptInput.value = example.prompt
   selectedType.value = example.type
   selectedStyle.value = example.style
@@ -908,6 +718,19 @@ function applyTutorialExample(example) {
   })
 
   notification.success('已填入示例', `${example.title} 已写入输入框`)
+}
+
+async function syncRouteExample(exampleId) {
+  if (typeof exampleId !== 'string' || !exampleId) return
+
+  const example = getTutorialExampleById(exampleId)
+  if (!example) return
+
+  applyTutorialExample(example)
+
+  const nextQuery = { ...route.query }
+  delete nextQuery.example
+  await router.replace({ path: route.path, query: nextQuery })
 }
 
 function getFileIcon(file) {
@@ -1225,6 +1048,10 @@ async function startBatchGeneration() {
   }
 }
 
+watch(() => route.query.example, (exampleId) => {
+  void syncRouteExample(exampleId)
+}, { immediate: true })
+
 onMounted(async () => {
   if (authStore.isAuthenticated && !authStore.accountInfo) {
     void authStore.fetchAccountInfo().catch(() => {})
@@ -1256,153 +1083,6 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 24px 72px rgba(15, 23, 42, 0.08);
   backdrop-filter: blur(16px);
-}
-
-.summary-card {
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.86);
-  border-radius: 1.25rem;
-  padding: 0.95rem 1rem;
-}
-
-.summary-card__label {
-  display: block;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: rgba(100, 106, 115, 0.82);
-}
-
-.summary-card__value {
-  margin-top: 0.45rem;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1f2329;
-  line-height: 1.1;
-}
-
-.summary-card__value--compact {
-  font-size: 1rem;
-  line-height: 1.45;
-}
-
-.summary-card__hint {
-  margin-top: 0.3rem;
-  font-size: 0.72rem;
-  color: rgba(100, 106, 115, 0.9);
-}
-
-.quick-step {
-  display: grid;
-  grid-template-columns: 2.35rem minmax(0, 1fr);
-  gap: 0.9rem;
-  align-items: start;
-}
-
-.quick-step__index {
-  display: grid;
-  height: 2.35rem;
-  width: 2.35rem;
-  place-items: center;
-  border-radius: 999px;
-  background: rgba(20, 86, 240, 0.08);
-  color: rgb(20, 86, 240);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-}
-
-.tutorial-example {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  border-radius: 1.15rem;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.9);
-  padding: 0.95rem 1rem;
-  text-align: left;
-  transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
-}
-
-.tutorial-example:hover {
-  border-color: rgba(20, 86, 240, 0.24);
-  box-shadow: 0 12px 24px rgba(20, 86, 240, 0.08);
-  transform: translateY(-1px);
-}
-
-.audience-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  border-radius: 999px;
-  border: 1px solid rgba(20, 86, 240, 0.14);
-  background: rgba(20, 86, 240, 0.08);
-  padding: 0.55rem 0.8rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: rgb(20, 86, 240);
-}
-
-.secondary-ghost-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: rgba(255, 255, 255, 0.9);
-  padding: 0.7rem 0.9rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: rgba(31, 35, 41, 0.72);
-  transition: border-color 180ms ease, color 180ms ease, background-color 180ms ease;
-}
-
-.secondary-ghost-button:hover {
-  border-color: rgba(20, 86, 240, 0.22);
-  color: rgb(20, 86, 240);
-  background: rgba(20, 86, 240, 0.03);
-}
-
-.history-scroller {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(15, 23, 42, 0.18) transparent;
-  scroll-snap-type: x mandatory;
-}
-
-.history-scroller::-webkit-scrollbar {
-  height: 8px;
-}
-
-.history-scroller::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.history-scroller::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.18);
-}
-
-.history-card {
-  width: min(360px, 82vw);
-  overflow: hidden;
-  border-radius: 1.5rem;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
-}
-
-.history-card__image {
-  display: flex;
-  min-height: 260px;
-  align-items: center;
-  justify-content: center;
-  background:
-    radial-gradient(circle at top, rgba(20, 86, 240, 0.08), transparent 50%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(247, 247, 249, 0.92));
-  padding: 1.1rem;
 }
 
 .result-card {
