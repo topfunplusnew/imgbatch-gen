@@ -1,4 +1,6 @@
 export const CASE_IMAGE_PLACEHOLDER = '/photo/template-placeholder.svg'
+const ENV_API_ENDPOINT = String(import.meta.env.VITE_API_BASE_URL || '').trim()
+const FORCE_SAME_ORIGIN_API = !import.meta.env.DEV && !ENV_API_ENDPOINT
 
 type StoredApiConfig = {
   apiEndpoint?: string
@@ -35,6 +37,10 @@ function getCurrentOrigin(): string {
 
 function getStoredApiEndpoint(): string {
   if (typeof window === 'undefined') {
+    return ''
+  }
+
+  if (FORCE_SAME_ORIGIN_API) {
     return ''
   }
 

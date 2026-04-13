@@ -82,6 +82,19 @@ class RechargeOptionResponse(BaseModel):
     popular: bool
 
 
+class SubscriptionPlanResponse(BaseModel):
+    """订阅套餐响应"""
+    id: str
+    name: str
+    icon: str
+    badge: str
+    monthly_price: int
+    yearly_price: int
+    points_per_month: int
+    features: List[str]
+    color: str
+
+
 # ==================== 路由 ====================
 
 
@@ -196,6 +209,28 @@ async def get_recharge_options(user: dict = Depends(OptionalAuthDependency())):
     ]
 
 
+@router.get("/subscription/plans", response_model=List[SubscriptionPlanResponse], summary="获取订阅套餐")
+async def get_subscription_plans(user: dict = Depends(OptionalAuthDependency())):
+    """获取公开的订阅套餐列表"""
+    config = get_billing_config()
+    plans = config.get("subscription_plans", {}).get("plans", [])
+
+    return [
+        SubscriptionPlanResponse(
+            id=plan.get("id", ""),
+            name=plan.get("name", ""),
+            icon=plan.get("icon", "workspace_premium"),
+            badge=plan.get("badge", ""),
+            monthly_price=plan.get("monthly_price", 0),
+            yearly_price=plan.get("yearly_price", 0),
+            points_per_month=plan.get("points_per_month", 0),
+            features=plan.get("features", []) or [],
+            color=plan.get("color", "red"),
+        )
+        for plan in plans
+    ]
+
+
 @router.get("/billing/config", summary="获取计费配置")
 async def get_billing_config_info(user: dict = Depends(OptionalAuthDependency())):
     """获取计费配置信息（公开接口）"""
@@ -204,5 +239,7 @@ async def get_billing_config_info(user: dict = Depends(OptionalAuthDependency())
     return {
         "billing": config.get("billing", {}),
         "initial_quota": config.get("initial_quota", {}),
+        "recharge_options": config.get("recharge_options", {}),
+        "subscription_plans": config.get("subscription_plans", {}),
         "limits": config.get("limits", {}),
     }

@@ -39,6 +39,7 @@ class PaymentService:
         plan_id: Optional[str] = None,
         subject: str = "",
         body: str = "",
+        attach: Optional[Dict[str, Any]] = None,
     ) -> PaymentOrder:
         """
         创建支付订单
@@ -51,6 +52,7 @@ class PaymentService:
             plan_id: 套餐ID（可选）
             subject: 订单标题
             body: 订单描述
+            attach: 订单附加信息
 
         Returns:
             PaymentOrder
@@ -69,6 +71,7 @@ class PaymentService:
             subject=subject,
             body=body,
             plan_id=plan_id,
+            attach=attach,
             expire_time=expire_time,
         )
 
@@ -302,14 +305,48 @@ class PaymentService:
 
             # 查找套餐配置
             plan_config = self._get_plan_config(order.plan_id)
-            duration_days = plan_config.get("duration_days", 30) if plan_config else 30
-            points_included = plan_config.get("points_included", 0) if plan_config else 0
+            attach = order.attach or {}
+            billing_cycle = str(attach.get("billing_cycle") or "").strip().lower()
+            if billing_cycle not in {"monthly", "yearly"}:
+                if plan_config and order.amount == plan_config.get("yearly_price"):
+                    billing_cycle = "yearly"
+                else:
+                    billing_cycle = "monthly"
+
+            if billing_cycle == "yearly":
+                duration_days = int(
+                    attach.get("duration_days")
+                    or (plan_config.get("yearly_duration_days") if plan_config else 0)
+                    or 365
+                )
+                points_included = int(
+                    attach.get("points_included")
+                    or (plan_config.get("points_per_month", 0) * 12 if plan_config else 0)
+                    or 0
+                )
+            else:
+                duration_days = int(
+                    attach.get("duration_days")
+                    or (plan_config.get("monthly_duration_days") if plan_config else 0)
+                    or 30
+                )
+                points_included = int(
+                    attach.get("points_included")
+                    or (plan_config.get("points_per_month", 0) if plan_config else 0)
+                    or 0
+                )
+
             plan_name = plan_config.get("name", order.plan_id) if plan_config else order.plan_id
+            cycle_label = "年付" if billing_cycle == "yearly" else "月付"
 
             # 设置订阅到期时间
             from datetime import datetime, timedelta
+            now = datetime.utcnow()
+            current_expiry = account.subscription_expires_at
+            base_time = current_expiry if current_expiry and current_expiry > now else now
             account.subscription_plan = order.plan_id
-            account.subscription_expires_at = datetime.now() + timedelta(days=duration_days)
+            account.subscription_expires_at = base_time + timedelta(days=duration_days)
+            account.subscription_quota_used = 0
             await account_service.db_manager.update_account(account)
 
             # 发放套餐包含的积分
@@ -319,12 +356,12 @@ class PaymentService:
                     transaction_type="subscription",
                     amount=0,
                     points_change=points_included,
-                    description=f"订阅 {plan_name} - 赠送 {points_included} 积分",
+                    description=f"订阅 {plan_name}{cycle_label} - 赠送 {points_included} 积分",
                     related_order_id=order.order_id,
                 )
 
             logger.info(
-                f"订阅开通: user={order.user_id}, plan={order.plan_id}, "
+                f"订阅开通: user={order.user_id}, plan={order.plan_id}, cycle={billing_cycle}, "
                 f"expires={account.subscription_expires_at}, points={points_included}"
             )
 

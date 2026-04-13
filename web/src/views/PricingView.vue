@@ -33,6 +33,12 @@
     <div class="mx-auto w-full max-w-[1000px] px-4 pb-8 xs:px-6 md:px-8">
       <div class="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory md:grid md:grid-cols-4 md:overflow-visible md:pb-0 scrollbar-hide">
         <div
+          v-if="plans.length === 0"
+          class="w-full rounded-3xl border border-dashed border-border-dark bg-white/70 px-6 py-10 text-center text-sm text-ink-500 md:col-span-4"
+        >
+          {{ pricingLoadFailed ? pricingErrorMessage : (pricingDataLoaded ? '暂无订阅套餐配置' : '正在加载套餐配置...') }}
+        </div>
+        <div
           v-for="plan in plans"
           :key="plan.id"
           :class="[
@@ -111,6 +117,48 @@
       </div>
     </div>
 
+    <!-- Model pricing -->
+    <div class="mx-auto w-full max-w-[1000px] px-4 pb-8 xs:px-6 md:px-8">
+      <div class="mb-4 text-center">
+        <h2 class="text-xl font-bold text-ink-950">模型定价</h2>
+        <p class="mt-1 text-sm text-ink-500">以下价格来自后台产品定价配置，按模型实际消耗展示</p>
+      </div>
+
+      <div class="overflow-hidden rounded-3xl border border-border-dark bg-white/90 shadow-sm">
+        <div class="hidden grid-cols-[minmax(0,2fr)_100px_120px] gap-4 border-b border-border-dark bg-background-dark/40 px-5 py-3 text-xs font-semibold text-ink-500 md:grid">
+          <span>模型</span>
+          <span>积分</span>
+          <span>金额</span>
+        </div>
+
+        <div
+          v-if="modelPrices.length === 0"
+          class="px-6 py-10 text-center text-sm text-ink-500"
+        >
+          {{ modelPricingLoadFailed ? modelPricingErrorMessage : (modelPricingLoaded ? '暂无模型定价配置' : '正在加载模型定价...') }}
+        </div>
+
+        <div
+          v-for="model in modelPrices"
+          :key="model.model_name"
+          class="border-b border-border-dark/70 px-5 py-4 last:border-b-0"
+        >
+          <div class="grid gap-3 md:grid-cols-[minmax(0,2fr)_100px_120px] md:items-center">
+            <div class="min-w-0">
+              <p class="truncate text-sm font-semibold text-ink-950">{{ model.display_name }}</p>
+              <p class="mt-1 break-all text-xs text-ink-500">{{ model.model_name }}</p>
+            </div>
+            <div class="text-sm font-medium text-primary">
+              {{ model.points }} 积分
+            </div>
+            <div class="text-sm text-ink-700">
+              ¥{{ model.amount_yuan.toFixed(2) }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Recharge options -->
     <div class="mx-auto w-full max-w-[800px] px-4 pb-8 xs:px-6 md:px-8">
       <div class="mb-4 text-center">
@@ -119,6 +167,14 @@
       </div>
 
       <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <button
+          v-if="rechargeOptions.length === 0"
+          type="button"
+          disabled
+          class="col-span-2 rounded-2xl border border-dashed border-border-dark bg-white/70 px-4 py-8 text-center text-sm text-ink-500 md:col-span-4"
+        >
+          {{ pricingLoadFailed ? pricingErrorMessage : (pricingDataLoaded ? '暂无积分充值配置' : '正在加载充值选项...') }}
+        </button>
         <button
           v-for="opt in rechargeOptions"
           :key="opt.id"
@@ -166,12 +222,15 @@
     </div>
 
     <!-- Payment dialog -->
-    <el-dialog v-model="showPayment" title="充值支付" width="min(420px, 90vw)" align-center @close="stopPolling">
+    <el-dialog v-model="showPayment" :title="paymentDialogTitle" width="min(420px, 90vw)" align-center @close="stopPolling">
       <div v-if="paymentOrder" class="space-y-4 text-center">
+        <p class="text-sm font-medium text-primary">
+          {{ paymentOrder.subject }}
+        </p>
         <p class="text-lg font-bold text-ink-950">
           支付 ¥{{ paymentOrder.amount_yuan }}
         </p>
-        <p class="text-sm text-ink-500">获得 {{ paymentOrder.points }} 积分</p>
+        <p class="text-sm text-ink-500">{{ paymentOrder.display_description }}</p>
 
         <!-- PC: QR code -->
         <div v-if="!isMobile" class="flex flex-col items-center gap-3 py-4">
@@ -179,7 +238,7 @@
             <img :src="qrCodeDataUrl" class="h-48 w-48" />
           </div>
           <p v-else class="py-8 text-ink-500">正在生成支付二维码...</p>
-          <p class="text-xs text-ink-500">请使用微信扫码支付</p>
+          <p class="text-xs text-ink-500">请使用微信扫码支付，支付成功后系统会自动刷新结果</p>
         </div>
 
         <!-- Mobile: redirect button -->
@@ -234,14 +293,27 @@ const checkingPayment = ref(false)
 const qrCodeDataUrl = ref('')
 const pollingTimer = ref(null)
 const pollingActive = ref(false)
+const pricingDataLoaded = ref(false)
+const pricingLoadFailed = ref(false)
+const pricingErrorMessage = ref('暂未加载到定价数据')
+const modelPricingLoaded = ref(false)
+const modelPricingLoadFailed = ref(false)
+const modelPricingErrorMessage = ref('暂未加载到模型定价')
 
 const isMobile = computed(() => {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
 })
 
 const plans = ref([])
-
+const modelPrices = ref([])
 const rechargeOptions = ref([])
+const paymentDialogTitle = computed(() => (
+  paymentOrder.value?.order_type === 'subscription' ? '套餐订阅支付' : '充值支付'
+))
+
+const getErrorMessage = (error, fallback = '请稍后刷新重试') => {
+  return error?.response?.data?.detail || error?.message || fallback
+}
 
 const colorBg = (color) => {
   const map = { emerald: 'bg-emerald-500', amber: 'bg-amber-500', rose: 'bg-rose-500', red: 'bg-primary' }
@@ -253,8 +325,93 @@ const colorText = (color) => {
   return map[color] || 'text-primary'
 }
 
+const buildRechargePaymentMeta = (opt) => {
+  const totalPoints = Number(opt.points || 0) + Number(opt.bonus || 0)
+  const bonusText = opt.bonus > 0 ? `，含赠送 ${opt.bonus} 积分` : ''
+  return {
+    display_description: `支付成功后到账 ${totalPoints} 积分${bonusText}`,
+    success_title: '充值成功',
+    success_message: `${totalPoints} 积分已到账`
+  }
+}
+
+const buildSubscriptionPaymentMeta = (plan) => {
+  const cycle = billingCycle.value === 'yearly' ? 'yearly' : 'monthly'
+  const cycleLabel = cycle === 'yearly' ? '年付' : '月付'
+  const selectedAmount = cycle === 'yearly'
+    ? Number(plan.yearly_price || 0)
+    : Number(plan.monthly_price || 0)
+  const pointsIncluded = cycle === 'yearly'
+    ? Number(plan.points_per_month || 0) * 12
+    : Number(plan.points_per_month || 0)
+
+  return {
+    cycle,
+    cycle_label: cycleLabel,
+    selected_amount: selectedAmount,
+    points_included: pointsIncluded,
+    display_description: pointsIncluded > 0
+      ? `支付成功后开通 ${plan.name}${cycleLabel}，赠送 ${pointsIncluded} 积分`
+      : `支付成功后开通 ${plan.name}${cycleLabel}`,
+    success_title: '订阅成功',
+    success_message: `${plan.name}${cycleLabel}已开通`
+  }
+}
+
+const handlePaymentSuccess = async () => {
+  const currentOrder = paymentOrder.value
+  if (!currentOrder) return
+
+  stopPolling()
+  showPayment.value = false
+  paymentOrder.value = null
+  qrCodeDataUrl.value = ''
+
+  if (authStore.isAuthenticated) {
+    try {
+      await authStore.fetchAccountInfo()
+    } catch (error) {
+      console.error('刷新账户信息失败:', error)
+    }
+  }
+
+  notification.success(
+    currentOrder.success_title || '支付成功',
+    currentOrder.success_message || '订单支付成功'
+  )
+}
+
+const openPaymentFlow = async ({ createNativeOrder, createH5Order, meta }) => {
+  try {
+    qrCodeDataUrl.value = ''
+
+    const order = isMobile.value
+      ? await createH5Order(await getClientIp())
+      : await createNativeOrder()
+
+    paymentOrder.value = { ...order, ...meta }
+    showPayment.value = true
+
+    if (!isMobile.value && order.qr_code_url) {
+      try {
+        qrCodeDataUrl.value = await QRCode.toDataURL(order.qr_code_url, {
+          width: 256,
+          margin: 2,
+          color: { dark: '#000000', light: '#ffffff' }
+        })
+      } catch (error) {
+        console.error('QR code generation failed:', error)
+      }
+    }
+
+    startPolling()
+  } catch (error) {
+    notification.error('创建订单失败', getErrorMessage(error))
+  }
+}
+
 const selectPlan = async (plan) => {
-  if (plan.monthly_price === 0) {
+  if (Number(plan.monthly_price || 0) === 0 && Number(plan.yearly_price || 0) === 0) {
     router.push('/')
     return
   }
@@ -264,29 +421,17 @@ const selectPlan = async (plan) => {
     return
   }
 
-  const price = billingCycle.value === 'monthly' ? plan.monthly_price : plan.yearly_price
-  const points = billingCycle.value === 'monthly'
-    ? plan.points_per_month
-    : plan.points_per_month * 12
-  const label = `${plan.name}套餐（${billingCycle.value === 'monthly' ? '月付' : '年付'}）`
-
-  // Find matching recharge option or use closest one
-  const matchOpt = rechargeOptions.value.find(o => o.amount_yuan * 100 === price)
-  if (matchOpt) {
-    await createPayment({ ...matchOpt, points, subject: label })
-  } else {
-    // No exact match - use the recharge API with a custom-like flow
-    // Pick the closest recharge option as base
-    const sorted = [...rechargeOptions.value].sort((a, b) =>
-      Math.abs(a.amount_yuan * 100 - price) - Math.abs(b.amount_yuan * 100 - price)
-    )
-    const closest = sorted[0]
-    if (closest) {
-      await createPayment({ ...closest, amount_yuan: price / 100, points, subject: label })
-    } else {
-      notification.info('暂不可用', '请通过下方积分充值')
-    }
+  const meta = buildSubscriptionPaymentMeta(plan)
+  if (meta.selected_amount <= 0) {
+    notification.info('暂不可用', `${plan.name}暂未配置${meta.cycle_label}价格`)
+    return
   }
+
+  await openPaymentFlow({
+    meta,
+    createNativeOrder: () => api.createSubscriptionOrder(plan.id, meta.cycle, 'wechat'),
+    createH5Order: (clientIp) => api.createH5SubscriptionOrder(plan.id, meta.cycle, clientIp)
+  })
 }
 
 const selectRecharge = async (opt) => {
@@ -295,44 +440,12 @@ const selectRecharge = async (opt) => {
     notification.warning('请先登录', '登录后即可充值')
     return
   }
-  await createPayment(opt)
-}
 
-const createPayment = async (opt) => {
-  try {
-    qrCodeDataUrl.value = ''
-
-    if (isMobile.value) {
-      // Mobile: H5 pay
-      const order = await api.createH5RechargeOrder(opt.id, await getClientIp())
-      paymentOrder.value = { ...opt, ...order }
-      showPayment.value = true
-    } else {
-      // PC: Native QR pay
-      const order = await api.createRechargeOrder(opt.id, 'wechat')
-      paymentOrder.value = { ...opt, ...order }
-      showPayment.value = true
-
-      // Generate QR code from the code_url
-      if (order.qr_code_url) {
-        try {
-          qrCodeDataUrl.value = await QRCode.toDataURL(order.qr_code_url, {
-            width: 256,
-            margin: 2,
-            color: { dark: '#000000', light: '#ffffff' }
-          })
-        } catch (e) {
-          console.error('QR code generation failed:', e)
-        }
-      }
-    }
-
-    // Start polling for payment status
-    startPolling()
-
-  } catch (err) {
-    notification.error('创建订单失败', err?.response?.data?.detail || err?.message || '请稍后重试')
-  }
+  await openPaymentFlow({
+    meta: buildRechargePaymentMeta(opt),
+    createNativeOrder: () => api.createRechargeOrder(opt.id, 'wechat'),
+    createH5Order: (clientIp) => api.createH5RechargeOrder(opt.id, clientIp)
+  })
 }
 
 const getClientIp = async () => {
@@ -359,11 +472,7 @@ const startPolling = () => {
     try {
       const status = await api.getOrderStatus(paymentOrder.value.order_id)
       if (status.status === 'paid') {
-        stopPolling()
-        notification.success('充值成功', `${paymentOrder.value.points} 积分已到账`)
-        showPayment.value = false
-        paymentOrder.value = null
-        qrCodeDataUrl.value = ''
+        await handlePaymentSuccess()
       }
     } catch {
       // ignore polling errors
@@ -385,11 +494,7 @@ const checkPaymentStatus = async () => {
   try {
     const status = await api.getOrderStatus(paymentOrder.value.order_id)
     if (status.status === 'paid') {
-      stopPolling()
-      notification.success('充值成功', `${paymentOrder.value.points} 积分已到账`)
-      showPayment.value = false
-      paymentOrder.value = null
-      qrCodeDataUrl.value = ''
+      await handlePaymentSuccess()
     } else {
       notification.warning('暂未到账', '如已支付请稍等片刻，系统会自动确认')
     }
@@ -404,16 +509,71 @@ onUnmounted(() => {
   stopPolling()
 })
 
-onMounted(async () => {
+const loadPricingData = async () => {
+  pricingDataLoaded.value = false
+  pricingLoadFailed.value = false
+  pricingErrorMessage.value = '暂未加载到定价数据'
+  modelPricingLoaded.value = false
+  modelPricingLoadFailed.value = false
+  modelPricingErrorMessage.value = '暂未加载到模型定价'
+
+  let nextPlans = []
+  let nextModelPrices = []
+  let nextRechargeOptions = []
+  let lastError = null
+
   try {
     const config = await api.getBillingConfig()
-    plans.value = config?.subscription_plans?.plans || []
-    rechargeOptions.value = config?.recharge_options?.options || []
+    nextPlans = config?.subscription_plans?.plans || []
+    nextRechargeOptions = config?.recharge_options?.options || []
   } catch (error) {
     console.error('加载计费配置失败:', error)
-    plans.value = []
-    rechargeOptions.value = []
+    lastError = error
   }
+
+  const [plansResult, modelPricingResult, rechargeResult] = await Promise.allSettled([
+    nextPlans.length > 0 ? Promise.resolve(nextPlans) : api.getSubscriptionPlans(),
+    api.getModelPricing(),
+    nextRechargeOptions.length > 0 ? Promise.resolve(nextRechargeOptions) : api.getRechargeOptions()
+  ])
+
+  if (plansResult.status === 'fulfilled') {
+    nextPlans = plansResult.value || []
+  } else {
+    console.error('加载订阅套餐失败:', plansResult.reason)
+    lastError = plansResult.reason
+  }
+
+  if (modelPricingResult.status === 'fulfilled') {
+    nextModelPrices = modelPricingResult.value || []
+  } else {
+    console.error('加载模型定价失败:', modelPricingResult.reason)
+    modelPricingLoadFailed.value = true
+    modelPricingErrorMessage.value = `模型定价加载失败：${getErrorMessage(modelPricingResult.reason, '请稍后刷新重试')}`
+  }
+
+  if (rechargeResult.status === 'fulfilled') {
+    nextRechargeOptions = rechargeResult.value || []
+  } else {
+    console.error('加载充值选项失败:', rechargeResult.reason)
+    lastError = rechargeResult.reason
+  }
+
+  plans.value = nextPlans
+  modelPrices.value = nextModelPrices
+  rechargeOptions.value = nextRechargeOptions
+  pricingDataLoaded.value = true
+  modelPricingLoaded.value = true
+
+  if (plans.value.length === 0 && rechargeOptions.value.length === 0) {
+    pricingLoadFailed.value = true
+    pricingErrorMessage.value = `定价数据加载失败：${getErrorMessage(lastError, '请检查 API 地址或后端服务是否已更新')}`
+    notification.error('定价数据加载失败', getErrorMessage(lastError, '请检查接口地址配置'))
+  }
+}
+
+onMounted(async () => {
+  await loadPricingData()
 })
 </script>
 

@@ -3,6 +3,8 @@ import { DEFAULT_IMAGE_MODEL } from '@/utils/modelSelection'
 
 const API_CONFIG_STORAGE_KEY = 'apiConfig'
 const DEFAULT_MODEL = DEFAULT_IMAGE_MODEL
+const ENV_API_ENDPOINT = String(import.meta.env.VITE_API_BASE_URL || '').trim()
+const FORCE_SAME_ORIGIN_API = !import.meta.env.DEV && !ENV_API_ENDPOINT
 
 type StoredApiConfig = {
   apiKey?: string
@@ -42,7 +44,17 @@ export const useApiConfigStore = defineStore('apiConfig', {
           this.defaultModel = saved.defaultModel
         }
         if (typeof saved.apiEndpoint === 'string') {
-          this.apiEndpoint = saved.apiEndpoint
+          if (FORCE_SAME_ORIGIN_API) {
+            const sanitized = { ...saved }
+            delete sanitized.apiEndpoint
+            if (Object.keys(sanitized).length > 0) {
+              localStorage.setItem(API_CONFIG_STORAGE_KEY, JSON.stringify(sanitized))
+            } else {
+              localStorage.removeItem(API_CONFIG_STORAGE_KEY)
+            }
+          } else {
+            this.apiEndpoint = saved.apiEndpoint
+          }
         }
       } catch (error) {
         console.error('Failed to load API config from localStorage:', error)
@@ -64,11 +76,16 @@ export const useApiConfigStore = defineStore('apiConfig', {
       this.defaultModel = DEFAULT_MODEL
     },
     configureFromEnv() {
-      const endpoint = import.meta.env.VITE_API_BASE_URL
+      const endpoint = ENV_API_ENDPOINT
 
       if (endpoint && endpoint !== this.apiEndpoint) {
         this.setApiEndpoint(endpoint)
         console.log('API endpoint configured from environment:', endpoint)
+      }
+
+      if (!endpoint && FORCE_SAME_ORIGIN_API && this.apiEndpoint) {
+        this.setApiEndpoint('')
+        console.info('Using same-origin API routing in production.')
       }
 
       return { endpoint: this.apiEndpoint, hasKey: !!this.apiKey }
@@ -78,8 +95,9 @@ export const useApiConfigStore = defineStore('apiConfig', {
 
       try {
         this.loadConfigFromStorage()
+        this.configureFromEnv()
 
-        if (!import.meta.env.VITE_API_BASE_URL) {
+        if (import.meta.env.DEV && !ENV_API_ENDPOINT) {
           console.warn('VITE_API_BASE_URL environment variable not found')
         }
 

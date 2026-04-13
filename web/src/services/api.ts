@@ -1082,6 +1082,14 @@ export const api = {
   },
 
   /**
+   * 获取订阅套餐列表
+   */
+  async getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
+    const response = await apiClient.get('/api/v1/account/subscription/plans')
+    return response.data
+  },
+
+  /**
    * 获取计费配置
    */
   async getBillingConfig(): Promise<BillingConfig> {
@@ -1094,14 +1102,10 @@ export const api = {
   /**
    * 创建充值订单
    */
-  async createRechargeOrder(rechargeOptionId: string, paymentMethod: 'wechat' | 'alipay'): Promise<{
-    order_id: string
-    amount: number
-    amount_yuan: number
-    qr_code_url: string
-    status: string
-    expire_time: string
-  }> {
+  async createRechargeOrder(
+    rechargeOptionId: string,
+    paymentMethod: 'wechat' | 'alipay'
+  ): Promise<PaymentCheckoutOrder> {
     const response = await apiClient.post('/api/v1/payment/create', {
       recharge_option_id: rechargeOptionId,
       payment_method: paymentMethod
@@ -1112,22 +1116,41 @@ export const api = {
   /**
    * 创建H5支付订单（手机网页支付）
    */
-  async createH5RechargeOrder(rechargeOptionId: string, clientIp: string): Promise<{
-    order_id: string
-    user_id: string
-    order_type: string
-    amount: number
-    amount_yuan: number
-    payment_method: string
-    status: string
-    subject: string
-    created_at: string
-    expire_time: string | null
-    qr_code_url: string | null
-    pay_url: string | null
-  }> {
+  async createH5RechargeOrder(rechargeOptionId: string, clientIp: string): Promise<PaymentCheckoutOrder> {
     const response = await apiClient.post('/api/v1/payment/create-h5', {
       recharge_option_id: rechargeOptionId,
+      client_ip: clientIp
+    })
+    return response.data
+  },
+
+  /**
+   * 创建订阅订单
+   */
+  async createSubscriptionOrder(
+    planId: string,
+    billingCycle: 'monthly' | 'yearly',
+    paymentMethod: 'wechat' | 'alipay' = 'wechat'
+  ): Promise<PaymentCheckoutOrder> {
+    const response = await apiClient.post('/api/v1/payment/create-subscription', {
+      plan_id: planId,
+      billing_cycle: billingCycle,
+      payment_method: paymentMethod
+    })
+    return response.data
+  },
+
+  /**
+   * 创建订阅 H5 支付订单
+   */
+  async createH5SubscriptionOrder(
+    planId: string,
+    billingCycle: 'monthly' | 'yearly',
+    clientIp: string
+  ): Promise<PaymentCheckoutOrder> {
+    const response = await apiClient.post('/api/v1/payment/create-subscription-h5', {
+      plan_id: planId,
+      billing_cycle: billingCycle,
       client_ip: clientIp
     })
     return response.data
@@ -2110,6 +2133,18 @@ export interface RechargeOption {
   popular: boolean
 }
 
+export interface SubscriptionPlan {
+  id: string
+  name: string
+  icon: string
+  badge: string
+  monthly_price: number
+  yearly_price: number
+  points_per_month: number
+  features: string[]
+  color: string
+}
+
 export interface BillingConfig {
   billing: {
     mode: string
@@ -2119,12 +2154,33 @@ export interface BillingConfig {
   initial_quota: {
     free_generations: number
   }
+  recharge_options: {
+    options: RechargeOption[]
+  }
+  subscription_plans: {
+    plans: SubscriptionPlan[]
+  }
   limits: {
     guest: {
       daily_limit: number
     }
     order_expire_minutes: number
   }
+}
+
+export interface PaymentCheckoutOrder {
+  order_id: string
+  user_id: string
+  order_type: 'recharge' | 'subscription'
+  amount: number
+  amount_yuan: number
+  payment_method: string
+  status: string
+  subject: string
+  created_at: string
+  expire_time: string | null
+  qr_code_url: string | null
+  pay_url: string | null
 }
 
 export interface SystemConfigItem {

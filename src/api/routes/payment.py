@@ -11,6 +11,7 @@ from ...services.payment_service import (
     get_wechat_pay_service,
     get_alipay_service,
 )
+from ...services.account_service import get_billing_config
 from ...database import PaymentOrder
 from ..auth import RequiredAuthDependency
 
@@ -40,6 +41,20 @@ class CreateRechargeOrderRequest(BaseModel):
 class CreateH5OrderRequest(BaseModel):
     """创建 H5 支付订单请求"""
     recharge_option_id: str = Field(..., description="充值选项ID")
+    client_ip: str = Field(..., description="客户端IP地址")
+
+
+class CreateSubscriptionOrderRequest(BaseModel):
+    """创建订阅套餐订单请求"""
+    plan_id: str = Field(..., description="订阅套餐ID")
+    billing_cycle: str = Field(..., pattern=r"^(monthly|yearly)$", description="订阅周期")
+    payment_method: str = Field(..., pattern=r"^(wechat|alipay)$", description="支付方式")
+
+
+class CreateSubscriptionH5OrderRequest(BaseModel):
+    """创建订阅套餐 H5 支付订单请求"""
+    plan_id: str = Field(..., description="订阅套餐ID")
+    billing_cycle: str = Field(..., pattern=r"^(monthly|yearly)$", description="订阅周期")
     client_ip: str = Field(..., description="客户端IP地址")
 
 
@@ -75,6 +90,95 @@ class OrderListResponse(BaseModel):
     paid_at: Optional[str] = None
 
 
+# ==================== 内部辅助 ====================
+
+
+def _get_recharge_option_config(recharge_option_id: str) -> Optional[dict]:
+    options = get_billing_config().get("recharge_options", {}).get("options", [])
+    for opt in options:
+        if opt.get("id") == recharge_option_id:
+            return opt
+    return None
+
+
+def _get_subscription_plan_config(plan_id: str) -> Optional[dict]:
+    plans = get_billing_config().get("subscription_plans", {}).get("plans", [])
+    for plan in plans:
+        if plan.get("id") == plan_id:
+            return plan
+    return None
+
+
+def _build_subscription_order_payload(plan: dict, billing_cycle: str) -> dict:
+    cycle = billing_cycle.lower()
+    if cycle == "yearly":
+        amount = int(plan.get("yearly_price") or 0)
+        duration_days = int(plan.get("yearly_duration_days") or 365)
+        points_included = int(plan.get("points_per_month") or 0) * 12
+        cycle_label = "年付"
+    else:
+        amount = int(plan.get("monthly_price") or 0)
+        duration_days = int(plan.get("monthly_duration_days") or 30)
+        points_included = int(plan.get("points_per_month") or 0)
+        cycle_label = "月付"
+
+    return {
+        "amount": amount,
+        "duration_days": duration_days,
+        "points_included": points_included,
+        "cycle_label": cycle_label,
+        "subject": f"{plan.get('name', '订阅套餐')} {cycle_label}",
+        "body": (
+            f"订阅 {plan.get('name', '订阅套餐')}（{cycle_label}），"
+            f"有效期 {duration_days} 天，包含 {points_included} 积分"
+        ),
+        "attach": {
+            "billing_cycle": cycle,
+            "duration_days": duration_days,
+            "points_included": points_included,
+            "plan_name": plan.get("name", ""),
+        },
+    }
+
+
+async def _create_native_payment(order: PaymentOrder) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    qr_code_url = None
+    pay_url = None
+    prepay_id = None
+
+    if order.payment_method == "wechat":
+        wechat_service = get_wechat_pay_service()
+        result = await wechat_service.create_native_pay(
+            order_id=order.order_id,
+            amount=order.amount,
+            subject=order.subject,
+        )
+        qr_code_url = result.get("code_url")
+        prepay_id = result.get("prepay_id")
+
+    elif order.payment_method == "alipay":
+        alipay_service = get_alipay_service()
+        result = await alipay_service.create_trade_precreate(
+            order_id=order.order_id,
+            amount=order.amount,
+            subject=order.subject,
+        )
+        qr_code_url = result.get("qr_code_url")
+
+    return qr_code_url, pay_url, prepay_id
+
+
+async def _create_h5_payment(order: PaymentOrder, client_ip: str) -> Optional[str]:
+    wechat_service = get_wechat_pay_service()
+    result = await wechat_service.create_h5_pay(
+        order_id=order.order_id,
+        amount=order.amount,
+        subject=order.subject,
+        client_ip=client_ip,
+    )
+    return result.get("h5_url")
+
+
 # ==================== 路由 ====================
 
 
@@ -91,19 +195,7 @@ async def create_payment_order(
     """
     payment_service = get_payment_service()
 
-    # 获取充值配置
-    import json
-    from pathlib import Path
-    config_path = Path(__file__).parent.parent.parent / "config" / "billing_config.json"
-    with open(config_path, "r", encoding="utf-8") as f:
-        config = json.load(f)
-
-    recharge_options = config.get("recharge_options", {}).get("options", [])
-    selected_option = None
-    for opt in recharge_options:
-        if opt.get("id") == body.recharge_option_id:
-            selected_option = opt
-            break
+    selected_option = _get_recharge_option_config(body.recharge_option_id)
 
     if not selected_option:
         raise HTTPException(status_code=400, detail="无效的充值选项")
@@ -118,30 +210,8 @@ async def create_payment_order(
         body=f"充值 {selected_option['amount_yuan']} 元，获得 {selected_option['points']} 积分",
     )
 
-    # 调用支付接口
-    qr_code_url = None
-    pay_url = None
-    prepay_id = None
-
     try:
-        if body.payment_method == "wechat":
-            wechat_service = get_wechat_pay_service()
-            result = await wechat_service.create_native_pay(
-                order_id=order.order_id,
-                amount=order.amount,
-                subject=order.subject,
-            )
-            qr_code_url = result.get("code_url")
-            prepay_id = result.get("prepay_id")
-
-        elif body.payment_method == "alipay":
-            alipay_service = get_alipay_service()
-            result = await alipay_service.create_trade_precreate(
-                order_id=order.order_id,
-                amount=order.amount,
-                subject=order.subject,
-            )
-            qr_code_url = result.get("qr_code_url")
+        qr_code_url, pay_url, prepay_id = await _create_native_payment(order)
 
         # 更新订单支付信息
         if qr_code_url or prepay_id:
@@ -187,19 +257,7 @@ async def create_h5_payment_order(
     """
     payment_service = get_payment_service()
 
-    # 获取充值配置
-    import json
-    from pathlib import Path
-    config_path = Path(__file__).parent.parent.parent / "config" / "billing_config.json"
-    with open(config_path, "r", encoding="utf-8") as f:
-        config = json.load(f)
-
-    recharge_options = config.get("recharge_options", {}).get("options", [])
-    selected_option = None
-    for opt in recharge_options:
-        if opt.get("id") == body.recharge_option_id:
-            selected_option = opt
-            break
+    selected_option = _get_recharge_option_config(body.recharge_option_id)
 
     if not selected_option:
         raise HTTPException(status_code=400, detail="无效的充值选项")
@@ -217,15 +275,7 @@ async def create_h5_payment_order(
     h5_url = None
 
     try:
-        # 调用微信H5支付接口
-        wechat_service = get_wechat_pay_service()
-        result = await wechat_service.create_h5_pay(
-            order_id=order.order_id,
-            amount=order.amount,
-            subject=order.subject,
-            client_ip=body.client_ip,
-        )
-        h5_url = result.get("h5_url")
+        h5_url = await _create_h5_payment(order, body.client_ip)
 
         # 更新订单支付信息
         if h5_url:
@@ -240,6 +290,129 @@ async def create_h5_payment_order(
         logger.error(f"创建H5支付订单失败: {order.order_id}, error={str(e)}")
         await payment_service.cancel_order(order.order_id)
         raise HTTPException(status_code=500, detail=f"创建H5支付订单失败: {str(e)}")
+
+    return OrderResponse(
+        order_id=order.order_id,
+        user_id=order.user_id,
+        order_type=order.order_type,
+        amount=order.amount,
+        amount_yuan=order.amount / 100,
+        payment_method=order.payment_method,
+        status=order.status,
+        subject=order.subject,
+        created_at=order.created_at.isoformat() if order.created_at else "",
+        expire_time=order.expire_time.isoformat() if order.expire_time else None,
+        qr_code_url=None,
+        pay_url=h5_url,
+    )
+
+
+@router.post("/create-subscription", response_model=OrderResponse, summary="创建订阅支付订单")
+async def create_subscription_order(
+    request: Request,
+    body: CreateSubscriptionOrderRequest,
+    user: dict = Depends(RequiredAuthDependency())
+):
+    """创建订阅套餐支付订单（扫码）"""
+    payment_service = get_payment_service()
+
+    plan = _get_subscription_plan_config(body.plan_id)
+    if not plan:
+        raise HTTPException(status_code=400, detail="无效的订阅套餐")
+
+    order_payload = _build_subscription_order_payload(plan, body.billing_cycle)
+    if order_payload["amount"] <= 0:
+        raise HTTPException(status_code=400, detail="当前套餐暂不支持支付订阅")
+
+    order = await payment_service.create_order(
+        user_id=user["id"],
+        order_type="subscription",
+        amount=order_payload["amount"],
+        payment_method=body.payment_method,
+        plan_id=body.plan_id,
+        subject=order_payload["subject"],
+        body=order_payload["body"],
+        attach=order_payload["attach"],
+    )
+
+    qr_code_url = None
+    pay_url = None
+    prepay_id = None
+
+    try:
+        qr_code_url, pay_url, prepay_id = await _create_native_payment(order)
+
+        if qr_code_url or prepay_id:
+            await payment_service.update_order_payment_info(
+                order_id=order.order_id,
+                qr_code_url=qr_code_url,
+                prepay_id=prepay_id,
+                pay_url=pay_url,
+            )
+    except Exception as e:
+        logger.error(f"创建订阅支付订单失败: {order.order_id}, error={str(e)}")
+        await payment_service.cancel_order(order.order_id)
+        raise HTTPException(status_code=500, detail=f"创建支付订单失败: {str(e)}")
+
+    return OrderResponse(
+        order_id=order.order_id,
+        user_id=order.user_id,
+        order_type=order.order_type,
+        amount=order.amount,
+        amount_yuan=order.amount / 100,
+        payment_method=order.payment_method,
+        status=order.status,
+        subject=order.subject,
+        created_at=order.created_at.isoformat() if order.created_at else "",
+        expire_time=order.expire_time.isoformat() if order.expire_time else None,
+        qr_code_url=qr_code_url,
+        pay_url=pay_url,
+    )
+
+
+@router.post("/create-subscription-h5", response_model=OrderResponse, summary="创建订阅H5支付订单")
+async def create_subscription_h5_order(
+    request: Request,
+    body: CreateSubscriptionH5OrderRequest,
+    user: dict = Depends(RequiredAuthDependency())
+):
+    """创建订阅套餐 H5 支付订单（手机网页支付）"""
+    payment_service = get_payment_service()
+
+    plan = _get_subscription_plan_config(body.plan_id)
+    if not plan:
+        raise HTTPException(status_code=400, detail="无效的订阅套餐")
+
+    order_payload = _build_subscription_order_payload(plan, body.billing_cycle)
+    if order_payload["amount"] <= 0:
+        raise HTTPException(status_code=400, detail="当前套餐暂不支持支付订阅")
+
+    order = await payment_service.create_order(
+        user_id=user["id"],
+        order_type="subscription",
+        amount=order_payload["amount"],
+        payment_method="wechat",
+        plan_id=body.plan_id,
+        subject=order_payload["subject"],
+        body=order_payload["body"],
+        attach=order_payload["attach"],
+    )
+
+    h5_url = None
+
+    try:
+        h5_url = await _create_h5_payment(order, body.client_ip)
+
+        if h5_url:
+            await payment_service.update_order_payment_info(
+                order_id=order.order_id,
+                pay_url=h5_url,
+                payment_channel="h5",
+            )
+    except Exception as e:
+        logger.error(f"创建订阅H5支付订单失败: {order.order_id}, error={str(e)}")
+        await payment_service.cancel_order(order.order_id)
+        raise HTTPException(status_code=500, detail=f"创建支付订单失败: {str(e)}")
 
     return OrderResponse(
         order_id=order.order_id,
