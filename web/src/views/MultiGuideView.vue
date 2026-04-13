@@ -11,9 +11,6 @@
             <h1 class="mt-4 text-3xl font-bold tracking-tight text-ink-950 md:text-[2.7rem] md:leading-[1.1]">
               多图创作指南
             </h1>
-            <p class="mt-3 max-w-3xl text-sm leading-6 text-ink-500 md:text-base">
-              把原来 `/multi` 右侧的教程、适合人群和积分信息单独收到了这里。先挑一个示例，系统会自动带你回到多图创作页并填好内容。
-            </p>
 
             <div class="mt-5 flex flex-wrap gap-2.5">
               <span class="hero-chip">
