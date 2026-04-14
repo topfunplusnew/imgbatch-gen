@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Depends, Request, Query
 from typing import Optional, List, Literal
+import re
 from pydantic import BaseModel, Field
 
 from ...models.request import GenerateRequest
@@ -70,6 +71,93 @@ class UnifiedGenerationRecord(BaseModel):
 def get_task_manager(request: Request) -> TaskManager:
     """获取任务管理器（依赖注入）"""
     return request.app.state.task_manager
+
+
+def _collapse_prompt_whitespace(prompt: Optional[str]) -> str:
+    return re.sub(r"\s+", " ", str(prompt or "")).strip()
+
+
+def _extract_wrapped_prompt_section(prompt: str, marker: str) -> str:
+    normalized = str(prompt or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not normalized:
+        return ""
+
+    lower = normalized.lower()
+    marker_lower = marker.lower()
+    index = lower.rfind(marker_lower)
+    if index == -1:
+        return ""
+
+    section = normalized[index + len(marker):].strip()
+    if not section:
+        return ""
+
+    lower_section = section.lower()
+    next_markers = (
+        "System instructions:",
+        "Recent conversation context:",
+        "Latest user request:",
+        "Final grounded generation brief:",
+    )
+    end_positions = [
+        lower_section.find(next_marker.lower())
+        for next_marker in next_markers
+        if lower_section.find(next_marker.lower()) > 0
+    ]
+    if end_positions:
+        section = section[: min(end_positions)].strip()
+
+    lines = []
+    for raw_line in section.split("\n"):
+        line = raw_line.strip()
+        if not line:
+            continue
+        if re.match(r"^(user|assistant)\s*:\s*", line, re.IGNORECASE):
+            line = re.sub(r"^(user|assistant)\s*:\s*", "", line, flags=re.IGNORECASE).strip()
+        if re.match(
+            r"^(System instructions?:|Recent conversation context:|Latest user request:|Final grounded generation brief:)",
+            line,
+            re.IGNORECASE,
+        ):
+            continue
+        lines.append(line)
+
+    return _collapse_prompt_whitespace("\n".join(lines))
+
+
+def _resolve_unified_history_prompt(prompt: Optional[str], extra_params: Optional[dict] = None) -> str:
+    extra = extra_params if isinstance(extra_params, dict) else {}
+
+    for key in ("display_prompt", "original_prompt", "user_input"):
+        value = _collapse_prompt_whitespace(extra.get(key))
+        if value:
+            return value
+
+    normalized = str(prompt or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not normalized:
+        return ""
+
+    latest_user_request = _extract_wrapped_prompt_section(normalized, "Latest user request:")
+    if latest_user_request:
+        return latest_user_request
+
+    grounded_brief = _extract_wrapped_prompt_section(normalized, "Final grounded generation brief:")
+    if grounded_brief:
+        return grounded_brief
+
+    if "System instructions" in normalized or normalized.startswith("You are an expert"):
+        cleaned = re.sub(r"System instructions?:[\s\S]*?(?=\n\n|$)", "", normalized, flags=re.IGNORECASE)
+        cleaned = re.sub(
+            r"Recent conversation context:[\s\S]*?(?=\n\n(?:Latest user request:|Final grounded generation brief:)|$)",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+        blocks = [_collapse_prompt_whitespace(block) for block in re.split(r"\n{2,}", cleaned) if block.strip()]
+        if blocks:
+            return blocks[-1]
+
+    return _collapse_prompt_whitespace(normalized)
 
 
 @router.post("/generate", response_model=ImageTask)
@@ -315,17 +403,10 @@ async def get_unified_generation_history(
     unified = []
 
     for record in chat_records:
-        # 优先使用用户输入的提示词（中文），过滤掉系统提示词
-        prompt = record.get("prompt", "")
-        if prompt and ("System instructions" in prompt or prompt.strip().startswith("You are an expert")):
-            # 尝试从extra_params中获取原始提示词
-            extra = record.get("extra_params") or {}
-            prompt = extra.get("display_prompt") or extra.get("original_prompt") or extra.get("user_input") or ""
-            if not prompt:
-                # 从长英文prompt中提取中文内容
-                import re
-                cn_parts = re.findall(r'[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]+', record.get("prompt", ""))
-                prompt = ' '.join(cn_parts) if cn_parts else record.get("prompt", "")
+        prompt = _resolve_unified_history_prompt(
+            record.get("prompt", ""),
+            record.get("extra_params") or {},
+        )
 
         unified.append({
             "id": record["id"],

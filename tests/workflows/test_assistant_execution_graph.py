@@ -267,6 +267,7 @@ async def test_build_image_plan_wraps_prompt_with_context_and_system_prompt(monk
     assert "there must be no typos, misspellings, or incorrect characters" in plan.prompt
     assert "Latest user request:\n做成电影海报风格" in plan.prompt
     assert "Final grounded generation brief:\n保留海报主标题与主体人物，生成一张电影感海报" in plan.prompt
+    assert plan.metadata["original_prompt"] == "做成电影海报风格"
 
 
 @pytest.mark.asyncio

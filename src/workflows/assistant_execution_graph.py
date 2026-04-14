@@ -2003,8 +2003,15 @@ async def _build_image_plan(
         effective_batch_count = route_decision.batch_count
         effective_intent_type = route_decision.intent_type
 
-    # Keep original Chinese prompts for display/records
-    original_prompt = final_prompt
+    # Keep the user-facing prompt for records instead of the wrapped system prompt.
+    original_prompt = (latest_user_prompt or "").strip()
+    if not original_prompt:
+        if pdf_page_prompts:
+            original_prompt = str(pdf_page_prompts[0] or "").strip()
+        elif word_section_prompts:
+            original_prompt = str(word_section_prompts[0] or "").strip()
+        else:
+            original_prompt = str(raw_prompt or "").strip()
     original_batch_prompts = list(wrapped_batch_prompts) if wrapped_batch_prompts else None
 
     prompts_to_translate = wrapped_batch_prompts if wrapped_batch_prompts else [final_prompt]
