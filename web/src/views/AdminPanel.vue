@@ -726,7 +726,18 @@
             </div>
 
             <!-- Scene list -->
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div v-if="loadingScenes" class="rounded-2xl border border-border-dark bg-white p-8 shadow-sm">
+              <div class="flex items-center justify-center gap-3 text-sm text-ink-500">
+                <div class="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+                正在加载场景库...
+              </div>
+            </div>
+
+            <div v-else-if="sceneList.length === 0" class="rounded-2xl border border-dashed border-border-dark bg-white p-8 text-center text-sm text-ink-500 shadow-sm">
+              暂无场景数据
+            </div>
+
+            <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               <div v-for="scene in sceneList" :key="scene.id"
                 class="rounded-2xl border border-border-dark bg-white p-4 shadow-sm">
                 <div class="flex items-start gap-3">
@@ -762,7 +773,13 @@
             </div>
 
             <!-- Scene form dialog -->
-            <el-dialog v-model="showSceneForm" :title="editingScene ? '编辑场景' : '添加场景'" width="min(520px, 90vw)">
+            <el-dialog
+              v-model="showSceneForm"
+              :title="editingSceneId ? '编辑场景' : '添加场景'"
+              width="min(520px, 90vw)"
+              destroy-on-close
+              @closed="resetSceneForm"
+            >
               <el-form label-position="top" class="space-y-4">
                 <el-form-item label="名称">
                   <el-input v-model="sceneForm.name" placeholder="场景名称" />
@@ -806,17 +823,49 @@
             </el-dialog>
 
             <!-- Template management dialog -->
-            <el-dialog v-model="showTemplateManager" :title="`${editingScene?.name} - 模版管理`" width="min(700px, 95vw)">
+            <el-dialog
+              v-model="showTemplateManager"
+              :title="editingTemplateScene ? `${editingTemplateScene.name} - 模版管理` : '模版管理'"
+              width="min(700px, 95vw)"
+              destroy-on-close
+              @closed="resetTemplateManager"
+            >
               <div class="mb-4 flex items-center justify-between">
-                <span class="text-sm text-ink-500">共 {{ editingScene?.templates?.length || 0 }} 个模版</span>
+                <span class="text-sm text-ink-500">共 {{ templateManagerTemplates.length }} 个模版</span>
                 <el-button size="small" type="primary" @click="addTemplate">
                   <span class="material-symbols-outlined !text-sm">add</span>添加模版
                 </el-button>
               </div>
               <div class="space-y-3 max-h-[60vh] overflow-y-auto">
-                <div v-for="(tpl, i) in editingScene?.templates || []" :key="i"
+                <div v-for="(tpl, i) in templateManagerTemplates" :key="tpl.id || i"
                   class="rounded-xl border border-border-dark p-3">
-                  <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <button
+                    type="button"
+                    class="flex w-full items-start justify-between gap-3 text-left"
+                    @click="toggleTemplateEditor(tpl.id || String(i))"
+                  >
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center gap-2">
+                        <span class="rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-semibold text-primary">
+                          模版 {{ i + 1 }}
+                        </span>
+                        <h4 class="truncate text-sm font-semibold text-ink-950">
+                          {{ tpl.title || '未命名模版' }}
+                        </h4>
+                      </div>
+                      <p class="mt-1 text-xs text-ink-500">
+                        {{ tpl.type || '未设置类型' }} · {{ tpl.style || '未设置风格' }}
+                      </p>
+                      <p v-if="tpl.prompt" class="mt-1 line-clamp-2 text-xs text-ink-700">
+                        {{ tpl.prompt }}
+                      </p>
+                    </div>
+                    <span class="material-symbols-outlined !text-base text-ink-500">
+                      {{ activeTemplateId === (tpl.id || String(i)) ? 'expand_less' : 'expand_more' }}
+                    </span>
+                  </button>
+
+                  <div v-if="activeTemplateId === (tpl.id || String(i))" class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                     <el-input v-model="tpl.title" placeholder="模版标题" />
                     <el-input v-model="tpl.type" placeholder="类型（如：海报设计）" />
                     <el-input v-model="tpl.style" placeholder="风格（如：手绘）" />
@@ -1335,7 +1384,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/store/useAppStore'
 import { useAuthStore } from '@/store/useAuthStore'
@@ -1351,21 +1400,146 @@ const authStore = useAuthStore()
 const activeTab = ref('overview')
 const loading = ref(false)
 
+type SceneCategory = {
+  id: string
+  name: string
+  icon?: string
+}
+
+type SceneTemplate = {
+  id: string
+  title: string
+  type: string
+  style: string
+  prompt: string
+  exampleImage: string
+}
+
+type SceneItem = {
+  id: string
+  name: string
+  icon: string
+  category: string
+  description: string
+  coverImage: string
+  isHot: boolean
+  templates: SceneTemplate[]
+  templateCount: number
+}
+
+type SceneFormState = {
+  name: string
+  icon: string
+  category: string
+  description: string
+  coverImage: string
+  isHot: boolean
+}
+
+const createSceneId = () => `scene_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+const createTemplateId = () => `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+const createDefaultSceneForm = (): SceneFormState => ({
+  name: '',
+  icon: '',
+  category: 'education',
+  description: '',
+  coverImage: '',
+  isHot: false,
+})
+
+function normalizeTemplate(template: Partial<SceneTemplate> = {}): SceneTemplate {
+  return {
+    id: String(template.id || createTemplateId()),
+    title: String(template.title || ''),
+    type: String(template.type || ''),
+    style: String(template.style || ''),
+    prompt: String(template.prompt || ''),
+    exampleImage: String(template.exampleImage || ''),
+  }
+}
+
+function normalizeScene(scene: Partial<SceneItem> = {}): SceneItem {
+  const templates = Array.isArray(scene.templates) ? scene.templates.map((template) => normalizeTemplate(template)) : []
+  return {
+    id: String(scene.id || createSceneId()),
+    name: String(scene.name || ''),
+    icon: String(scene.icon || ''),
+    category: String(scene.category || 'education'),
+    description: String(scene.description || ''),
+    coverImage: String(scene.coverImage || ''),
+    isHot: Boolean(scene.isHot),
+    templates,
+    templateCount: templates.length,
+  }
+}
+
+function buildSceneCategories(scenes: SceneItem[]): SceneCategory[] {
+  const categoryMap = new Map<string, SceneCategory>()
+  scenes.forEach((scene) => {
+    if (!scene.category || categoryMap.has(scene.category)) return
+    categoryMap.set(scene.category, {
+      id: scene.category,
+      name: scene.category,
+      icon: '',
+    })
+  })
+  return Array.from(categoryMap.values())
+}
+
+function replaceScene(scene: SceneItem) {
+  const nextScene = normalizeScene(scene)
+  const nextScenes = [...sceneList.value]
+  const targetIndex = nextScenes.findIndex(item => item.id === nextScene.id)
+  if (targetIndex >= 0) nextScenes[targetIndex] = nextScene
+  else nextScenes.push(nextScene)
+  sceneList.value = nextScenes
+}
+
+function ensureSceneCategory(categoryId: string) {
+  const normalizedCategoryId = String(categoryId || '').trim()
+  if (!normalizedCategoryId) return
+  if (sceneCategories.value.some(category => category.id === normalizedCategoryId)) return
+  sceneCategories.value = [
+    ...sceneCategories.value,
+    {
+      id: normalizedCategoryId,
+      name: normalizedCategoryId,
+      icon: '',
+    },
+  ]
+}
+
+function resetSceneForm() {
+  editingSceneId.value = null
+  sceneForm.value = createDefaultSceneForm()
+}
+
+function resetTemplateManager() {
+  editingTemplateScene.value = null
+  activeTemplateId.value = null
+}
+
 // 场景库管理状态
-const sceneList = ref<any[]>([])
+const sceneList = shallowRef<SceneItem[]>([])
+const sceneCategories = shallowRef<SceneCategory[]>([])
+const loadingScenes = ref(false)
+const scenesLoaded = ref(false)
 const showSceneForm = ref(false)
 const showTemplateManager = ref(false)
-const editingScene = ref<any>(null)
-const sceneForm = ref({ name: '', icon: '', category: 'education', description: '', coverImage: '', isHot: false })
+const editingSceneId = ref<string | null>(null)
+const editingTemplateScene = ref<SceneItem | null>(null)
+const activeTemplateId = ref<string | null>(null)
+const templateManagerTemplates = computed(() => editingTemplateScene.value?.templates || [])
+const sceneForm = ref<SceneFormState>(createDefaultSceneForm())
 
 function openNewSceneForm() {
-  editingScene.value = null
-  sceneForm.value = { name: '', icon: '', category: 'education', description: '', coverImage: '', isHot: false }
+  editingSceneId.value = null
+  sceneForm.value = createDefaultSceneForm()
   showSceneForm.value = true
 }
 
-function editScene(scene: any) {
-  editingScene.value = scene
+function editScene(scene: SceneItem) {
+  editingSceneId.value = scene.id
   sceneForm.value = {
     name: scene.name,
     icon: scene.icon,
@@ -1377,8 +1551,9 @@ function editScene(scene: any) {
   showSceneForm.value = true
 }
 
-function editSceneTemplates(scene: any) {
-  editingScene.value = scene
+function editSceneTemplates(scene: SceneItem) {
+  editingTemplateScene.value = normalizeScene(scene)
+  activeTemplateId.value = editingTemplateScene.value.templates[0]?.id || null
   showTemplateManager.value = true
 }
 
@@ -1406,44 +1581,51 @@ async function syncScenesToServer() {
 }
 
 function saveScene() {
+  const existingScene = editingSceneId.value
+    ? sceneList.value.find(scene => scene.id === editingSceneId.value) || null
+    : null
+  ensureSceneCategory(sceneForm.value.category)
   const data = {
+    ...existingScene,
     ...sceneForm.value,
     isHot: Boolean(sceneForm.value.isHot),
-    id: editingScene.value?.id || `scene_${Date.now()}`,
-    templates: editingScene.value?.templates || [],
-    templateCount: editingScene.value?.templates?.length || 0,
+    id: existingScene?.id || createSceneId(),
+    templates: existingScene?.templates || [],
   }
-  if (editingScene.value) {
-    const idx = sceneList.value.findIndex(s => s.id === editingScene.value.id)
-    if (idx >= 0) sceneList.value[idx] = { ...sceneList.value[idx], ...data }
-    else sceneList.value.push(data)
-  } else {
-    sceneList.value.push(data)
-  }
+  replaceScene(normalizeScene(data))
   showSceneForm.value = false
   syncScenesToServer()
 }
 
-function deleteScene(scene: any) {
+function deleteScene(scene: SceneItem) {
   sceneList.value = sceneList.value.filter(s => s.id !== scene.id)
   syncScenesToServer()
 }
 
 function addTemplate() {
-  if (!editingScene.value) return
-  if (!editingScene.value.templates) editingScene.value.templates = []
-  editingScene.value.templates.push({ id: `tpl_${Date.now()}`, title: '', type: '', style: '', prompt: '', exampleImage: '' })
+  if (!editingTemplateScene.value) return
+  const nextTemplate = normalizeTemplate({ id: createTemplateId() })
+  editingTemplateScene.value.templates = [...editingTemplateScene.value.templates, nextTemplate]
+  activeTemplateId.value = nextTemplate.id
 }
 
 function removeTemplate(index: number) {
-  editingScene.value?.templates?.splice(index, 1)
+  if (!editingTemplateScene.value) return
+  const nextTemplates = [...editingTemplateScene.value.templates]
+  const [removedTemplate] = nextTemplates.splice(index, 1)
+  editingTemplateScene.value.templates = nextTemplates
+  if (removedTemplate?.id && activeTemplateId.value === removedTemplate.id) {
+    activeTemplateId.value = nextTemplates[index]?.id || nextTemplates[index - 1]?.id || null
+  }
+}
+
+function toggleTemplateEditor(templateId: string) {
+  activeTemplateId.value = activeTemplateId.value === templateId ? null : templateId
 }
 
 function saveSceneTemplates() {
-  if (!editingScene.value) return
-  editingScene.value.templateCount = editingScene.value.templates?.length || 0
-  const idx = sceneList.value.findIndex(s => s.id === editingScene.value.id)
-  if (idx >= 0) sceneList.value[idx] = { ...editingScene.value }
+  if (!editingTemplateScene.value) return
+  replaceScene(normalizeScene(editingTemplateScene.value))
   showTemplateManager.value = false
   syncScenesToServer()
 }
@@ -1456,7 +1638,7 @@ function handleSceneCoverUpload(uploadFile: any) {
   reader.readAsDataURL(file)
 }
 
-function handleTemplateCoverUpload(uploadFile: any, template: any) {
+function handleTemplateCoverUpload(uploadFile: any, template: SceneTemplate) {
   const file = uploadFile?.raw || uploadFile
   if (!file || !template) return
   const reader = new FileReader()
@@ -1466,34 +1648,38 @@ function handleTemplateCoverUpload(uploadFile: any, template: any) {
   reader.readAsDataURL(file)
 }
 
-const sceneCategories = ref([])
-
-// Load ALL scenes from API (including defaults)
-async function loadScenesFromServer() {
+// Load scenes from API only when needed
+async function loadScenesFromServer(force = false) {
+  if (loadingScenes.value || (scenesLoaded.value && !force)) return
+  loadingScenes.value = true
   try {
     const res = await fetch('/api/v1/admin/system-config/scenes')
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
     const data = await res.json()
-    sceneList.value = Array.isArray(data.scenes) ? data.scenes : []
-    sceneCategories.value = Array.isArray(data.categories) ? data.categories : []
-    // 如果没有分类数据，从场景中自动提取
+    const nextScenes = Array.isArray(data.scenes) ? data.scenes.map((scene: Partial<SceneItem>) => normalizeScene(scene)) : []
+    sceneList.value = nextScenes
+    sceneCategories.value = Array.isArray(data.categories)
+      ? data.categories.map((category: Partial<SceneCategory>) => ({
+        id: String(category.id || ''),
+        name: String(category.name || category.id || ''),
+        icon: String(category.icon || ''),
+      }))
+      : []
     if (!sceneCategories.value.length && sceneList.value.length) {
-      const catMap = new Map()
-      sceneList.value.forEach((s: any) => {
-        if (s.category && !catMap.has(s.category)) {
-          catMap.set(s.category, { id: s.category, name: s.category, icon: '' })
-        }
-      })
-      sceneCategories.value = Array.from(catMap.values())
+      sceneCategories.value = buildSceneCategories(sceneList.value)
     }
+    scenesLoaded.value = true
   } catch (error) {
     console.error('加载场景库失败:', error)
-    sceneList.value = []
-    sceneCategories.value = []
+    if (!scenesLoaded.value) {
+      sceneList.value = []
+      sceneCategories.value = []
+    }
+  } finally {
+    loadingScenes.value = false
   }
 }
-loadScenesFromServer()
 
 // 公告管理状态
 const showAnnouncementForm = ref(false)
@@ -2199,13 +2385,6 @@ function formatTime(dateString: string | null): string {
   })
 }
 
-// 监听标签页切换，加载公告数据
-watch(activeTab, (newTab) => {
-  if (newTab === 'announcements' && announcements.value.length === 0) {
-    loadAnnouncements()
-  }
-})
-
 onMounted(() => {
   loadStatistics()
   loadUsers()
@@ -2213,10 +2392,14 @@ onMounted(() => {
 
 // 监听标签页切换
 watch(activeTab, (newTab) => {
-  if (newTab === 'config' && configs.value.length === 0) {
+  if (newTab === 'announcements' && announcements.value.length === 0) {
+    loadAnnouncements()
+  } else if (newTab === 'config' && configs.value.length === 0) {
     loadConfigs()
   } else if (newTab === 'withdrawals' && withdrawals.value.length === 0) {
     loadWithdrawals()
+  } else if (newTab === 'scenes') {
+    loadScenesFromServer()
   }
 })
 </script>
